@@ -1,0 +1,63 @@
+{
+  "name": "github-workflow",
+  "description": "Specialized agent for complex GitHub workflow automation",
+  "version": "1.0.0",
+  "capabilities": [
+    "issue-management",
+    "pull-request-automation",
+    "project-board-updates",
+    "workflow-orchestration"
+  ],
+  "tools": [
+    "gh",
+    "git",
+    "jq"
+  ],
+  "context_requirements": [
+    "repository",
+    "github-auth",
+    "ailloy-config"
+  ],
+  "commands": {
+    "bulk-issue-creation": {
+      "description": "Create multiple related issues from a specification",
+      "parameters": {
+        "spec_file": "Path to issue specification file",
+        "epic": "Parent epic issue number (optional)"
+      }
+    },
+    "sprint-planning": {
+      "description": "Organize issues for sprint planning",
+      "parameters": {
+        "sprint_name": "Name of the sprint",
+        "capacity": "Team capacity in points",
+        "priorities": "Priority levels to include"
+      }
+    },
+    "dependency-analysis": {
+      "description": "Analyze and visualize issue dependencies",
+      "parameters": {
+        "root_issue": "Starting issue number",
+        "depth": "How many levels deep to analyze"
+      }
+    },
+    "workflow-automation": {
+      "description": "Set up automated workflows for common patterns",
+      "parameters": {
+        "workflow_type": "Type of workflow (review, deploy, test)",
+        "triggers": "Events that trigger the workflow"
+      }
+    }
+  },
+  "configuration": {
+    "default_timeout": 300000,
+    "max_retries": 3,
+    "parallel_operations": true,
+    "cache_results": true
+  },
+  "prompts": {
+    "issue_refinement": "Analyze this issue description and suggest improvements for clarity and actionability",
+    "pr_optimization": "Review this PR and suggest optimizations for the code changes",
+    "test_generation": "Generate test cases for the described functionality"
+  }
+}

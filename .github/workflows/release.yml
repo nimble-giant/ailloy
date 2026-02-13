@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build-binaries:
+    name: Build and Upload Binaries
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build binaries
+        run: |
+          VERSION=${{ needs.release-please.outputs.version }}
+          LDFLAGS="-X main.version=v${VERSION}"
+
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/ailloy-linux-amd64 ./cmd/ailloy
+
+          # Linux ARM64
+          GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/ailloy-linux-arm64 ./cmd/ailloy
+
+          # macOS AMD64
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/ailloy-darwin-amd64 ./cmd/ailloy
+
+          # macOS ARM64
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/ailloy-darwin-arm64 ./cmd/ailloy
+
+          # Windows AMD64
+          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/ailloy-windows-amd64.exe ./cmd/ailloy
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+
+      - name: Upload Release Artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload ${{ needs.release-please.outputs.tag_name }} dist/*
