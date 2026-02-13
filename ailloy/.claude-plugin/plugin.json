@@ -1,0 +1,8 @@
+{
+  "author": {
+    "name": "Ailloy Team"
+  },
+  "description": "AI-assisted development workflows and structured templates for Claude Code",
+  "name": "ailloy",
+  "version": "1.0.0"
+}

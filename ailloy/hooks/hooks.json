@@ -1,0 +1,18 @@
+{
+  "hooks": [
+    {
+      "action": "validate-github-auth",
+      "description": "Ensure GitHub CLI is authenticated",
+      "event": "command:before",
+      "name": "pre-issue-create",
+      "pattern": "/create-issue"
+    },
+    {
+      "action": "substitute-variables",
+      "description": "Replace template variables",
+      "event": "template:load",
+      "name": "variable-substitution",
+      "pattern": "*"
+    }
+  ]
+}
