@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "pull-request-title-pattern": "release: ${component} v${version}",
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "component": "ailloy",
+      "include-component-in-tag": false,
+      "initial-version": "0.1.0",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "extra-files": []
+    }
+  }
+}

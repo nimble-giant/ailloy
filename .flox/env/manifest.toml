@@ -1,0 +1,32 @@
+# Ailloy Development Environment
+# Activate with: flox activate
+
+version = 1
+
+[install]
+go.pkg-path = "go"
+golangci-lint.pkg-path = "golangci-lint"
+gosec.pkg-path = "gosec"
+act.pkg-path = "act"
+gh.pkg-path = "gh"
+gnumake.pkg-path = "gnumake"
+
+[vars]
+AILLOY_DEV = "true"
+
+[hook]
+on-activate = """
+  echo "🚀 Ailloy development environment activated"
+  echo ""
+  echo "Available tools:"
+  echo "  go            - $(go version | cut -d' ' -f3)"
+  echo "  golangci-lint - $(golangci-lint --version | head -1 | cut -d' ' -f4)"
+  echo "  gosec         - $(gosec --version 2>/dev/null | head -1 || echo 'installed')"
+  echo "  act           - $(act --version | cut -d' ' -f3)"
+  echo "  gh            - $(gh --version | head -1 | cut -d' ' -f3)"
+  echo ""
+  echo "Run 'make help' to see available commands"
+"""
+
+[options]
+systems = ["aarch64-darwin", "x86_64-darwin", "aarch64-linux", "x86_64-linux"]
