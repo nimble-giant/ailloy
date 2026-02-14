@@ -78,7 +78,7 @@ func GetConfigDir(global bool) (string, error) {
 		}
 		return filepath.Join(homeDir, ".ailloy"), nil
 	}
-	
+
 	// Local project config
 	return ".ailloy", nil
 }
@@ -89,12 +89,12 @@ func GetConfigPath(global bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	configFile := "ailloy.yaml"
 	if global {
 		configFile = "ailloy.yaml"
 	}
-	
+
 	return filepath.Join(configDir, configFile), nil
 }
 
