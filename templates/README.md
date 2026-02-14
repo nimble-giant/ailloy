@@ -12,6 +12,7 @@ Templates are embedded in the Go binary from `pkg/templates/` and deployed to:
 
 ### Command Templates
 
+- **`architect.md`**: Invoke an expert cloud-native architect skill to produce system designs, architecture diagrams, and implementation plans from high-level ideas
 - **`create-issue.md`**: Generate well-formatted GitHub issues with proper structure and metadata
 - **`start-issue.md`**: Fetch GitHub issue details and begin implementation workflow
 - **`open-pr.md`**: Create pull requests with structured descriptions

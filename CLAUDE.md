@@ -6,6 +6,7 @@ This project is set up with Ailloy templates for AI-assisted development workflo
 
 The following command templates are available in the `.claude/commands/` directory:
 
+- **architect**: Invoke an expert cloud-native architect to produce system designs from high-level ideas
 - **create-issue**: Generate well-formatted GitHub issues with proper structure
 - **start-issue**: Fetch GitHub issue details and begin implementation
 - **open-pr**: Create pull requests with structured descriptions

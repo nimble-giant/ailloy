@@ -7,9 +7,10 @@
 - ✅ Implemented plugin manifest (`.claude-plugin/plugin.json`)
 - ✅ Set up commands, agents, and hooks directories
 
-### 2. Commands Implemented (8 total)
+### 2. Commands Implemented (9 total)
 
 #### Workflow Commands
+- **`/architect`** - Expert cloud-native system design from high-level ideas
 - **`/create-issue`** - Create well-structured GitHub issues with flags support
 - **`/start-issue`** - Fetch issue details and begin implementation
 - **`/open-pr`** - Create comprehensive pull requests
@@ -77,7 +78,7 @@ cd claude-plugin
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Commands | ✅ Complete | 8 workflow commands |
+| Commands | ✅ Complete | 9 workflow commands |
 | Configuration | ✅ Complete | YAML-based config |
 | GitHub Integration | ✅ Complete | Full `gh` CLI integration |
 | Variable Substitution | ✅ Complete | Template variables |
