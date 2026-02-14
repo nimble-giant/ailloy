@@ -29,7 +29,7 @@ This project uses [lefthook](https://github.com/evilmartians/lefthook) for gradu
 | Hook         | What Runs                                          |
 | ------------ | -------------------------------------------------- |
 | `pre-commit` | `go vet` + `gofmt` check (staged `.go` files only) |
-| `commit-msg` | commitlint (conventional commits)                  |
+| `commit-msg` | conform (conventional commits)                     |
 | `pre-push`   | `golangci-lint` + `go build` + `go test -race`     |
 
 ## Project Setup

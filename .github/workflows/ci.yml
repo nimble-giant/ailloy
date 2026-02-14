@@ -35,8 +35,8 @@ jobs:
           name: coverage
           path: coverage.out
 
-  commitlint:
-    name: Commit Lint
+  conform:
+    name: Conform
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
@@ -44,11 +44,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install commitlint
-        run: npm install --save-dev @commitlint/{cli,config-conventional}
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
 
-      - name: Lint commits
-        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+      - name: Install conform
+        run: go install github.com/siderolabs/conform/cmd/conform@latest
+
+      - name: Enforce commit policy
+        run: conform enforce
 
   lint:
     name: Lint
