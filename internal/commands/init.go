@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/nimble-giant/ailloy/pkg/config"
-	embeddedtemplates "github.com/nimble-giant/ailloy/pkg/templates"
 	"github.com/nimble-giant/ailloy/pkg/styles"
+	embeddedtemplates "github.com/nimble-giant/ailloy/pkg/templates"
+	"github.com/spf13/cobra"
 )
 
 var initCmd = &cobra.Command{
