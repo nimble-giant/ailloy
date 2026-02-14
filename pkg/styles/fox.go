@@ -187,7 +187,7 @@ func FoxArt(foxType string) string {
 }
 
 // Welcome banner with ailloy fox matching the main logo
-func WelcomeBanner() string {
+func WelcomeBanner(ver string) string {
 	fox := FoxArt("ailloy")
 
 	title := lipgloss.NewStyle().
@@ -201,7 +201,7 @@ func WelcomeBanner() string {
 
 	subtitle := SubtleStyle.Render("AI-powered development workflows")
 
-	version := InfoStyle.Render("v0.1.0")
+	version := InfoStyle.Render(ver)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Center,

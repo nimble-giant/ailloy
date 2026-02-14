@@ -10,13 +10,21 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "ailloy",
-	Short:   "AI-assisted development methodology and toolchain",
-	Long:    buildLongDescription(),
-	Version: "0.1.0",
+	Use:   "ailloy",
+	Short: "AI-assisted development methodology and toolchain",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		styles.Init()
 	},
+}
+
+// SetVersionInfo sets the version information injected via ldflags at build time.
+func SetVersionInfo(version, commit, date string) {
+	if commit != "unknown" && date != "unknown" {
+		rootCmd.Version = fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)
+	} else {
+		rootCmd.Version = version
+	}
+	rootCmd.Long = buildLongDescription(rootCmd.Version)
 }
 
 func Execute() {
@@ -26,8 +34,8 @@ func Execute() {
 	}
 }
 
-func buildLongDescription() string {
-	banner := styles.WelcomeBanner()
+func buildLongDescription(version string) string {
+	banner := styles.WelcomeBanner(version)
 
 	description := styles.BoxStyle.Render(
 		"Ailloy is a modern AI-assisted development methodology and toolchain\n" +
