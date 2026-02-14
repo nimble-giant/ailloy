@@ -19,5 +19,6 @@ module.exports = {
         'release',
       ],
     ],
+    'body-max-line-length': [2, 'always', 300],
   },
 };
