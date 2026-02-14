@@ -13,6 +13,7 @@ The following command templates are available in the `.claude/commands/` directo
 - **pr-comments**: Respond to PR review comments efficiently
 - **pr-review**: Conduct comprehensive code reviews with silent/interactive modes
 - **update-pr**: Update existing pull requests
+- **brainstorm**: Analyze an idea for feasibility, scope, and value using structured brainstorming techniques
 
 ## Usage
 
