@@ -33,7 +33,24 @@ When this command is invoked, Claude must:
 2. Execute all brainstorming phases below against the user's idea
 3. Present the complete brainstorm analysis as the plan using `ExitPlanMode`
 4. Wait for user approval
-5. After approval, save the brainstorm as a markdown report and stop. Do **not** begin implementation. The user decides if and when to act on the findings separately
+5. After approval, save the brainstorm report and stop. Do **not** begin implementation. The user decides if and when to act on the findings separately
+
+### Report Save Location
+
+Save the final report to:
+- `.claude/plans/` if a `.claude/` directory exists in the project root
+- `~/.claude/plans/` otherwise
+
+Create the `plans/` subdirectory if it does not exist.
+
+### Report File Naming
+
+Name the file `brainstorm-{slug}.md` where `{slug}` is a kebab-case summary of the idea (3-5 words max), derived from the core idea — not randomly generated.
+
+Examples:
+- "a CLI tool that auto-generates changelogs from conventional commits" → `brainstorm-cli-changelog-generator.md`
+- "adding real-time collaboration to our document editor" → `brainstorm-realtime-doc-collaboration.md`
+- "personal AI assistant" → `brainstorm-personal-ai-assistant.md`
 
 ---
 
@@ -246,7 +263,7 @@ Do not fabricate comparisons or claim prior art exists without verifying. If you
 - Stay grounded. Every claim about feasibility, scope, or value should trace back to something concrete from the analysis.
 - Keep it concise. Each phase should be thorough but not verbose. The entire brainstorm should be scannable.
 - **No implementation.** This command produces documentation and analysis only — reports, diagrams, structured findings, and supporting artifacts. It must never write application code, create features, modify project source files, or begin building the idea. Implementation is a separate act taken by the user on their own terms.
-- **Stop after the report.** After the user approves the plan, save the brainstorm as a markdown file and stop. Do not ask "should I start building this?" or otherwise prompt toward implementation.
+- **Stop after the report.** After the user approves the plan, save the brainstorm report to the appropriate plans directory (see Workflow) and stop. Do not ask "should I start building this?" or otherwise prompt toward implementation.
 
 ## Recap
 
