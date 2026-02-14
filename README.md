@@ -12,7 +12,7 @@ Like in metallurgy—where combining two elements yields a stronger alloy—Aill
 
 Ailloy helps you:
 
-- **Initialize AI-ready projects**: Set up `CLAUDE.md` configuration and template structure
+- **Initialize AI-ready projects**: Set up command template structure for AI-assisted workflows
 - **Customize templates**: Configure team-specific defaults for consistent workflows
 - **Manage AI templates**: Access pre-built templates for common development tasks
 - **Standardize AI workflows**: Use consistent patterns for GitHub issues, PRs, and development tasks
@@ -234,7 +234,7 @@ When both global and project configurations exist:
 
 **Alpha Stage**: Ailloy is an early-stage tool focused on Claude Code integration. The CLI provides:
 
-- ✅ Project initialization with `CLAUDE.md` setup
+- ✅ Project initialization with command template setup
 - ✅ Template management and viewing
 - ✅ Template customization with team-specific variables
 - ✅ YAML configuration system with global and project scopes
