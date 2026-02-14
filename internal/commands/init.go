@@ -238,6 +238,6 @@ preferences:
 	fmt.Println("\n✅ Global initialization complete!")
 	fmt.Printf("Configuration stored in: %s\n", globalDir)
 	fmt.Println("Edit the configuration files to set up your AI providers and preferences.")
-	
+
 	return nil
 }

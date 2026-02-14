@@ -21,13 +21,13 @@ func ListTemplates() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var templates []string
 	for _, entry := range entries {
 		if !entry.IsDir() && entry.Name()[len(entry.Name())-3:] == ".md" {
 			templates = append(templates, entry.Name())
 		}
 	}
-	
+
 	return templates, nil
 }
