@@ -125,6 +125,7 @@ Ailloy includes pre-built templates for common SDLC tasks, optimized for Claude 
 
 ### Available Templates
 
+- **`brainstorm`**: Analyze an idea for feasibility, scope, and value using structured brainstorming techniques
 - **`create-issue`**: Generate well-formatted GitHub issues with proper structure
 - **`start-issue`**: Fetch GitHub issue details and begin implementation
 - **`open-pr`**: Create pull requests with structured descriptions

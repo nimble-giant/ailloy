@@ -134,6 +134,7 @@ func copyTemplateFiles() error {
 
 	// Define template files to copy
 	templates := []string{
+		"brainstorm.md",
 		"pr-description.md",
 		"create-issue.md",
 		"start-issue.md",

@@ -30,6 +30,7 @@ func TestListTemplates_ExpectedTemplates(t *testing.T) {
 	}
 
 	expected := []string{
+		"brainstorm.md",
 		"create-issue.md",
 		"open-pr.md",
 		"pr-comments.md",
