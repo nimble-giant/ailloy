@@ -9,48 +9,40 @@ import (
 //go:embed all:claude
 var embeddedTemplates embed.FS
 
-// GetTemplate returns the content of a template file
+// GetTemplate returns the content of a command template file
 func GetTemplate(name string) ([]byte, error) {
 	path := fmt.Sprintf("claude/commands/%s", name)
 	return embeddedTemplates.ReadFile(path)
 }
 
-// ListTemplates returns a list of available template files
-func ListTemplates() ([]string, error) {
-	entries, err := fs.ReadDir(embeddedTemplates, "claude/commands")
-	if err != nil {
-		return nil, err
-	}
-
-	var templates []string
-	for _, entry := range entries {
-		if !entry.IsDir() && entry.Name()[len(entry.Name())-3:] == ".md" {
-			templates = append(templates, entry.Name())
-		}
-	}
-
-	return templates, nil
-}
-
-// GetSkill returns the content of a skill file
+// GetSkill returns the content of a skill template file
 func GetSkill(name string) ([]byte, error) {
 	path := fmt.Sprintf("claude/skills/%s", name)
 	return embeddedTemplates.ReadFile(path)
 }
 
-// ListSkills returns a list of available skill files
+// ListTemplates returns a list of available command template files
+func ListTemplates() ([]string, error) {
+	return listMarkdownFiles("claude/commands")
+}
+
+// ListSkills returns a list of available skill template files
 func ListSkills() ([]string, error) {
-	entries, err := fs.ReadDir(embeddedTemplates, "claude/skills")
+	return listMarkdownFiles("claude/skills")
+}
+
+func listMarkdownFiles(dir string) ([]string, error) {
+	entries, err := fs.ReadDir(embeddedTemplates, dir)
 	if err != nil {
 		return nil, err
 	}
 
-	var skills []string
+	var files []string
 	for _, entry := range entries {
 		if !entry.IsDir() && entry.Name()[len(entry.Name())-3:] == ".md" {
-			skills = append(skills, entry.Name())
+			files = append(files, entry.Name())
 		}
 	}
 
-	return skills, nil
+	return files, nil
 }

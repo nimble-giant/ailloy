@@ -38,6 +38,7 @@ func TestIntegration_CopyTemplateFiles(t *testing.T) {
 
 	// Verify all expected templates were created
 	expectedTemplates := []string{
+		"architect.md",
 		"brainstorm.md",
 		"pr-description.md",
 		"create-issue.md",
@@ -113,6 +114,9 @@ func TestIntegration_CopyTemplateFiles_WithVariableSubstitution(t *testing.T) {
 	// Create directory structure
 	if err := os.MkdirAll(".claude/commands", 0750); err != nil {
 		t.Fatalf("failed to create dirs: %v", err)
+	}
+	if err := os.MkdirAll(".claude/skills", 0750); err != nil {
+		t.Fatalf("failed to create skills dir: %v", err)
 	}
 
 	// Run copyTemplateFiles

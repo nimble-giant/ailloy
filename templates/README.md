@@ -5,8 +5,10 @@ Ailloy templates are embedded in the CLI binary and automatically copied to proj
 ## Template Location
 
 Templates are embedded in the Go binary from `pkg/templates/` and deployed to:
-- **Project templates**: `.claude/commands/` (created by `ailloy init`)
-- **Source templates**: `pkg/templates/claude/commands/` (embedded in binary)
+- **Project commands**: `.claude/commands/` (created by `ailloy init`)
+- **Project skills**: `.claude/skills/` (created by `ailloy init`)
+- **Source commands**: `pkg/templates/claude/commands/` (embedded in binary)
+- **Source skills**: `pkg/templates/claude/skills/` (embedded in binary)
 
 ## Available Templates
 
@@ -21,6 +23,12 @@ Templates are embedded in the Go binary from `pkg/templates/` and deployed to:
 - **`pr-comments.md`**: Add structured comments to pull requests
 - **`update-pr.md`**: Update existing pull requests
 - **`preflight.md`**: Pre-flight checks and setup
+
+### Skill Templates
+
+Skills are reusable expertise profiles that commands can activate. They define a persona, competencies, design principles, and behavioral protocols that Claude adopts when the skill is active.
+
+- **`system-design.md`**: Expert cloud-native architect persona — covers distributed systems, Kubernetes, data architecture, observability, security, and cost optimization. Includes codebase discovery and gap analysis protocols. Used by the `/architect` command and activated automatically when tasks involve architectural decisions.
 
 ### Future: Agents & Hooks
 
@@ -54,7 +62,9 @@ ailloy template show create-issue
 
 ## Template Development
 
-Templates are embedded from `pkg/templates/claude/commands/` during the build process. To add new templates:
+Templates are embedded from `pkg/templates/claude/` during the build process.
+
+### Adding a new command
 
 1. Create a new `.md` file in `pkg/templates/claude/commands/`
 2. Include clear instructions for Claude Code
@@ -62,4 +72,12 @@ Templates are embedded from `pkg/templates/claude/commands/` during the build pr
 4. Rebuild the Ailloy binary to embed the new template
 5. Test with `ailloy template show <new-template-name>`
 
-Templates are automatically discovered from the embedded filesystem.
+### Adding a new skill
+
+1. Create a new `.md` file in `pkg/templates/claude/skills/`
+2. Define the persona, competencies, design principles, and protocols
+3. Specify activation criteria (when should the skill engage)
+4. Reference the skill from commands via the `## Skill Dependency` section
+5. Rebuild the Ailloy binary to embed the new skill
+
+Templates and skills are automatically discovered from the embedded filesystem.
