@@ -18,8 +18,8 @@ pre-commit:
 
 commit-msg:
   commands:
-    commitlint:
-      run: npx --no -- commitlint --edit {1}
+    conform:
+      run: conform enforce --commit-msg-file {1}
 
 pre-push:
   parallel: true

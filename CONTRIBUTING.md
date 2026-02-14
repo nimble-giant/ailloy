@@ -45,7 +45,7 @@ Thank you for your interest in contributing to Ailloy! This document provides gu
 
    This installs lefthook-managed hooks that run graduated checks:
    - **pre-commit**: `go vet` + `gofmt` on staged files
-   - **commit-msg**: commitlint (conventional commits)
+   - **commit-msg**: conform (conventional commits)
    - **pre-push**: `golangci-lint` + `go build` + `go test -race`
 
 5. **Build the project**:
