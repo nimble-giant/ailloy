@@ -275,6 +275,7 @@ If you prefer to manage dependencies manually:
 |------------|---------|--------------|
 | [Go 1.24+](https://go.dev/dl/) | Build the CLI | `brew install go` |
 | [golangci-lint](https://golangci-lint.run/) | Linting | `brew install golangci-lint` |
+| [lefthook](https://github.com/evilmartians/lefthook) | Git hooks | `brew install lefthook` |
 | [Docker](https://www.docker.com/) | Required for local CI | [Docker Desktop](https://www.docker.com/products/docker-desktop/) |
 | [act](https://github.com/nektos/act) | Run GitHub Actions locally | `brew install act` |
 | [gh](https://cli.github.com/) | GitHub CLI | `brew install gh` |
@@ -288,6 +289,9 @@ cd ailloy
 
 # Activate Flox environment (or install deps manually)
 flox activate
+
+# Install git hooks (runs checks automatically on commit/push)
+make hooks
 
 # Build the project
 make build

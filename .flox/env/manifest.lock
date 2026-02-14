@@ -20,6 +20,9 @@
       },
       "gosec": {
         "pkg-path": "gosec"
+      },
+      "lefthook": {
+        "pkg-path": "lefthook"
       }
     },
     "vars": {
@@ -513,6 +516,7 @@
       "outputs_to_install": [
         "out",
         "out",
+        "out",
         "out"
       ],
       "outputs": {
@@ -749,6 +753,122 @@
       ],
       "outputs": {
         "out": "/nix/store/9z5k72ima3b1np16ifnax8pkkkkavnig-gosec-2.22.11"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "lefthook",
+      "broken": false,
+      "derivation": "/nix/store/rdlr8vjiv13amgan6hndxbhqjn0y2jpy-lefthook-2.1.0.drv",
+      "description": "Fast and powerful Git hooks manager for any type of projects",
+      "install_id": "lefthook",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=d6c71932130818840fc8fe9509cf50be8c64634f",
+      "name": "lefthook-2.1.0",
+      "pname": "lefthook",
+      "rev": "d6c71932130818840fc8fe9509cf50be8c64634f",
+      "rev_count": 942779,
+      "rev_date": "2026-02-08T14:52:16Z",
+      "scrape_date": "2026-02-09T04:38:45.132443Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.1.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/cz4pi16djxbf3zrcl3nj87fgr30qq4kl-lefthook-2.1.0"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "lefthook",
+      "broken": false,
+      "derivation": "/nix/store/nmbs6gwygg7b9sw53cclccwq1r353b6r-lefthook-2.1.0.drv",
+      "description": "Fast and powerful Git hooks manager for any type of projects",
+      "install_id": "lefthook",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=d6c71932130818840fc8fe9509cf50be8c64634f",
+      "name": "lefthook-2.1.0",
+      "pname": "lefthook",
+      "rev": "d6c71932130818840fc8fe9509cf50be8c64634f",
+      "rev_count": 942779,
+      "rev_date": "2026-02-08T14:52:16Z",
+      "scrape_date": "2026-02-09T05:10:58.386325Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.1.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/dvrpks4rhph02g86f47rkcwxzix1swx1-lefthook-2.1.0"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "lefthook",
+      "broken": false,
+      "derivation": "/nix/store/0gmz2yq8akpc1g17jvs63ndkl83qwvcp-lefthook-2.1.0.drv",
+      "description": "Fast and powerful Git hooks manager for any type of projects",
+      "install_id": "lefthook",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=d6c71932130818840fc8fe9509cf50be8c64634f",
+      "name": "lefthook-2.1.0",
+      "pname": "lefthook",
+      "rev": "d6c71932130818840fc8fe9509cf50be8c64634f",
+      "rev_count": 942779,
+      "rev_date": "2026-02-08T14:52:16Z",
+      "scrape_date": "2026-02-09T05:44:30.598483Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.1.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/4amg29p35333h30znh5rjwnbdr9i705c-lefthook-2.1.0"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "lefthook",
+      "broken": false,
+      "derivation": "/nix/store/wkxlwd1yybm60c4h2p1vdbniijmwsxv0-lefthook-2.1.0.drv",
+      "description": "Fast and powerful Git hooks manager for any type of projects",
+      "install_id": "lefthook",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=d6c71932130818840fc8fe9509cf50be8c64634f",
+      "name": "lefthook-2.1.0",
+      "pname": "lefthook",
+      "rev": "d6c71932130818840fc8fe9509cf50be8c64634f",
+      "rev_count": 942779,
+      "rev_date": "2026-02-08T14:52:16Z",
+      "scrape_date": "2026-02-09T06:20:39.811271Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.1.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/jg3mhs42ylcm6lx8jkgd3zhnzd6kfwl0-lefthook-2.1.0"
       },
       "system": "x86_64-linux",
       "group": "toplevel",

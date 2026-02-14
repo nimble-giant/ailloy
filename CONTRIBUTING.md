@@ -21,6 +21,7 @@ Thank you for your interest in contributing to Ailloy! This document provides gu
 - **Git**: For version control
 - **GitHub CLI** (`gh`): Required for testing GitHub integration features
 - **golangci-lint**: For code linting (optional but recommended)
+- **lefthook**: For git hooks (`brew install lefthook`)
 
 ### Development Setup
 
@@ -37,17 +38,27 @@ Thank you for your interest in contributing to Ailloy! This document provides gu
    git remote add upstream https://github.com/nimble-giant/ailloy.git
    ```
 
-4. **Build the project**:
+4. **Install git hooks**:
+   ```bash
+   make hooks
+   ```
+
+   This installs lefthook-managed hooks that run graduated checks:
+   - **pre-commit**: `go vet` + `gofmt` on staged files
+   - **commit-msg**: commitlint (conventional commits)
+   - **pre-push**: `golangci-lint` + `go build` + `go test -race`
+
+5. **Build the project**:
    ```bash
    make build
    ```
 
-5. **Run tests**:
+6. **Run tests**:
    ```bash
    make test
    ```
 
-6. **Run linter** (requires golangci-lint):
+7. **Run linter** (requires golangci-lint):
    ```bash
    make lint
    ```

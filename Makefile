@@ -1,4 +1,4 @@
-.PHONY: build clean install test lint help plugin-generate plugin-update plugin-validate check-act ci ci-build ci-lint ci-security setup check-deps
+.PHONY: build clean install test lint help plugin-generate plugin-update plugin-validate check-act ci ci-build ci-lint ci-security setup check-deps hooks hooks-uninstall
 
 # Variables
 BINARY_NAME=ailloy
@@ -38,6 +38,15 @@ lint:
 	@echo "Running linter..."
 	golangci-lint run
 
+# Git Hooks (lefthook)
+hooks:
+	@echo "Installing git hooks..."
+	lefthook install
+
+hooks-uninstall:
+	@echo "Removing git hooks..."
+	lefthook uninstall
+
 # Plugin Management
 plugin-generate: build
 	@echo "Generating Claude Code plugin from templates..."
@@ -72,7 +81,7 @@ setup:
 		echo ""; \
 		echo "Then run: flox activate"; \
 		echo ""; \
-		echo "This will install all required tools: go, golangci-lint, act, gh"; \
+		echo "This will install all required tools: go, golangci-lint, lefthook, act, gh"; \
 		echo ""; \
 		echo "Alternatively, install dependencies manually:"; \
 		echo "  go           - https://go.dev/dl/"; \
@@ -86,6 +95,7 @@ check-deps:
 	@missing=""; \
 	command -v go >/dev/null 2>&1 || missing="$$missing go"; \
 	command -v golangci-lint >/dev/null 2>&1 || missing="$$missing golangci-lint"; \
+	command -v lefthook >/dev/null 2>&1 || missing="$$missing lefthook"; \
 	command -v act >/dev/null 2>&1 || missing="$$missing act"; \
 	command -v gh >/dev/null 2>&1 || missing="$$missing gh"; \
 	if [ -n "$$missing" ]; then \
@@ -98,6 +108,7 @@ check-deps:
 		echo "All dependencies installed:"; \
 		echo "  go            - $$(go version | cut -d' ' -f3)"; \
 		echo "  golangci-lint - $$(golangci-lint --version 2>/dev/null | head -1 | cut -d' ' -f4)"; \
+		echo "  lefthook      - $$(lefthook version 2>/dev/null)"; \
 		echo "  act           - $$(act --version 2>/dev/null | cut -d' ' -f3)"; \
 		echo "  gh            - $$(gh --version 2>/dev/null | head -1 | cut -d' ' -f3)"; \
 	fi
@@ -147,6 +158,8 @@ help:
 	@echo "  clean           - Clean build artifacts"
 	@echo "  test            - Run tests"
 	@echo "  lint            - Run linter"
+	@echo "  hooks           - Install git hooks (lefthook)"
+	@echo "  hooks-uninstall - Remove git hooks"
 	@echo ""
 	@echo "Plugin Management:"
 	@echo "  plugin-generate - Generate Claude plugin from templates"
@@ -161,4 +174,4 @@ help:
 	@echo "  ci-lint         - Run lint job locally"
 	@echo "  ci-security     - Run security workflow locally"
 	@echo ""
-	@echo "Quick start: flox activate && make build"
+	@echo "Quick start: flox activate && make hooks && make build"
