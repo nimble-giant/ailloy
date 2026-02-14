@@ -195,3 +195,83 @@ func TestGetTemplate_ContentContainsMarkdown(t *testing.T) {
 		}
 	}
 }
+
+func TestListWorkflowTemplates(t *testing.T) {
+	workflows, err := ListWorkflowTemplates()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(workflows) == 0 {
+		t.Fatal("expected at least one workflow template, got none")
+	}
+
+	for _, wf := range workflows {
+		if !strings.HasSuffix(wf, ".yml") {
+			t.Errorf("expected workflow name ending in .yml, got %s", wf)
+		}
+	}
+}
+
+func TestListWorkflowTemplates_ExpectedWorkflows(t *testing.T) {
+	workflows, err := ListWorkflowTemplates()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := []string{
+		"claude-code.yml",
+	}
+
+	workflowSet := make(map[string]bool)
+	for _, wf := range workflows {
+		workflowSet[wf] = true
+	}
+
+	for _, exp := range expected {
+		if !workflowSet[exp] {
+			t.Errorf("expected workflow %s not found in list", exp)
+		}
+	}
+}
+
+func TestGetWorkflowTemplate_ValidTemplate(t *testing.T) {
+	content, err := GetWorkflowTemplate("claude-code.yml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(content) == 0 {
+		t.Error("expected non-empty workflow template content")
+	}
+
+	// Should contain YAML workflow name
+	if !strings.Contains(string(content), "name:") {
+		t.Error("expected workflow template to contain 'name:' field")
+	}
+}
+
+func TestGetWorkflowTemplate_NonExistentTemplate(t *testing.T) {
+	_, err := GetWorkflowTemplate("nonexistent-workflow.yml")
+	if err == nil {
+		t.Error("expected error for non-existent workflow template, got nil")
+	}
+}
+
+func TestGetWorkflowTemplate_AllWorkflowsReadable(t *testing.T) {
+	workflows, err := ListWorkflowTemplates()
+	if err != nil {
+		t.Fatalf("unexpected error listing workflows: %v", err)
+	}
+
+	for _, wf := range workflows {
+		content, err := GetWorkflowTemplate(wf)
+		if err != nil {
+			t.Errorf("failed to read workflow %s: %v", wf, err)
+			continue
+		}
+		if len(content) == 0 {
+			t.Errorf("workflow %s has empty content", wf)
+		}
+	}
+}
