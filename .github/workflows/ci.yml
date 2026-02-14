@@ -68,6 +68,14 @@ jobs:
           go-version: '1.24'
           cache: true
 
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Run gofmt on:" $unformatted
+            exit 1
+          fi
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
