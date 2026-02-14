@@ -122,7 +122,9 @@ func TestValidator_NonExistentPlugin(t *testing.T) {
 func TestValidator_MissingManifest(t *testing.T) {
 	dir := setupValidPlugin(t)
 	// Remove manifest
-	os.Remove(filepath.Join(dir, ".claude-plugin", "plugin.json"))
+	if err := os.Remove(filepath.Join(dir, ".claude-plugin", "plugin.json")); err != nil {
+		t.Fatalf("failed to remove manifest: %v", err)
+	}
 
 	v := NewValidator(dir)
 	result, err := v.Validate()
@@ -197,8 +199,12 @@ func TestValidator_ManifestMissingFields(t *testing.T) {
 func TestValidator_NoCommands(t *testing.T) {
 	dir := setupValidPlugin(t)
 	// Remove all command files
-	os.RemoveAll(filepath.Join(dir, "commands"))
-	os.MkdirAll(filepath.Join(dir, "commands"), 0750)
+	if err := os.RemoveAll(filepath.Join(dir, "commands")); err != nil {
+		t.Fatalf("failed to remove commands dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "commands"), 0750); err != nil {
+		t.Fatalf("failed to recreate commands dir: %v", err)
+	}
 
 	v := NewValidator(dir)
 	result, err := v.Validate()
@@ -215,15 +221,17 @@ func TestValidator_NoCommands(t *testing.T) {
 
 func TestValidator_MissingREADME(t *testing.T) {
 	dir := setupValidPlugin(t)
-	os.Remove(filepath.Join(dir, "README.md"))
+	if err := os.Remove(filepath.Join(dir, "README.md")); err != nil {
+		t.Fatalf("failed to remove README: %v", err)
+	}
 
 	v := NewValidator(dir)
 	result, err := v.Validate()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !result.HasREADME {
-		// Expected
+	if result.HasREADME {
+		t.Error("expected HasREADME to be false")
 	}
 	// Missing README should be a warning, not an error
 	foundWarning := false
@@ -239,7 +247,9 @@ func TestValidator_MissingREADME(t *testing.T) {
 
 func TestValidator_MissingInstallScript(t *testing.T) {
 	dir := setupValidPlugin(t)
-	os.Remove(filepath.Join(dir, "scripts", "install.sh"))
+	if err := os.Remove(filepath.Join(dir, "scripts", "install.sh")); err != nil {
+		t.Fatalf("failed to remove install script: %v", err)
+	}
 
 	v := NewValidator(dir)
 	result, err := v.Validate()
