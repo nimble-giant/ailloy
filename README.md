@@ -1,5 +1,9 @@
 # Ailloy
 
+[![CI](https://github.com/nimble-giant/ailloy/actions/workflows/ci.yml/badge.svg)](https://github.com/nimble-giant/ailloy/actions/workflows/ci.yml)
+[![Security](https://github.com/nimble-giant/ailloy/actions/workflows/security.yml/badge.svg)](https://github.com/nimble-giant/ailloy/actions/workflows/security.yml)
+[![Release](https://github.com/nimble-giant/ailloy/actions/workflows/release.yml/badge.svg)](https://github.com/nimble-giant/ailloy/actions/workflows/release.yml)
+
 ![Ailloy Mascot](.assets/Ailloy%20the%20Blacksmith%20Innovator.png)
 
 **Ailloy** is a CLI tool for initializing projects with agentic AI patterns to assist with software development lifecycle (SDLC) tasks. Currently focused on Claude Code integration, Ailloy helps developers set up structured AI workflows using templates and configuration files.
