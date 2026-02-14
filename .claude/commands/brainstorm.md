@@ -4,6 +4,8 @@
 
 This command takes a raw idea or prompt and systematically dissects it using structured brainstorming techniques inspired by the [UNC Writing Center's brainstorming methodology](https://writingcenter.unc.edu/tips-and-tools/brainstorming/). It analyzes the idea for feasibility, scope, and predicted value, extracts a hypothesis, and proposes high-level solutions. If the idea is not viable, it says so directly.
 
+**This command produces supporting artifacts only — not implementation.** The output is documentation, analysis reports, diagrams, and structured findings that help the user decide whether and how to proceed. The user takes implementation as a separate, deliberate act.
+
 ## Command Name
 
 `brainstorm`
@@ -30,8 +32,8 @@ When this command is invoked, Claude must:
 1. **Enter Plan Mode** immediately
 2. Execute all brainstorming phases below against the user's idea
 3. Present the complete brainstorm analysis as the plan using `ExitPlanMode`
-4. Wait for user approval before taking any further action
-5. After approval, ask the user which direction they want to pursue
+4. Wait for user approval
+5. After approval, save the brainstorm as a markdown report and stop. Do **not** begin implementation. The user decides if and when to act on the findings separately
 
 ---
 
@@ -125,12 +127,12 @@ The hypothesis must be:
 
 ### Phase 6: Proposed Solutions
 
-Propose 2-4 high-level solution approaches. For each, provide:
+Propose 2-4 high-level solution approaches. These are directional sketches, not implementation plans. For each, provide:
 
 - **Approach name**: A short descriptive label
-- **Summary**: 1-3 sentences describing the approach
+- **Summary**: 1-3 sentences describing the approach at a conceptual level
 - **Key tradeoff**: The main advantage vs. the main risk or cost
-- **Starting point**: The first concrete step if this approach were chosen
+- **First question to answer**: The most important unknown that must be resolved before this approach could move forward
 
 Order the approaches from most conservative to most ambitious.
 
@@ -203,14 +205,14 @@ The plan presented via `ExitPlanMode` must follow this exact structure:
 {Summary}
 
 - **Key tradeoff**: {advantage} vs. {risk/cost}
-- **Starting point**: {first concrete step}
+- **First question to answer**: {key unknown to resolve}
 
 ### 2. {Approach Name}
 
 {Summary}
 
 - **Key tradeoff**: {advantage} vs. {risk/cost}
-- **Starting point**: {first concrete step}
+- **First question to answer**: {key unknown to resolve}
 
 {Repeat for each approach, 2-4 total}
 
@@ -243,8 +245,9 @@ Do not fabricate comparisons or claim prior art exists without verifying. If you
 - Be honest. If the idea is bad, say so in the verdict. Do not pad a weak idea with false encouragement.
 - Stay grounded. Every claim about feasibility, scope, or value should trace back to something concrete from the analysis.
 - Keep it concise. Each phase should be thorough but not verbose. The entire brainstorm should be scannable.
-- Do not implement anything. This command produces analysis only. Implementation happens after the user chooses a direction.
+- **No implementation.** This command produces documentation and analysis only — reports, diagrams, structured findings, and supporting artifacts. It must never write application code, create features, modify project source files, or begin building the idea. Implementation is a separate act taken by the user on their own terms.
+- **Stop after the report.** After the user approves the plan, save the brainstorm as a markdown file and stop. Do not ask "should I start building this?" or otherwise prompt toward implementation.
 
 ## Recap
 
-Use this command to pressure-test an idea before committing to it. The brainstorm applies structured techniques (freewriting, cubing, journalistic questions) to thoroughly explore the idea from multiple angles, then synthesizes everything into a feasibility assessment, hypothesis, and concrete solution proposals. The output is honest and actionable — it tells you whether to proceed, pivot, or abandon the idea.
+Use this command to pressure-test an idea before committing to it. The brainstorm applies structured techniques (freewriting, cubing, journalistic questions) to thoroughly explore the idea from multiple angles, then synthesizes everything into a feasibility assessment, hypothesis, and concrete solution proposals. The output is a saved report — documentation and analysis that supports decision-making. It does not produce implementation. The user decides independently whether and when to act on the findings.
