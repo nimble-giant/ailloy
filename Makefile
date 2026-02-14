@@ -6,7 +6,9 @@ BUILD_DIR=bin
 PLUGIN_DIR=ailloy
 PLUGIN_AUTO_DIR=ailloy-auto
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS=-ldflags "-X main.version=$(VERSION)"
+COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
 
 # Default target
 all: build
