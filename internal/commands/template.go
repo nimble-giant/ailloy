@@ -289,6 +289,8 @@ func findTemplate(name string) (string, error) {
 // getTemplateIcon returns an appropriate icon based on template name
 func getTemplateIcon(templateName string) string {
 	switch {
+	case strings.Contains(templateName, "architect") || strings.Contains(templateName, "system-design"):
+		return "🏗️"
 	case strings.Contains(templateName, "brainstorm"):
 		return "💡"
 	case strings.Contains(templateName, "claude-code"):

@@ -22,7 +22,12 @@ The following skills are available in the `.claude/skills/` directory:
 
 - **brainstorm**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
 
-## Workflow Templates
+
+Skills are reusable expertise profiles in `.claude/skills/` that commands and workflows can activate:
+
+- **system-design**: Expert cloud-native architect persona for system design, technology selection, and architecture evaluation. Activated automatically by `/architect` and whenever a task involves architectural decisions.
+
+## Workflow Agents
 
 The following workflow templates are available in `.github/workflows/`:
 

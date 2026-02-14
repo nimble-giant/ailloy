@@ -155,7 +155,8 @@ func copyTemplateFiles() error {
 	}
 
 	// Define template files to copy
-	templates := []string{
+	commandTemplates := []string{
+		"architect.md",
 		"brainstorm.md",
 		"pr-description.md",
 		"create-issue.md",
@@ -167,7 +168,7 @@ func copyTemplateFiles() error {
 		"pr-review.md",
 	}
 
-	for _, templateName := range templates {
+	for _, templateName := range commandTemplates {
 		// Read from embedded filesystem
 		content, err := embeddedtemplates.GetTemplate(templateName)
 		if err != nil {
@@ -198,6 +199,27 @@ Add your Claude Code command documentation here.
 		}
 
 		fmt.Println(styles.SuccessStyle.Render("✅ Created template: ") + styles.CodeStyle.Render(destPath))
+	}
+
+	// Copy skill files
+	skillDir := ".claude/skills"
+	skillFiles, err := embeddedtemplates.ListSkills()
+	if err == nil {
+		for _, skillName := range skillFiles {
+			content, err := embeddedtemplates.GetSkill(skillName)
+			if err != nil {
+				continue
+			}
+
+			processedContent := config.ProcessTemplate(string(content), cfg.Templates.Variables)
+			destPath := filepath.Join(skillDir, skillName)
+			//#nosec G306 -- Skill files need to be readable
+			if err := os.WriteFile(destPath, []byte(processedContent), 0644); err != nil {
+				return fmt.Errorf("failed to write skill %s: %w", skillName, err)
+			}
+
+			fmt.Println(styles.SuccessStyle.Render("✅ Created skill: ") + styles.CodeStyle.Render(destPath))
+		}
 	}
 
 	return nil
@@ -257,6 +279,7 @@ func copySkillFiles() error {
 	// Define skill files to copy
 	skills := []string{
 		"brainstorm.md",
+		"system-design.md",
 	}
 
 	for _, skillName := range skills {
