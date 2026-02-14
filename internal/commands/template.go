@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
-	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/nimble-giant/ailloy/pkg/styles"
+	"github.com/spf13/cobra"
 )
 
 var templateCmd = &cobra.Command{

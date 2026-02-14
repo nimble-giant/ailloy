@@ -6,10 +6,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/nimble-giant/ailloy/pkg/config"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
-	"github.com/charmbracelet/lipgloss"
 )
 
 var customizeCmd = &cobra.Command{
