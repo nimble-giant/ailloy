@@ -1,0 +1,32 @@
+# Graduated git hooks — checks escalate closer to push
+# Install: make hooks | lefthook install
+
+pre-commit:
+  parallel: true
+  commands:
+    go-vet:
+      glob: "*.go"
+      run: go vet ./...
+    go-fmt-check:
+      glob: "*.go"
+      run: |
+        unformatted=$(gofmt -l {staged_files})
+        if [ -n "$unformatted" ]; then
+          echo "Run gofmt on:" $unformatted
+          exit 1
+        fi
+
+commit-msg:
+  commands:
+    commitlint:
+      run: npx --no -- commitlint --edit {1}
+
+pre-push:
+  parallel: true
+  commands:
+    lint:
+      run: golangci-lint run
+    build:
+      run: go build ./...
+    test:
+      run: go test -race ./...

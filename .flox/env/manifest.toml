@@ -10,6 +10,7 @@ gosec.pkg-path = "gosec"
 act.pkg-path = "act"
 gh.pkg-path = "gh"
 gnumake.pkg-path = "gnumake"
+lefthook.pkg-path = "lefthook"
 
 [vars]
 AILLOY_DEV = "true"

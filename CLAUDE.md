@@ -22,6 +22,16 @@ To use a command template:
 2. Copy the template content into your Claude Code conversation
 3. Use the command syntax specified in the template
 
+## Git Hooks (lefthook)
+
+This project uses [lefthook](https://github.com/evilmartians/lefthook) for graduated local checks. Install with `make hooks`.
+
+| Hook         | What Runs                                          |
+| ------------ | -------------------------------------------------- |
+| `pre-commit` | `go vet` + `gofmt` check (staged `.go` files only) |
+| `commit-msg` | commitlint (conventional commits)                  |
+| `pre-push`   | `golangci-lint` + `go build` + `go test -race`     |
+
 ## Project Setup
 
 This project was initialized with Ailloy to provide structured AI workflows for:
