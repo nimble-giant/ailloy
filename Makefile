@@ -1,4 +1,4 @@
-.PHONY: build clean install test lint help plugin-generate plugin-update plugin-validate check-act ci ci-build ci-lint ci-security setup check-deps hooks hooks-uninstall
+.PHONY: build clean install test fmt lint help plugin-generate plugin-update plugin-validate check-act ci ci-build ci-lint ci-security setup check-deps hooks hooks-uninstall
 
 # Variables
 BINARY_NAME=ailloy
@@ -32,6 +32,15 @@ clean:
 test:
 	@echo "Running tests..."
 	go test -v ./...
+
+# Check formatting
+fmt:
+	@echo "Checking formatting..."
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+		echo "Run gofmt on:" $$unformatted; \
+		exit 1; \
+	fi
 
 # Run linter
 lint:
@@ -157,6 +166,7 @@ help:
 	@echo "  install         - Install the binary to GOPATH/bin"
 	@echo "  clean           - Clean build artifacts"
 	@echo "  test            - Run tests"
+	@echo "  fmt             - Check formatting (gofmt)"
 	@echo "  lint            - Run linter"
 	@echo "  hooks           - Install git hooks (lefthook)"
 	@echo "  hooks-uninstall - Remove git hooks"
