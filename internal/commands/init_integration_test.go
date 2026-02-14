@@ -30,6 +30,7 @@ func TestIntegration_CopyTemplateFiles(t *testing.T) {
 
 	// Verify all expected templates were created
 	expectedTemplates := []string{
+		"brainstorm.md",
 		"pr-description.md",
 		"create-issue.md",
 		"start-issue.md",
