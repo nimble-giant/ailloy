@@ -86,7 +86,7 @@ func listTemplateVariables(cfg *config.Config) error {
 	if len(cfg.Templates.Variables) == 0 {
 		noVarsMsg := styles.InfoBoxStyle.Render(
 			styles.InfoStyle.Render("ℹ️  No variables configured.\n\n") +
-			"Use " + styles.CodeStyle.Render("ailloy customize") + " to set up variables interactively.",
+				"Use " + styles.CodeStyle.Render("ailloy customize") + " to set up variables interactively.",
 		)
 		fmt.Println(noVarsMsg)
 		return nil
@@ -95,14 +95,14 @@ func listTemplateVariables(cfg *config.Config) error {
 	// Create a styled table
 	table := styles.NewTable()
 	table.Headers("Variable", "Value")
-	
+
 	for key, value := range cfg.Templates.Variables {
 		table.Row(
 			styles.AccentStyle.Render(key),
 			styles.CodeStyle.Render(value),
 		)
 	}
-	
+
 	fmt.Println(table.Render())
 	return nil
 }
@@ -110,8 +110,8 @@ func listTemplateVariables(cfg *config.Config) error {
 func deleteTemplateVariable(cfg *config.Config, key string) error {
 	if _, exists := cfg.Templates.Variables[key]; !exists {
 		errorMsg := styles.ErrorBoxStyle.Render(
-			styles.ErrorStyle.Render("❌ Variable not found: ") + 
-			styles.CodeStyle.Render(key),
+			styles.ErrorStyle.Render("❌ Variable not found: ") +
+				styles.CodeStyle.Render(key),
 		)
 		fmt.Println(errorMsg)
 		return nil
@@ -128,8 +128,8 @@ func deleteTemplateVariable(cfg *config.Config, key string) error {
 		scope = "global"
 	}
 
-	successMsg := styles.SuccessStyle.Render("✅ Deleted variable ") + 
-		styles.CodeStyle.Render(key) + 
+	successMsg := styles.SuccessStyle.Render("✅ Deleted variable ") +
+		styles.CodeStyle.Render(key) +
 		styles.SuccessStyle.Render(" from "+scope+" configuration")
 	fmt.Println(successMsg)
 	return nil
@@ -161,8 +161,8 @@ func setTemplateVariables(cfg *config.Config, variables []string) error {
 		scope = "global"
 	}
 
-	successMsg := styles.SuccessStyle.Render("✅ Updated ") + 
-		fmt.Sprintf("%d", len(variables)) + 
+	successMsg := styles.SuccessStyle.Render("✅ Updated ") +
+		fmt.Sprintf("%d", len(variables)) +
 		styles.SuccessStyle.Render(" variable(s) in "+scope+" configuration")
 	fmt.Println(successMsg)
 	return nil
@@ -175,14 +175,14 @@ func runInteractiveCustomize(cfg *config.Config) error {
 	}
 
 	// Welcome message
-	fmt.Println(styles.WorkingBanner("Interactive template customization ("+scope+")"))
+	fmt.Println(styles.WorkingBanner("Interactive template customization (" + scope + ")"))
 	fmt.Println()
-	
+
 	description := styles.InfoBoxStyle.Render(
 		"This will help you set up team-specific defaults for templates.\n" +
-		styles.SubtleStyle.Render("• Press Enter to keep existing values\n") +
-		styles.SubtleStyle.Render("• Type new values to update settings\n") +
-		styles.SubtleStyle.Render("• Leave blank to skip optional settings"),
+			styles.SubtleStyle.Render("• Press Enter to keep existing values\n") +
+			styles.SubtleStyle.Render("• Type new values to update settings\n") +
+			styles.SubtleStyle.Render("• Leave blank to skip optional settings"),
 	)
 	fmt.Println(description)
 	fmt.Println()
@@ -204,19 +204,19 @@ func runInteractiveCustomize(cfg *config.Config) error {
 
 	fmt.Println(styles.AccentStyle.Render("🔧 Basic template variables:"))
 	fmt.Println()
-	
+
 	for _, variable := range basicVars {
 		current := cfg.Templates.Variables[variable.key]
-		
+
 		var prompt string
 		if current != "" {
-			prompt = styles.InfoStyle.Render(variable.description) + " " + 
+			prompt = styles.InfoStyle.Render(variable.description) + " " +
 				styles.SubtleStyle.Render("["+current+"]: ")
 		} else {
-			prompt = styles.InfoStyle.Render(variable.description) + " " + 
+			prompt = styles.InfoStyle.Render(variable.description) + " " +
 				styles.SubtleStyle.Render("(e.g., "+variable.example+"): ")
 		}
-		
+
 		fmt.Print(prompt)
 		input, err := reader.ReadString('\n')
 		if err != nil {
@@ -236,11 +236,11 @@ func runInteractiveCustomize(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to read input: %w", err)
 	}
-	
+
 	if strings.ToLower(strings.TrimSpace(advancedInput)) == "y" {
 		fmt.Println("\nAdvanced GitHub Project configuration:")
 		fmt.Println("(Run 'gh api graphql' commands to find these values for your project)")
-		
+
 		advancedVars := []struct {
 			key         string
 			description string
@@ -250,17 +250,17 @@ func runInteractiveCustomize(cfg *config.Config) error {
 			{"priority_field_id", "Priority field ID (PVTSSF_...)"},
 			{"iteration_field_id", "Iteration field ID (PVTIF_...)"},
 		}
-		
+
 		for _, variable := range advancedVars {
 			current := cfg.Templates.Variables[variable.key]
-			
+
 			var prompt string
 			if current != "" {
 				prompt = fmt.Sprintf("%s [%s]: ", variable.description, current)
 			} else {
 				prompt = fmt.Sprintf("%s: ", variable.description)
 			}
-			
+
 			fmt.Print(prompt)
 			input, err := reader.ReadString('\n')
 			if err != nil {
@@ -303,7 +303,7 @@ func runInteractiveCustomize(cfg *config.Config) error {
 	}
 
 	fmt.Println()
-	successMessage := "Template customization saved to "+scope+" configuration"
+	successMessage := "Template customization saved to " + scope + " configuration"
 	fmt.Println(styles.SuccessBanner(successMessage))
 	return nil
 }

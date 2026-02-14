@@ -44,14 +44,14 @@ func initProject() error {
 	// Welcome message
 	fmt.Println(styles.WorkingBanner("Initializing Ailloy project structure..."))
 	fmt.Println()
-	
+
 	// Check runtime dependencies
 	checkDependencies()
 
 	// Check if we're in a git repository
 	if _, err := os.Stat(".git"); os.IsNotExist(err) {
-		warning := styles.WarningStyle.Render("⚠️  Warning: ") + 
-			"Not in a Git repository. Consider running " + 
+		warning := styles.WarningStyle.Render("⚠️  Warning: ") +
+			"Not in a Git repository. Consider running " +
 			styles.CodeStyle.Render("git init") + " first."
 		fmt.Println(warning)
 		fmt.Println()
@@ -67,7 +67,7 @@ func initProject() error {
 	for i, dir := range dirs {
 		fmt.Print(styles.ProgressStep(i+1, len(dirs), "Creating "+dir))
 		time.Sleep(100 * time.Millisecond) // Small delay for visual effect
-		
+
 		if err := os.MkdirAll(dir, 0750); err != nil { // #nosec G301 -- Project directories need group read access
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
@@ -85,7 +85,7 @@ func initProject() error {
 	successMessage := "Project initialization complete!"
 	fmt.Println(styles.SuccessBanner(successMessage))
 	fmt.Println()
-	
+
 	// Summary box
 	summaryContent := styles.SuccessStyle.Render("🎉 Setup Complete!\n\n") +
 		styles.FoxBullet("Command templates: ") + styles.CodeStyle.Render(".claude/commands/") + "\n" +
@@ -102,14 +102,14 @@ func initProject() error {
 	summary := styles.SuccessBoxStyle.Render(summaryContent)
 
 	fmt.Println(summary)
-	
+
 	return nil
 }
 
 // copyTemplateFiles copies markdown template files from embedded sources to the project directory
 func copyTemplateFiles() error {
 	templateDir := ".claude/commands"
-	
+
 	// Load configuration to get template variables
 	cfg, err := config.LoadConfig(false) // Load project config
 	if err != nil {
@@ -131,11 +131,11 @@ func copyTemplateFiles() error {
 			}
 		}
 	}
-	
+
 	// Define template files to copy
 	templates := []string{
 		"pr-description.md",
-		"create-issue.md", 
+		"create-issue.md",
 		"start-issue.md",
 		"update-pr.md",
 		"open-pr.md",
@@ -143,7 +143,7 @@ func copyTemplateFiles() error {
 		"pr-comments.md",
 		"pr-review.md",
 	}
-	
+
 	for _, templateName := range templates {
 		// Read from embedded filesystem
 		content, err := embeddedtemplates.GetTemplate(templateName)
@@ -163,26 +163,26 @@ Add your Claude Code command documentation here.
 - Replace this content with your actual Claude Code command
 `, strings.TrimSuffix(templateName, ".md"), strings.TrimSuffix(templateName, ".md")))
 		}
-		
+
 		// Process template variables
 		processedContent := config.ProcessTemplate(string(content), cfg.Templates.Variables)
-		
+
 		// Write to project directory
 		destPath := filepath.Join(templateDir, templateName)
 		//#nosec G306 -- Templates need to be readable
 		if err := os.WriteFile(destPath, []byte(processedContent), 0644); err != nil {
 			return fmt.Errorf("failed to write template %s: %w", templateName, err)
 		}
-		
+
 		fmt.Println(styles.SuccessStyle.Render("✅ Created template: ") + styles.CodeStyle.Render(destPath))
 	}
-	
+
 	return nil
 }
 
 func initGlobal() error {
 	fmt.Println("Initializing global Ailloy configuration...")
-	
+
 	// Get user home directory
 	homeDir, err := os.UserHomeDir()
 	if err != nil {

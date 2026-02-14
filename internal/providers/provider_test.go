@@ -21,7 +21,7 @@ func (m *mockProvider) ExecuteTemplate(_ context.Context, _ Template, _ map[stri
 	}, nil
 }
 func (m *mockProvider) ValidateConfig() error { return nil }
-func (m *mockProvider) IsEnabled() bool        { return m.enabled }
+func (m *mockProvider) IsEnabled() bool       { return m.enabled }
 
 func TestNewRegistry(t *testing.T) {
 	r := NewRegistry()
@@ -137,13 +137,13 @@ func TestRegistry_Register_Overwrite(t *testing.T) {
 
 func TestTemplate_Struct(t *testing.T) {
 	tmpl := Template{
-		Name:     "test-template",
-		Provider: "claude",
-		Stage:    "plan",
-		Purpose:  "testing",
-		Version:  "1.0.0",
-		Content:  "template content",
-		Metadata: map[string]string{"key": "value"},
+		Name:       "test-template",
+		Provider:   "claude",
+		Stage:      "plan",
+		Purpose:    "testing",
+		Version:    "1.0.0",
+		Content:    "template content",
+		Metadata:   map[string]string{"key": "value"},
 		Validation: []string{"check1", "check2"},
 	}
 

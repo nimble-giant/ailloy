@@ -35,7 +35,7 @@ func (c *ClaudeProvider) ExecuteTemplate(ctx context.Context, template Template,
 	// TODO: Implement actual Claude API integration
 	// For now, return a placeholder response
 	return &Response{
-		Content:  fmt.Sprintf("Template '%s' would be executed with Claude AI", template.Name),
+		Content: fmt.Sprintf("Template '%s' would be executed with Claude AI", template.Name),
 		Metadata: map[string]string{
 			"provider": "claude",
 			"model":    "claude-3-sonnet",
@@ -51,7 +51,7 @@ func (c *ClaudeProvider) ValidateConfig() error {
 	if c.apiKey == "" {
 		return fmt.Errorf("ANTHROPIC_API_KEY environment variable is required")
 	}
-	
+
 	// TODO: Add API key validation by making a test request
 	return nil
 }

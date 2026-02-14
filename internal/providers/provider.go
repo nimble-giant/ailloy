@@ -9,37 +9,37 @@ import (
 type Provider interface {
 	// Name returns the provider name (e.g., "claude", "gpt")
 	Name() string
-	
+
 	// ExecuteTemplate runs a template against the provider
 	ExecuteTemplate(ctx context.Context, template Template, context map[string]interface{}) (*Response, error)
-	
+
 	// ValidateConfig checks if the provider configuration is valid
 	ValidateConfig() error
-	
+
 	// IsEnabled returns whether the provider is enabled
 	IsEnabled() bool
 }
 
 // Template represents an AI command template
 type Template struct {
-	Name        string            `yaml:"name"`
-	Provider    string            `yaml:"provider"`
-	Stage       string            `yaml:"stage"`
-	Purpose     string            `yaml:"purpose"`
-	Version     string            `yaml:"version"`
-	Content     string            `yaml:"content"`
-	Metadata    map[string]string `yaml:"metadata"`
-	Validation  []string          `yaml:"validation"`
+	Name       string            `yaml:"name"`
+	Provider   string            `yaml:"provider"`
+	Stage      string            `yaml:"stage"`
+	Purpose    string            `yaml:"purpose"`
+	Version    string            `yaml:"version"`
+	Content    string            `yaml:"content"`
+	Metadata   map[string]string `yaml:"metadata"`
+	Validation []string          `yaml:"validation"`
 }
 
 // Response represents the result from an AI provider
 type Response struct {
-	Content   string            `json:"content"`
-	Metadata  map[string]string `json:"metadata"`
-	Provider  string            `json:"provider"`
-	Template  string            `json:"template"`
-	Success   bool              `json:"success"`
-	Error     string            `json:"error,omitempty"`
+	Content  string            `json:"content"`
+	Metadata map[string]string `json:"metadata"`
+	Provider string            `json:"provider"`
+	Template string            `json:"template"`
+	Success  bool              `json:"success"`
+	Error    string            `json:"error,omitempty"`
 }
 
 // Registry manages available providers

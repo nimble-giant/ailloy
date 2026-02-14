@@ -185,8 +185,8 @@ func runUpdatePlugin(cmd *cobra.Command, args []string) error {
 	if updater.UpdatedFiles > 0 {
 		summary := styles.InfoBoxStyle.Render(
 			fmt.Sprintf("Updated %d files\n", updater.UpdatedFiles) +
-			fmt.Sprintf("Added %d new commands\n", updater.NewCommands) +
-			fmt.Sprintf("Preserved %d custom files", updater.PreservedFiles),
+				fmt.Sprintf("Added %d new commands\n", updater.NewCommands) +
+				fmt.Sprintf("Preserved %d custom files", updater.PreservedFiles),
 		)
 		fmt.Println(summary)
 	}
