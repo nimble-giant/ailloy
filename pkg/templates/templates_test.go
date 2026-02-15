@@ -30,6 +30,7 @@ func TestListTemplates_ExpectedTemplates(t *testing.T) {
 	}
 
 	expected := []string{
+		"architect.md",
 		"brainstorm.md",
 		"create-issue.md",
 		"open-pr.md",
@@ -120,6 +121,7 @@ func TestListSkills_ExpectedSkills(t *testing.T) {
 
 	expected := []string{
 		"brainstorm.md",
+		"system-design.md",
 	}
 
 	skillSet := make(map[string]bool)

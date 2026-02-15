@@ -68,6 +68,11 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to generate commands: %w", err)
 	}
 
+	// Generate skill files
+	if err := g.generateSkills(); err != nil {
+		return fmt.Errorf("failed to generate skills: %w", err)
+	}
+
 	// Generate README
 	if err := g.generateREADME(); err != nil {
 		return fmt.Errorf("failed to generate README: %w", err)
@@ -117,6 +122,7 @@ func (g *Generator) createStructure() error {
 	dirs := []string{
 		filepath.Join(g.OutputDir, ".claude-plugin"),
 		filepath.Join(g.OutputDir, "commands"),
+		filepath.Join(g.OutputDir, "skills"),
 		filepath.Join(g.OutputDir, "agents"),
 		filepath.Join(g.OutputDir, "hooks"),
 		filepath.Join(g.OutputDir, "scripts"),
@@ -169,6 +175,30 @@ func (g *Generator) generateCommands() error {
 		//#nosec G306 -- Command files need to be readable
 		if err := os.WriteFile(cmdPath, command, 0644); err != nil {
 			return fmt.Errorf("failed to write command %s: %w", tmpl.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// generateSkills copies skill files to the plugin
+func (g *Generator) generateSkills() error {
+	skillList, err := templates.ListSkills()
+	if err != nil {
+		// No skills directory is not an error
+		return nil
+	}
+
+	for _, skillName := range skillList {
+		content, err := templates.GetSkill(skillName)
+		if err != nil {
+			return fmt.Errorf("failed to load skill %s: %w", skillName, err)
+		}
+
+		skillPath := filepath.Join(g.OutputDir, "skills", skillName)
+		//#nosec G306 -- Skill files need to be readable
+		if err := os.WriteFile(skillPath, content, 0644); err != nil {
+			return fmt.Errorf("failed to write skill %s: %w", skillName, err)
 		}
 	}
 
