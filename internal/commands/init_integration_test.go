@@ -22,10 +22,18 @@ func TestIntegration_CopyTemplateFiles(t *testing.T) {
 	if err := os.MkdirAll(".claude/commands", 0750); err != nil {
 		t.Fatalf("failed to create dirs: %v", err)
 	}
+	if err := os.MkdirAll(".claude/skills", 0750); err != nil {
+		t.Fatalf("failed to create skills dir: %v", err)
+	}
 
 	err := copyTemplateFiles()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err = copySkillFiles()
+	if err != nil {
+		t.Fatalf("unexpected error copying skills: %v", err)
 	}
 
 	// Verify all expected templates were created
@@ -55,6 +63,28 @@ func TestIntegration_CopyTemplateFiles(t *testing.T) {
 		}
 		if len(content) == 0 {
 			t.Errorf("template %s is empty", tmpl)
+		}
+	}
+
+	// Verify all expected skills were created
+	expectedSkills := []string{
+		"brainstorm.md",
+	}
+
+	for _, skill := range expectedSkills {
+		path := filepath.Join(".claude", "skills", skill)
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("expected skill %s to be created: %v", skill, err)
+			continue
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("failed to read skill %s: %v", skill, err)
+			continue
+		}
+		if len(content) == 0 {
+			t.Errorf("skill %s is empty", skill)
 		}
 	}
 }
@@ -128,11 +158,20 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 	if err := os.MkdirAll(".claude/commands", 0750); err != nil {
 		t.Fatalf("failed to create dirs: %v", err)
 	}
+	if err := os.MkdirAll(".claude/skills", 0750); err != nil {
+		t.Fatalf("failed to create skills dir: %v", err)
+	}
 
 	// Copy templates (no variable substitution since no config)
 	err := copyTemplateFiles()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Copy skills
+	err = copySkillFiles()
+	if err != nil {
+		t.Fatalf("unexpected error copying skills: %v", err)
 	}
 
 	// List embedded templates
@@ -161,6 +200,33 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 			t.Errorf("template %s content mismatch between embedded and copied version", tmplName)
 		}
 	}
+
+	// List embedded skills
+	embeddedSkills, err := embeddedtemplates.ListSkills()
+	if err != nil {
+		t.Fatalf("failed to list embedded skills: %v", err)
+	}
+
+	// Verify each embedded skill has a corresponding file
+	for _, skillName := range embeddedSkills {
+		embeddedContent, err := embeddedtemplates.GetSkill(skillName)
+		if err != nil {
+			t.Errorf("failed to get embedded skill %s: %v", skillName, err)
+			continue
+		}
+
+		filePath := filepath.Join(".claude", "skills", skillName)
+		fileContent, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Errorf("failed to read copied skill %s: %v", skillName, err)
+			continue
+		}
+
+		// Content should match (no variables to substitute)
+		if string(embeddedContent) != string(fileContent) {
+			t.Errorf("skill %s content mismatch between embedded and copied version", skillName)
+		}
+	}
 }
 
 func TestIntegration_InitProject_DirectoryCreation(t *testing.T) {
@@ -175,6 +241,7 @@ func TestIntegration_InitProject_DirectoryCreation(t *testing.T) {
 	dirs := []string{
 		".claude",
 		".claude/commands",
+		".claude/skills",
 	}
 
 	for _, dir := range dirs {
@@ -270,32 +337,44 @@ func TestIntegration_TemplateFilePermissions(t *testing.T) {
 	if err := os.MkdirAll(".claude/commands", 0750); err != nil {
 		t.Fatalf("failed to create dirs: %v", err)
 	}
+	if err := os.MkdirAll(".claude/skills", 0750); err != nil {
+		t.Fatalf("failed to create skills dir: %v", err)
+	}
 
 	err := copyTemplateFiles()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Check permissions of created template files
-	entries, err := os.ReadDir(".claude/commands")
+	err = copySkillFiles()
 	if err != nil {
-		t.Fatalf("failed to read dir: %v", err)
+		t.Fatalf("unexpected error copying skills: %v", err)
 	}
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		path := filepath.Join(".claude", "commands", entry.Name())
-		info, err := os.Stat(path)
+	// Check permissions of created template files
+	checkPermissions := func(dir string) {
+		entries, err := os.ReadDir(dir)
 		if err != nil {
-			t.Errorf("failed to stat %s: %v", entry.Name(), err)
-			continue
+			t.Fatalf("failed to read dir %s: %v", dir, err)
 		}
-		perm := info.Mode().Perm()
-		// Templates should be readable (0644)
-		if perm != 0644 {
-			t.Errorf("expected permissions 0644 for %s, got %o", entry.Name(), perm)
+
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			path := filepath.Join(dir, entry.Name())
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Errorf("failed to stat %s: %v", entry.Name(), err)
+				continue
+			}
+			perm := info.Mode().Perm()
+			if perm != 0644 {
+				t.Errorf("expected permissions 0644 for %s, got %o", path, perm)
+			}
 		}
 	}
+
+	checkPermissions(".claude/commands")
+	checkPermissions(".claude/skills")
 }

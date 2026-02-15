@@ -41,6 +41,7 @@ func init() {
 func runListTemplates(cmd *cobra.Command, args []string) error {
 	templateDirs := []string{
 		".claude/commands",         // Project commands directory (created by init)
+		".claude/skills",           // Project skills directory (created by init)
 		"commands",                 // Legacy project commands directory
 		"templates/claude",         // Source templates directory
 		".ailloy/templates/claude", // Legacy project templates
@@ -176,6 +177,7 @@ func runShowTemplate(cmd *cobra.Command, args []string) error {
 func findTemplate(name string) (string, error) {
 	templateDirs := []string{
 		".claude/commands",         // Project commands directory (created by init)
+		".claude/skills",           // Project skills directory (created by init)
 		"commands",                 // Legacy project commands directory
 		"templates/claude",         // Source templates directory
 		".ailloy/templates/claude", // Legacy project templates

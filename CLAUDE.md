@@ -15,6 +15,12 @@ The following command templates are available in the `.claude/commands/` directo
 - **update-pr**: Update existing pull requests
 - **brainstorm**: Analyze an idea for feasibility, scope, and value using structured brainstorming techniques
 
+## Available Skills
+
+The following skills are available in the `.claude/skills/` directory:
+
+- **brainstorm**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
+
 ## Usage
 
 To use a command template:
