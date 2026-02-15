@@ -9,6 +9,8 @@ func TestGetTemplateIcon(t *testing.T) {
 		name     string
 		expected string
 	}{
+		{"claude-code", "🤖"},
+		{"claude-code-review", "🤖"},
 		{"brainstorm", "💡"},
 		{"claude-code", "🤖"},
 		{"claude-code-action", "🤖"},
