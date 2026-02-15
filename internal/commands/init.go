@@ -61,6 +61,7 @@ func initProject() error {
 	dirs := []string{
 		".claude",
 		".claude/commands",
+		".claude/skills",
 	}
 
 	fmt.Println(styles.InfoStyle.Render("📁 Creating directory structure..."))
@@ -80,6 +81,11 @@ func initProject() error {
 		return fmt.Errorf("failed to copy template files: %w", err)
 	}
 
+	// Copy skill files from embedded templates
+	if err := copySkillFiles(); err != nil {
+		return fmt.Errorf("failed to copy skill files: %w", err)
+	}
+
 	// Success celebration
 	fmt.Println()
 	successMessage := "Project initialization complete!"
@@ -89,6 +95,7 @@ func initProject() error {
 	// Summary box
 	summaryContent := styles.SuccessStyle.Render("🎉 Setup Complete!\n\n") +
 		styles.FoxBullet("Command templates: ") + styles.CodeStyle.Render(".claude/commands/") + "\n" +
+		styles.FoxBullet("Skill templates:   ") + styles.CodeStyle.Render(".claude/skills/") + "\n" +
 		styles.FoxBullet("Ready for AI-powered development! 🚀")
 
 	// Check if CLAUDE.md exists and suggest creating one if not
@@ -176,6 +183,71 @@ Add your Claude Code command documentation here.
 		}
 
 		fmt.Println(styles.SuccessStyle.Render("✅ Created template: ") + styles.CodeStyle.Render(destPath))
+	}
+
+	return nil
+}
+
+// copySkillFiles copies skill files from embedded sources to the project directory
+func copySkillFiles() error {
+	skillDir := ".claude/skills"
+
+	// Load configuration to get template variables
+	cfg, err := config.LoadConfig(false)
+	if err != nil {
+		cfg = &config.Config{
+			Templates: config.TemplateConfig{
+				Variables: make(map[string]string),
+			},
+		}
+	}
+
+	// Try to load global config and merge variables
+	globalCfg, err := config.LoadConfig(true)
+	if err == nil && globalCfg.Templates.Variables != nil {
+		for key, value := range globalCfg.Templates.Variables {
+			if _, exists := cfg.Templates.Variables[key]; !exists {
+				cfg.Templates.Variables[key] = value
+			}
+		}
+	}
+
+	// Define skill files to copy
+	skills := []string{
+		"brainstorm.md",
+	}
+
+	for _, skillName := range skills {
+		// Read from embedded filesystem
+		content, err := embeddedtemplates.GetSkill(skillName)
+		if err != nil {
+			// Create a placeholder if embedded file doesn't exist
+			content = []byte(fmt.Sprintf(`# Skill: %s
+
+This is a placeholder for the %s Claude Code skill.
+
+## Usage
+
+Add your Claude Code skill documentation here.
+
+## Notes
+
+- This skill was auto-generated during ailloy init
+- Replace this content with your actual Claude Code skill
+`, strings.TrimSuffix(skillName, ".md"), strings.TrimSuffix(skillName, ".md")))
+		}
+
+		// Process template variables
+		processedContent := config.ProcessTemplate(string(content), cfg.Templates.Variables)
+
+		// Write to project directory
+		destPath := filepath.Join(skillDir, skillName)
+		//#nosec G306 -- Skills need to be readable
+		if err := os.WriteFile(destPath, []byte(processedContent), 0644); err != nil {
+			return fmt.Errorf("failed to write skill %s: %w", skillName, err)
+		}
+
+		fmt.Println(styles.SuccessStyle.Render("✅ Created skill: ") + styles.CodeStyle.Render(destPath))
 	}
 
 	return nil

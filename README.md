@@ -132,6 +132,12 @@ Ailloy includes pre-built templates for common SDLC tasks, optimized for Claude 
 - **`pr-description`**: Generate comprehensive PR descriptions
 - **`update-pr`**: Update existing pull requests
 
+### Available Skills
+
+Skills are proactive workflows that Claude Code can use automatically based on context, without requiring explicit slash command invocation:
+
+- **`brainstorm`**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
+
 ### Using Templates
 
 Templates are Markdown files containing instructions for Claude Code. You can:
