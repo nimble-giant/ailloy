@@ -209,6 +209,7 @@ func copyWorkflowTemplates() error {
 
 	workflows := []string{
 		"claude-code.yml",
+		"claude-code-review.yml",
 	}
 
 	for _, workflowName := range workflows {

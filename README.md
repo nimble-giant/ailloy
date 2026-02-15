@@ -143,6 +143,7 @@ Skills are proactive workflows that Claude Code can use automatically based on c
 Ailloy also includes GitHub Actions workflow templates:
 
 - **`claude-code`**: GitHub Actions workflow for the [Claude Code agent](https://github.com/anthropics/claude-code-action). Responds to `@claude` mentions in issues, PR comments, and PR reviews. Requires an `ANTHROPIC_API_KEY` secret in your repository.
+- **`claude-code-review`**: GitHub Actions workflow for automated PR reviews with the [Claude Code agent](https://github.com/anthropics/claude-code-action). Features brevity-focused formatting, collapsible sections for detailed analysis, and intelligent comment management (updates summary comments, creates reply comments). Requires an `ANTHROPIC_API_KEY` secret in your repository.
 
 ### Using Templates
 
