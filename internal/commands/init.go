@@ -23,12 +23,16 @@ Use -g or --global to install user-level configuration instead.`,
 	RunE: runInit,
 }
 
-var globalInit bool
+var (
+	globalInit    bool
+	withWorkflows bool
+)
 
 func init() {
 	rootCmd.AddCommand(initCmd)
 
 	initCmd.Flags().BoolVarP(&globalInit, "global", "g", false, "install user-level configuration instead of project-level")
+	initCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow templates (e.g. Claude Code review agent)")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -63,6 +67,9 @@ func initProject() error {
 		".claude/commands",
 		".claude/skills",
 	}
+	if withWorkflows {
+		dirs = append(dirs, ".github/workflows")
+	}
 
 	fmt.Println(styles.InfoStyle.Render("📁 Creating directory structure..."))
 	for i, dir := range dirs {
@@ -86,6 +93,13 @@ func initProject() error {
 		return fmt.Errorf("failed to copy skill files: %w", err)
 	}
 
+	// Copy workflow templates (opt-in)
+	if withWorkflows {
+		if err := copyWorkflowTemplates(); err != nil {
+			return fmt.Errorf("failed to copy workflow templates: %w", err)
+		}
+	}
+
 	// Success celebration
 	fmt.Println()
 	successMessage := "Project initialization complete!"
@@ -95,8 +109,11 @@ func initProject() error {
 	// Summary box
 	summaryContent := styles.SuccessStyle.Render("🎉 Setup Complete!\n\n") +
 		styles.FoxBullet("Command templates: ") + styles.CodeStyle.Render(".claude/commands/") + "\n" +
-		styles.FoxBullet("Skill templates:   ") + styles.CodeStyle.Render(".claude/skills/") + "\n" +
-		styles.FoxBullet("Ready for AI-powered development! 🚀")
+		styles.FoxBullet("Skill templates:   ") + styles.CodeStyle.Render(".claude/skills/") + "\n"
+	if withWorkflows {
+		summaryContent += styles.FoxBullet("Workflow templates: ") + styles.CodeStyle.Render(".github/workflows/") + "\n"
+	}
+	summaryContent += styles.FoxBullet("Ready for AI-powered development! 🚀")
 
 	// Check if CLAUDE.md exists and suggest creating one if not
 	if _, err := os.Stat("CLAUDE.md"); os.IsNotExist(err) {
@@ -248,6 +265,32 @@ Add your Claude Code skill documentation here.
 		}
 
 		fmt.Println(styles.SuccessStyle.Render("✅ Created skill: ") + styles.CodeStyle.Render(destPath))
+	}
+
+	return nil
+}
+
+// copyWorkflowTemplates copies GitHub Actions workflow templates from embedded sources to the project
+func copyWorkflowTemplates() error {
+	workflowDir := ".github/workflows"
+
+	workflows := []string{
+		"claude-code-review.yml",
+	}
+
+	for _, workflowName := range workflows {
+		content, err := embeddedtemplates.GetWorkflowTemplate(workflowName)
+		if err != nil {
+			return fmt.Errorf("failed to read workflow template %s: %w", workflowName, err)
+		}
+
+		destPath := filepath.Join(workflowDir, workflowName)
+		//#nosec G306 -- Workflow files need to be readable
+		if err := os.WriteFile(destPath, content, 0644); err != nil {
+			return fmt.Errorf("failed to write workflow %s: %w", workflowName, err)
+		}
+
+		fmt.Println(styles.SuccessStyle.Render("✅ Created workflow: ") + styles.CodeStyle.Render(destPath))
 	}
 
 	return nil

@@ -138,6 +138,12 @@ Skills are proactive workflows that Claude Code can use automatically based on c
 
 - **`brainstorm`**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
 
+### Workflow Templates
+
+Ailloy also includes GitHub Actions workflow templates (install with `ailloy init --with-workflows`):
+
+- **`claude-code-review`**: GitHub Actions workflow for automated PR reviews with the [Claude Code agent](https://github.com/anthropics/claude-code-action). Features brevity-focused formatting, collapsible sections for detailed analysis, and intelligent comment management (updates summary comments, creates reply comments). Requires an `ANTHROPIC_API_KEY` secret in your repository.
+
 ### Using Templates
 
 Templates are Markdown files containing instructions for Claude Code. You can:
