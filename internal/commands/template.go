@@ -48,6 +48,10 @@ func runListTemplates(cmd *cobra.Command, args []string) error {
 		filepath.Join(os.Getenv("HOME"), ".ailloy/templates/claude"), // Global templates
 	}
 
+	workflowDirs := []string{
+		".github/workflows", // Project workflows directory
+	}
+
 	// Header with inquisitive fox for exploring templates
 	header := lipgloss.JoinVertical(
 		lipgloss.Center,
@@ -108,6 +112,54 @@ func runListTemplates(cmd *cobra.Command, args []string) error {
 				icon := getTemplateIcon(templateName)
 				templateDisplay := styles.SuccessStyle.Render(icon+" ") +
 					styles.AccentStyle.Render(category+"/"+templateName) +
+					styles.SubtleStyle.Render(" - "+description)
+				fmt.Println("  " + templateDisplay)
+				foundTemplates = true
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			continue
+		}
+	}
+
+	// List workflow templates
+	for _, dir := range workflowDirs {
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			continue
+		}
+
+		err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+
+			if !d.IsDir() && strings.HasSuffix(path, ".yml") {
+				fileName := filepath.Base(path)
+				templateName := strings.TrimSuffix(fileName, ".yml")
+
+				// Extract the workflow name from the YAML
+				content, err := os.ReadFile(path) // #nosec G304 -- CLI tool reads user workflow files
+				if err != nil {
+					return nil
+				}
+
+				var description string
+				for _, line := range strings.Split(string(content), "\n") {
+					if strings.HasPrefix(line, "name:") {
+						description = strings.TrimSpace(strings.TrimPrefix(line, "name:"))
+						break
+					}
+				}
+				if description == "" {
+					description = "GitHub Actions workflow"
+				}
+
+				icon := getTemplateIcon(templateName)
+				templateDisplay := styles.SuccessStyle.Render(icon+" ") +
+					styles.AccentStyle.Render("workflows/"+templateName) +
 					styles.SubtleStyle.Render(" - "+description)
 				fmt.Println("  " + templateDisplay)
 				foundTemplates = true
@@ -239,6 +291,8 @@ func getTemplateIcon(templateName string) string {
 	switch {
 	case strings.Contains(templateName, "brainstorm"):
 		return "💡"
+	case strings.Contains(templateName, "claude-code"):
+		return "🤖"
 	case strings.Contains(templateName, "issue"):
 		return "🎯"
 	case strings.Contains(templateName, "pr"):

@@ -21,6 +21,10 @@ The following skills are available in the `.claude/skills/` directory:
 
 - **brainstorm**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
 
+The following workflow templates are available in `.github/workflows/`:
+
+- **claude-code**: GitHub Actions workflow for the Claude Code agent (responds to @claude mentions in issues and PRs)
+
 ## Usage
 
 To use a command template:
