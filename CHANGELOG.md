@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/nimble-giant/ailloy/compare/v0.1.2...v0.1.3) (2026-02-16)
+
+
+### Features
+
+* add Claude Code workflow template with --with-workflows flag ([5197c98](https://github.com/nimble-giant/ailloy/commit/5197c98cb19814f962a16d9b3e71bf5504debd98))
+* claude code review agent workflow for github ([e93cc91](https://github.com/nimble-giant/ailloy/commit/e93cc91acb4f29aadd507f81e88dc86ab582293e))
+
 ## [0.1.2](https://github.com/nimble-giant/ailloy/compare/v0.1.1...v0.1.2) (2026-02-15)
 
 
