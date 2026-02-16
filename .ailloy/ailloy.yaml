@@ -1,0 +1,5 @@
+templates:
+  ignore:
+    - ci.yml
+    - release.yml
+    - security.yml
