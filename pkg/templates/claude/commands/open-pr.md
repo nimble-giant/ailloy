@@ -18,7 +18,7 @@ When this command is used, Claude will:
 
 1. **Enter Plan Mode** to outline the PR creation/update process
 
-2. **Check for existing PR** on the current branch using `gh pr view`
+2. **Check for existing PR** on the current branch using `gh pr view --json number,title,url,state`
 
 3. **If PR already exists**:
    - Use `/update-pr` to update the existing PR description

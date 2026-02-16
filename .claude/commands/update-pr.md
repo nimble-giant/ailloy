@@ -14,7 +14,7 @@ When this command is used, Claude will:
 
 1. **Enter Plan Mode** to outline the PR update process
 
-2. **Verify PR exists** for the current branch using `gh pr view`
+2. **Verify PR exists** for the current branch using `gh pr view --json number,title,url,state`
 
 3. **Generate updated description** using `/pr-description` command
    - Analyzes current branch changes against main
