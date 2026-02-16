@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/nimble-giant/ailloy/compare/v0.1.3...v0.1.4) (2026-02-16)
+
+
+### Bug Fixes
+
+* start-issue no longer gets confused with sub-issues ([9cb5416](https://github.com/nimble-giant/ailloy/commit/9cb5416c73594cc85194b8de61d47f6371344426))
+
 ## [0.1.3](https://github.com/nimble-giant/ailloy/compare/v0.1.2...v0.1.3) (2026-02-16)
 
 
