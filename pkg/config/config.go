@@ -54,6 +54,7 @@ type TemplateConfig struct {
 	AutoUpdate      bool              `yaml:"auto_update"`
 	Repositories    []string          `yaml:"repositories"`
 	Variables       map[string]string `yaml:"variables"`
+	Ignore          []string          `yaml:"ignore"` // Patterns to exclude from template list
 }
 
 // WorkflowConfig holds workflow definitions

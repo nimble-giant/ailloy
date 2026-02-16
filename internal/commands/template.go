@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/nimble-giant/ailloy/pkg/config"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
 )
@@ -39,6 +40,9 @@ func init() {
 }
 
 func runListTemplates(cmd *cobra.Command, args []string) error {
+	// Load config to get ignore patterns
+	cfg, _ := config.LoadConfig(false) // Ignore errors, use empty config if not found
+
 	templateDirs := []string{
 		".claude/commands",         // Project commands directory (created by init)
 		".claude/skills",           // Project skills directory (created by init)
@@ -90,6 +94,11 @@ func runListTemplates(cmd *cobra.Command, args []string) error {
 				fileName := filepath.Base(path)
 				templateName := strings.TrimSuffix(fileName, ".md")
 
+				// Check if this template should be ignored
+				if isIgnored(fileName, templateName, category+"/"+templateName, cfg.Templates.Ignore) {
+					return nil
+				}
+
 				// Try to extract the first line as description
 				content, err := os.ReadFile(path) // #nosec G304 -- CLI tool reads user template files
 				if err != nil {
@@ -139,6 +148,11 @@ func runListTemplates(cmd *cobra.Command, args []string) error {
 			if !d.IsDir() && strings.HasSuffix(path, ".yml") {
 				fileName := filepath.Base(path)
 				templateName := strings.TrimSuffix(fileName, ".yml")
+
+				// Check if this workflow should be ignored
+				if isIgnored(fileName, templateName, "workflows/"+templateName, cfg.Templates.Ignore) {
+					return nil
+				}
 
 				// Extract the workflow name from the YAML
 				content, err := os.ReadFile(path) // #nosec G304 -- CLI tool reads user workflow files
@@ -284,6 +298,25 @@ func findTemplate(name string) (string, error) {
 	}
 
 	return "", fmt.Errorf("template %s not found", name)
+}
+
+// isIgnored checks if a template should be ignored based on the ignore patterns
+func isIgnored(fileName, templateName, fullPath string, patterns []string) bool {
+	for _, pattern := range patterns {
+		// Match against filename (e.g., "ci.yml")
+		if pattern == fileName {
+			return true
+		}
+		// Match against template name without extension (e.g., "ci")
+		if pattern == templateName {
+			return true
+		}
+		// Match against full path (e.g., "workflows/ci")
+		if pattern == fullPath {
+			return true
+		}
+	}
+	return false
 }
 
 // getTemplateIcon returns an appropriate icon based on template name
