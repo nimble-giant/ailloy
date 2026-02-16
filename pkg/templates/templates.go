@@ -4,18 +4,19 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"strings"
 )
 
-//go:embed all:claude
+//go:embed all:claude all:github
 var embeddedTemplates embed.FS
 
-// GetTemplate returns the content of a template file
+// GetTemplate returns the content of a command template file
 func GetTemplate(name string) ([]byte, error) {
 	path := fmt.Sprintf("claude/commands/%s", name)
 	return embeddedTemplates.ReadFile(path)
 }
 
-// ListTemplates returns a list of available template files
+// ListTemplates returns a list of available command template files
 func ListTemplates() ([]string, error) {
 	entries, err := fs.ReadDir(embeddedTemplates, "claude/commands")
 	if err != nil {
@@ -53,4 +54,27 @@ func ListSkills() ([]string, error) {
 	}
 
 	return skills, nil
+}
+
+// GetWorkflowTemplate returns the content of a GitHub workflow template file
+func GetWorkflowTemplate(name string) ([]byte, error) {
+	path := fmt.Sprintf("github/workflows/%s", name)
+	return embeddedTemplates.ReadFile(path)
+}
+
+// ListWorkflowTemplates returns a list of available GitHub workflow template files
+func ListWorkflowTemplates() ([]string, error) {
+	entries, err := fs.ReadDir(embeddedTemplates, "github/workflows")
+	if err != nil {
+		return nil, err
+	}
+
+	var templates []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".yml") {
+			templates = append(templates, entry.Name())
+		}
+	}
+
+	return templates, nil
 }

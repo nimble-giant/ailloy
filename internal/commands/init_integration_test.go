@@ -237,7 +237,7 @@ func TestIntegration_InitProject_DirectoryCreation(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
-	// Simulate the directory creation part of initProject
+	// Simulate the directory creation part of initProject (default, no workflows)
 	dirs := []string{
 		".claude",
 		".claude/commands",
@@ -377,4 +377,161 @@ func TestIntegration_TemplateFilePermissions(t *testing.T) {
 
 	checkPermissions(".claude/commands")
 	checkPermissions(".claude/skills")
+}
+
+func TestIntegration_InitProject_DefaultSkipsWorkflows(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() {
+		withWorkflows = false
+		_ = os.Chdir(origDir)
+	}()
+
+	// Ensure withWorkflows is false (default)
+	withWorkflows = false
+
+	err := initProject()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// .claude/commands should exist
+	if _, err := os.Stat(".claude/commands"); err != nil {
+		t.Error("expected .claude/commands to be created")
+	}
+
+	// .github/workflows should NOT exist
+	if _, err := os.Stat(".github/workflows"); err == nil {
+		t.Error("expected .github/workflows to NOT be created by default")
+	}
+
+	// No workflow files should exist
+	if _, err := os.Stat(filepath.Join(".github", "workflows", "claude-code.yml")); err == nil {
+		t.Error("expected claude-code.yml to NOT be created by default")
+	}
+}
+
+func TestIntegration_InitProject_WithWorkflowsFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() {
+		withWorkflows = false
+		_ = os.Chdir(origDir)
+	}()
+
+	// Enable workflows
+	withWorkflows = true
+
+	err := initProject()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// .claude/commands should exist
+	if _, err := os.Stat(".claude/commands"); err != nil {
+		t.Error("expected .claude/commands to be created")
+	}
+
+	// .github/workflows should exist
+	if _, err := os.Stat(".github/workflows"); err != nil {
+		t.Error("expected .github/workflows to be created with --with-workflows")
+	}
+
+	// Workflow file should exist and be non-empty
+	wfPath := filepath.Join(".github", "workflows", "claude-code.yml")
+	content, err := os.ReadFile(wfPath)
+	if err != nil {
+		t.Fatalf("expected claude-code.yml to be created: %v", err)
+	}
+	if len(content) == 0 {
+		t.Error("workflow file is empty")
+	}
+	if !strings.Contains(string(content), "claude-code-action") {
+		t.Error("workflow file should reference claude-code-action")
+	}
+}
+
+func TestIntegration_CopyWorkflowTemplates(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.MkdirAll(".github/workflows", 0750); err != nil {
+		t.Fatalf("failed to create dirs: %v", err)
+	}
+
+	err := copyWorkflowTemplates()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedWorkflows := []string{
+		"claude-code.yml",
+	}
+
+	for _, wf := range expectedWorkflows {
+		path := filepath.Join(".github", "workflows", wf)
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("expected workflow %s to be created: %v", wf, err)
+			continue
+		}
+		if len(content) == 0 {
+			t.Errorf("workflow %s is empty", wf)
+		}
+		if !strings.Contains(string(content), "name:") {
+			t.Errorf("workflow %s does not contain YAML name field", wf)
+		}
+	}
+}
+
+func TestIntegration_WorkflowFilesMatchEmbedded(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.MkdirAll(".github/workflows", 0750); err != nil {
+		t.Fatalf("failed to create dirs: %v", err)
+	}
+
+	err := copyWorkflowTemplates()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	embeddedList, err := embeddedtemplates.ListWorkflowTemplates()
+	if err != nil {
+		t.Fatalf("failed to list embedded workflows: %v", err)
+	}
+
+	for _, wfName := range embeddedList {
+		embeddedContent, err := embeddedtemplates.GetWorkflowTemplate(wfName)
+		if err != nil {
+			t.Errorf("failed to get embedded workflow %s: %v", wfName, err)
+			continue
+		}
+
+		filePath := filepath.Join(".github", "workflows", wfName)
+		fileContent, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Errorf("failed to read copied workflow %s: %v", wfName, err)
+			continue
+		}
+
+		if string(embeddedContent) != string(fileContent) {
+			t.Errorf("workflow %s content mismatch between embedded and copied version", wfName)
+		}
+	}
 }
