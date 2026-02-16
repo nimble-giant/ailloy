@@ -15,7 +15,7 @@ Refer to the full template documentation for detailed instructions.
 
 When this command is used, Claude will:
 
-1. **Fetch the issue details** using `gh issue view <issue-number>`
+1. **Fetch the issue details** using `gh issue view <issue-number> --json title,body,author,state,labels,assignees,milestone,number,url,comments`
 
 2. **Create a todo list** with tasks derived from the issue requirements
 
@@ -36,8 +36,10 @@ When this command is used, Claude will:
 
 ## GitHub CLI Commands
 
+**IMPORTANT:** Always use `--json` to avoid GitHub Projects (classic) deprecation errors.
+
 ```bash
-gh issue view <URL or issue-number>
+gh issue view <URL or issue-number> --json title,body,author,state,labels,assignees,milestone,number,url,comments
 ```
 
 

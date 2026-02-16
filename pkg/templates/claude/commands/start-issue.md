@@ -18,7 +18,7 @@ Fetch a GitHub issue and begin implementation.
 
 When this command is used, Claude will:
 
-1. **Fetch the issue details** using `gh issue view <issue-number>`
+1. **Fetch the issue details** using `gh issue view <issue-number> --json title,body,author,state,labels,assignees,milestone,number,url,comments`
 
 2. **Create a todo list** with tasks derived from the issue requirements
 
@@ -40,14 +40,16 @@ When this command is used, Claude will:
 
 ### Fetching Issue Details
 
+**IMPORTANT:** Always use `--json` to avoid GitHub Projects (classic) deprecation errors.
+
 ```bash
-gh issue view <URL or issue-number>
+gh issue view <URL or issue-number> --json title,body,author,state,labels,assignees,milestone,number,url,comments
 ```
 
 Examples:
 
-- `gh issue view https://github.com/your-org/your-repo/issues/1234`
-- `gh issue view 1234` (when in the repository directory)
+- `gh issue view 1234 --json title,body,author,state,labels,assignees,milestone,number,url,comments`
+- `gh issue view https://github.com/your-org/your-repo/issues/1234 --json title,body,author,state,labels,assignees,milestone,number,url,comments`
 
 ## Notes
 
