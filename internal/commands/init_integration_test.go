@@ -181,10 +181,25 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 	}
 
 	// Verify each embedded template has a corresponding file
+	// Note: templates are processed through the Go template engine,
+	// so we compare against the processed embedded content (not raw source)
 	for _, tmplName := range embeddedList {
 		embeddedContent, err := embeddedtemplates.GetTemplate(tmplName)
 		if err != nil {
 			t.Errorf("failed to get embedded template %s: %v", tmplName, err)
+			continue
+		}
+
+		// Process embedded content through the same template engine
+		// (with default models and no variables, matching what copyTemplateFiles does)
+		defaultModels := config.DefaultModels()
+		expectedContent, err := config.ProcessTemplate(
+			string(embeddedContent),
+			make(map[string]string),
+			&defaultModels,
+		)
+		if err != nil {
+			t.Errorf("failed to process embedded template %s: %v", tmplName, err)
 			continue
 		}
 
@@ -195,9 +210,8 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 			continue
 		}
 
-		// Content should match (no variables to substitute)
-		if string(embeddedContent) != string(fileContent) {
-			t.Errorf("template %s content mismatch between embedded and copied version", tmplName)
+		if expectedContent != string(fileContent) {
+			t.Errorf("template %s content mismatch between processed embedded and copied version", tmplName)
 		}
 	}
 
@@ -215,6 +229,18 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 			continue
 		}
 
+		// Process embedded content through the same template engine
+		defaultModels := config.DefaultModels()
+		expectedContent, err := config.ProcessTemplate(
+			string(embeddedContent),
+			make(map[string]string),
+			&defaultModels,
+		)
+		if err != nil {
+			t.Errorf("failed to process embedded skill %s: %v", skillName, err)
+			continue
+		}
+
 		filePath := filepath.Join(".claude", "skills", skillName)
 		fileContent, err := os.ReadFile(filePath)
 		if err != nil {
@@ -222,9 +248,8 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 			continue
 		}
 
-		// Content should match (no variables to substitute)
-		if string(embeddedContent) != string(fileContent) {
-			t.Errorf("skill %s content mismatch between embedded and copied version", skillName)
+		if expectedContent != string(fileContent) {
+			t.Errorf("skill %s content mismatch between processed embedded and copied version", skillName)
 		}
 	}
 }

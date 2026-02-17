@@ -290,7 +290,10 @@ func TestProcessTemplate_BasicSubstitution(t *testing.T) {
 		"project": "Ailloy",
 	}
 
-	result := ProcessTemplate(content, variables)
+	result, err := ProcessTemplate(content, variables, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	expected := "Hello Alice, welcome to Ailloy!"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
@@ -298,18 +301,23 @@ func TestProcessTemplate_BasicSubstitution(t *testing.T) {
 }
 
 func TestProcessTemplate_NoVariables(t *testing.T) {
-	content := "Hello {{name}}, welcome to {{project}}!"
+	content := "Hello world, no placeholders here!"
 	variables := map[string]string{}
 
-	result := ProcessTemplate(content, variables)
-	// Should remain unchanged
+	result, err := ProcessTemplate(content, variables, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if result != content {
 		t.Errorf("expected content to remain unchanged, got %q", result)
 	}
 }
 
 func TestProcessTemplate_EmptyContent(t *testing.T) {
-	result := ProcessTemplate("", map[string]string{"key": "value"})
+	result, err := ProcessTemplate("", map[string]string{"key": "value"}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if result != "" {
 		t.Errorf("expected empty string, got %q", result)
 	}
@@ -319,7 +327,10 @@ func TestProcessTemplate_MultipleOccurrences(t *testing.T) {
 	content := "{{name}} said: Hello {{name}}!"
 	variables := map[string]string{"name": "Bob"}
 
-	result := ProcessTemplate(content, variables)
+	result, err := ProcessTemplate(content, variables, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	expected := "Bob said: Hello Bob!"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
@@ -333,7 +344,10 @@ func TestProcessTemplate_PartialMatch(t *testing.T) {
 		"board_id": "12345",
 	}
 
-	result := ProcessTemplate(content, variables)
+	result, err := ProcessTemplate(content, variables, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	expected := "Use Engineering for issues on 12345"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
@@ -341,8 +355,11 @@ func TestProcessTemplate_PartialMatch(t *testing.T) {
 }
 
 func TestProcessTemplate_NilVariables(t *testing.T) {
-	content := "Hello {{name}}!"
-	result := ProcessTemplate(content, nil)
+	content := "Hello world!"
+	result, err := ProcessTemplate(content, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if result != content {
 		t.Errorf("expected content to remain unchanged with nil variables, got %q", result)
 	}
@@ -353,7 +370,10 @@ func TestProcessTemplate_SpecialCharacters(t *testing.T) {
 	variables := map[string]string{
 		"url": "https://example.com/path?query=1&other=2",
 	}
-	result := ProcessTemplate(content, variables)
+	result, err := ProcessTemplate(content, variables, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	expected := "URL: https://example.com/path?query=1&other=2"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)

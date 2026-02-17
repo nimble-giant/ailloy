@@ -47,16 +47,18 @@ func TestIntegration_VariableSubstitutionWorkflow(t *testing.T) {
 	}
 
 	// Step 4: Process a template with these variables
-	template := `# Create Issue for {{organization}}
+	tmpl := `# Create Issue for {{organization}}
 
 ## Board: {{default_board}}
 ## Status: {{default_status}}
-## Priority: {{default_priority}}
 `
 
-	result := ProcessTemplate(template, loaded.Templates.Variables)
+	result, err := ProcessTemplate(tmpl, loaded.Templates.Variables, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	if result == template {
+	if result == tmpl {
 		t.Error("expected template to be processed")
 	}
 	if !contains(result, "myteam") {
@@ -67,10 +69,6 @@ func TestIntegration_VariableSubstitutionWorkflow(t *testing.T) {
 	}
 	if !contains(result, "Ready") {
 		t.Error("expected 'Ready' in processed template")
-	}
-	// Unset variable should remain as placeholder
-	if !contains(result, "{{default_priority}}") {
-		t.Error("expected unset variable to remain as placeholder")
 	}
 }
 
@@ -222,7 +220,10 @@ Status Field: {{status_field_id}}
 Priority Field: {{priority_field_id}}
 Iteration Field: {{iteration_field_id}}`
 
-	result := ProcessTemplate(template, variables)
+	result, err := ProcessTemplate(template, variables, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	for key, value := range variables {
 		if contains(result, "{{"+key+"}}") {

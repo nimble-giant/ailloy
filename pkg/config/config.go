@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -182,16 +181,6 @@ func SaveConfig(config *Config, global bool) error {
 	}
 
 	return nil
-}
-
-// ProcessTemplate processes a template string by replacing {{variable}} placeholders
-func ProcessTemplate(content string, variables map[string]string) string {
-	result := content
-	for key, value := range variables {
-		placeholder := fmt.Sprintf("{{%s}}", key)
-		result = strings.ReplaceAll(result, placeholder, value)
-	}
-	return result
 }
 
 // DefaultModels returns the default model definitions with ailloy-native concepts

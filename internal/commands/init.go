@@ -190,8 +190,11 @@ Add your Claude Code command documentation here.
 `, strings.TrimSuffix(templateName, ".md"), strings.TrimSuffix(templateName, ".md")))
 		}
 
-		// Process template variables
-		processedContent := config.ProcessTemplate(string(content), cfg.Templates.Variables)
+		// Process template variables (with model-aware rendering)
+		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Variables, &cfg.Models)
+		if err != nil {
+			return fmt.Errorf("failed to process template %s: %w", templateName, err)
+		}
 
 		// Write to project directory
 		destPath := filepath.Join(templateDir, templateName)
@@ -285,8 +288,11 @@ Add your Claude Code skill documentation here.
 `, strings.TrimSuffix(skillName, ".md"), strings.TrimSuffix(skillName, ".md")))
 		}
 
-		// Process template variables
-		processedContent := config.ProcessTemplate(string(content), cfg.Templates.Variables)
+		// Process template variables (with model-aware rendering)
+		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Variables, &cfg.Models)
+		if err != nil {
+			return fmt.Errorf("failed to process skill %s: %w", skillName, err)
+		}
 
 		// Write to project directory
 		destPath := filepath.Join(skillDir, skillName)
