@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/nimble-giant/ailloy/compare/v0.1.4...v0.1.5) (2026-02-17)
+
+
+### Features
+
+* introduce semantic model layer for generations ([a9b8769](https://github.com/nimble-giant/ailloy/commit/a9b8769b8aad47ae69315dfe0071678471875997))
+
 ## [0.1.4](https://github.com/nimble-giant/ailloy/compare/v0.1.3...v0.1.4) (2026-02-16)
 
 
