@@ -224,57 +224,41 @@ gh issue edit <issue-number> --add-project "Engineering"
 # - "Reporting"
 ```
 
+{{- if or .models.status.enabled .models.priority.enabled .models.iteration.enabled}}
+
 ## Project Field Management
 
-### {{default_board}} Board Field IDs
+### {{.default_board}} Board Field IDs
 
-- Project ID: `{{project_id}}`
-- Status Field ID: `{{status_field_id}}`
-- Priority Field ID: `{{priority_field_id}}`  
-- Iteration Field ID: `{{iteration_field_id}}`
+- Project ID: `{{.project_id}}`
+{{- if .models.status.enabled}}
+- Status Field ID: `{{.models.status.field_id}}`
+{{- end}}
+{{- if .models.priority.enabled}}
+- Priority Field ID: `{{.models.priority.field_id}}`
+{{- end}}
+{{- if .models.iteration.enabled}}
+- Iteration Field ID: `{{.models.iteration.field_id}}`
+{{- end}}
+{{- if .models.status.enabled}}
 
 **Status Options:**
 
-- {{default_status}}: `e18bf179` (default)
-- In progress: `47fc9ee4`
-- In review: `aba860b9`
-- Done: `98236657`
-- Epics: `f75ad846`
-
-**Priority Options:**
-
-- P0: `79628723`
-- {{default_priority}}: `0a877460` (default)
-- P2: `da944a9c`
+{{range $key, $opt := .models.status.options -}}
+- {{$opt.label}}{{if $opt.id}}: `{{$opt.id}}`{{end}}
+{{end}}
 
 ```bash
-# Set Status to {{default_status}}
+# Set Status
 gh api graphql --field query='
 mutation {
   updateProjectV2ItemFieldValue(
     input: {
-      projectId: "{{project_id}}"
+      projectId: "{{.project_id}}"
       itemId: "<ITEM_ID>"
-      fieldId: "{{status_field_id}}"
-      value: { 
-        singleSelectOptionId: "e18bf179"
-      }
-    }
-  ) {
-    projectV2Item { id }
-  }
-}'
-
-# Set Priority to {{default_priority}}
-gh api graphql --field query='
-mutation {
-  updateProjectV2ItemFieldValue(
-    input: {
-      projectId: "{{project_id}}"
-      itemId: "<ITEM_ID>"
-      fieldId: "{{priority_field_id}}"
-      value: { 
-        singleSelectOptionId: "0a877460"
+      fieldId: "{{.models.status.field_id}}"
+      value: {
+        singleSelectOptionId: "<OPTION_ID>"
       }
     }
   ) {
@@ -282,6 +266,37 @@ mutation {
   }
 }'
 ```
+
+{{- end}}
+{{- if .models.priority.enabled}}
+
+**Priority Options:**
+
+{{range $key, $opt := .models.priority.options -}}
+- {{$opt.label}}{{if $opt.id}}: `{{$opt.id}}`{{end}}
+{{end}}
+
+```bash
+# Set Priority
+gh api graphql --field query='
+mutation {
+  updateProjectV2ItemFieldValue(
+    input: {
+      projectId: "{{.project_id}}"
+      itemId: "<ITEM_ID>"
+      fieldId: "{{.models.priority.field_id}}"
+      value: {
+        singleSelectOptionId: "<OPTION_ID>"
+      }
+    }
+  ) {
+    projectV2Item { id }
+  }
+}'
+```
+
+{{- end}}
+{{- end}}
 
 ### Flag Parsing Rules
 

@@ -164,17 +164,23 @@ Each template includes:
 
 ### Template Customization
 
-Templates support variables using `{{variable_name}}` syntax. Common variables include:
+Templates use `{{variable_name}}` syntax, powered by Go's [text/template](https://pkg.go.dev/text/template) engine. Common variables include:
 
 - `{{default_board}}`: Default GitHub project board name
 - `{{default_priority}}`: Default issue priority (P0, P1, P2)
 - `{{default_status}}`: Default issue status (Ready, In Progress, etc.)
 - `{{organization}}`: GitHub organization name
 - `{{project_id}}`: GitHub project ID for API calls
-- `{{status_field_id}}`: GitHub project status field ID
-- `{{priority_field_id}}`: GitHub project priority field ID
 
-Variables are automatically replaced when templates are copied during `ailloy init`.
+Templates also support **conditional rendering** based on your configuration:
+
+```markdown
+{{if .models.status.enabled}}
+Status Field: {{.models.status.field_id}}
+{{end}}
+```
+
+Variables and conditionals are processed when templates are copied during `ailloy init`. See the [Configuration Guide](docs/configuration.md) for full details on template syntax, models, and conditional rendering.
 
 ## Configuration
 
@@ -255,6 +261,7 @@ When both global and project configurations exist:
 - ✅ Project initialization with command template setup
 - ✅ Template management and viewing
 - ✅ Template customization with team-specific variables
+- ✅ Conditional template rendering with model-aware context
 - ✅ YAML configuration system with global and project scopes
 - ✅ Claude Code-optimized workflow templates
 - 🔄 Additional AI provider support (planned)
