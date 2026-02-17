@@ -154,6 +154,9 @@ func copyTemplateFiles() error {
 		}
 	}
 
+	// Merge model-derived variables into template variables
+	config.MergeModelVariables(cfg)
+
 	// Define template files to copy
 	templates := []string{
 		"brainstorm.md",
@@ -253,6 +256,9 @@ func copySkillFiles() error {
 			}
 		}
 	}
+
+	// Merge model-derived variables into template variables
+	config.MergeModelVariables(cfg)
 
 	// Define skill files to copy
 	skills := []string{

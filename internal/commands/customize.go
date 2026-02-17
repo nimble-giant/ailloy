@@ -104,7 +104,47 @@ func listTemplateVariables(cfg *config.Config) error {
 	}
 
 	fmt.Println(table.Render())
+
+	// Show models section if any are enabled
+	if hasEnabledModels(cfg) {
+		fmt.Println()
+		fmt.Println(styles.AccentStyle.Render("Semantic Models:"))
+		fmt.Println()
+
+		printModelSummary("Status", &cfg.Models.Status)
+		printModelSummary("Priority", &cfg.Models.Priority)
+		printModelSummary("Iteration", &cfg.Models.Iteration)
+	}
+
 	return nil
+}
+
+func hasEnabledModels(cfg *config.Config) bool {
+	return cfg.Models.Status.Enabled || cfg.Models.Priority.Enabled || cfg.Models.Iteration.Enabled
+}
+
+func printModelSummary(name string, model *config.ModelConfig) {
+	if !model.Enabled {
+		fmt.Println(styles.SubtleStyle.Render("  " + name + ": disabled"))
+		return
+	}
+
+	status := styles.SuccessStyle.Render("enabled")
+	mapping := ""
+	if model.FieldMapping != "" {
+		mapping = " -> " + styles.CodeStyle.Render(model.FieldMapping)
+	}
+	fmt.Println("  " + styles.AccentStyle.Render(name) + ": " + status + mapping)
+
+	if len(model.Options) > 0 {
+		for concept, opt := range model.Options {
+			line := "    " + styles.SubtleStyle.Render(concept) + ": " + styles.CodeStyle.Render(opt.Label)
+			if opt.ID != "" {
+				line += styles.SubtleStyle.Render(" (" + opt.ID + ")")
+			}
+			fmt.Println(line)
+		}
+	}
 }
 
 func deleteTemplateVariable(cfg *config.Config, key string) error {
