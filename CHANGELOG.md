@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/nimble-giant/ailloy/compare/v0.1.5...v0.1.6) (2026-02-17)
+
+
+### Bug Fixes
+
+* gh deprecated projects api ([b1611a8](https://github.com/nimble-giant/ailloy/commit/b1611a8d5e8926485bc070aad2d466f464a9f70f))
+
 ## [0.1.5](https://github.com/nimble-giant/ailloy/compare/v0.1.4...v0.1.5) (2026-02-17)
 
 
