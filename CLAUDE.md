@@ -6,6 +6,7 @@ This project is set up with Ailloy templates for AI-assisted development workflo
 
 The following command templates are available in the `.claude/commands/` directory:
 
+- **architect**: Invoke an expert cloud-native architect to produce system designs from high-level ideas
 - **create-issue**: Generate well-formatted GitHub issues with proper structure
 - **start-issue**: Fetch GitHub issue details and begin implementation
 - **open-pr**: Create pull requests with structured descriptions
@@ -21,7 +22,12 @@ The following skills are available in the `.claude/skills/` directory:
 
 - **brainstorm**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
 
-## Workflow Templates
+
+Skills are reusable expertise profiles in `.claude/skills/` that commands and workflows can activate:
+
+- **system-design**: Expert cloud-native architect persona for system design, technology selection, and architecture evaluation. Activated automatically by `/architect` and whenever a task involves architectural decisions.
+
+## Workflow Agents
 
 The following workflow templates are available in `.github/workflows/`:
 
