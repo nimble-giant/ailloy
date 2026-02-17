@@ -9,6 +9,27 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ModelOption represents a single option within a model (e.g., "P0" in Priority)
+type ModelOption struct {
+	Label string `yaml:"label"`        // User-facing label (or their GitHub field option name)
+	ID    string `yaml:"id,omitempty"` // Resolved GraphQL option ID (populated by discovery layer)
+}
+
+// ModelConfig represents a single semantic model (Status, Priority, or Iteration)
+type ModelConfig struct {
+	Enabled      bool                   `yaml:"enabled"`
+	FieldMapping string                 `yaml:"field_mapping,omitempty"` // User's GitHub Project field name
+	FieldID      string                 `yaml:"field_id,omitempty"`      // Resolved GraphQL field ID
+	Options      map[string]ModelOption `yaml:"options,omitempty"`       // concept name → option
+}
+
+// Models holds all semantic model configurations
+type Models struct {
+	Status    ModelConfig `yaml:"status"`
+	Priority  ModelConfig `yaml:"priority"`
+	Iteration ModelConfig `yaml:"iteration"`
+}
+
 // Config represents the Ailloy configuration structure
 type Config struct {
 	Project   ProjectConfig   `yaml:"project"`
@@ -16,6 +37,7 @@ type Config struct {
 	Workflows WorkflowConfig  `yaml:"workflows"`
 	User      UserConfig      `yaml:"user"`
 	Providers ProvidersConfig `yaml:"providers"`
+	Models    Models          `yaml:"models"`
 }
 
 // ProjectConfig holds project-specific settings
@@ -107,10 +129,12 @@ func LoadConfig(global bool) (*Config, error) {
 
 	// If config file doesn't exist, return default config
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		defaults := DefaultModels()
 		return &Config{
 			Templates: TemplateConfig{
 				Variables: make(map[string]string),
 			},
+			Models: defaults,
 		}, nil
 	}
 
@@ -128,6 +152,9 @@ func LoadConfig(global bool) (*Config, error) {
 	if config.Templates.Variables == nil {
 		config.Templates.Variables = make(map[string]string)
 	}
+
+	// Initialize models with defaults for any missing options
+	initModels(&config.Models)
 
 	return &config, nil
 }
@@ -165,4 +192,108 @@ func ProcessTemplate(content string, variables map[string]string) string {
 		result = strings.ReplaceAll(result, placeholder, value)
 	}
 	return result
+}
+
+// DefaultModels returns the default model definitions with ailloy-native concepts
+func DefaultModels() Models {
+	return Models{
+		Status: ModelConfig{
+			Enabled: false,
+			Options: map[string]ModelOption{
+				"ready":       {Label: "Ready"},
+				"in_progress": {Label: "In Progress"},
+				"in_review":   {Label: "In Review"},
+				"done":        {Label: "Done"},
+			},
+		},
+		Priority: ModelConfig{
+			Enabled: false,
+			Options: map[string]ModelOption{
+				"p0": {Label: "P0"},
+				"p1": {Label: "P1"},
+				"p2": {Label: "P2"},
+				"p3": {Label: "P3"},
+			},
+		},
+		Iteration: ModelConfig{
+			Enabled: false,
+		},
+	}
+}
+
+// initModels fills in missing default options without overwriting user-customized values
+func initModels(models *Models) {
+	defaults := DefaultModels()
+
+	initModelConfig(&models.Status, &defaults.Status)
+	initModelConfig(&models.Priority, &defaults.Priority)
+	// Iteration has no predefined options, just ensure the struct exists
+}
+
+// initModelConfig fills in missing options for a single model
+func initModelConfig(model *ModelConfig, defaults *ModelConfig) {
+	if model.Options == nil && defaults.Options != nil {
+		model.Options = make(map[string]ModelOption, len(defaults.Options))
+		for key, opt := range defaults.Options {
+			model.Options[key] = opt
+		}
+		return
+	}
+
+	// Fill in any missing default options
+	if defaults.Options != nil {
+		if model.Options == nil {
+			model.Options = make(map[string]ModelOption)
+		}
+		for key, opt := range defaults.Options {
+			if _, exists := model.Options[key]; !exists {
+				model.Options[key] = opt
+			}
+		}
+	}
+}
+
+// ModelsToVariables converts model state into the flat variable format that existing templates expect
+func ModelsToVariables(models Models) map[string]string {
+	vars := make(map[string]string)
+
+	if models.Status.Enabled {
+		if opt, ok := models.Status.Options["ready"]; ok {
+			vars["default_status"] = opt.Label
+		}
+		if models.Status.FieldID != "" {
+			vars["status_field_id"] = models.Status.FieldID
+		}
+	}
+
+	if models.Priority.Enabled {
+		if opt, ok := models.Priority.Options["p1"]; ok {
+			vars["default_priority"] = opt.Label
+		}
+		if models.Priority.FieldID != "" {
+			vars["priority_field_id"] = models.Priority.FieldID
+		}
+	}
+
+	if models.Iteration.Enabled {
+		if models.Iteration.FieldID != "" {
+			vars["iteration_field_id"] = models.Iteration.FieldID
+		}
+	}
+
+	return vars
+}
+
+// MergeModelVariables merges model-derived variables into the config's template variables.
+// Existing flat variables take precedence over model-derived values.
+func MergeModelVariables(cfg *Config) {
+	modelVars := ModelsToVariables(cfg.Models)
+	if cfg.Templates.Variables == nil {
+		cfg.Templates.Variables = make(map[string]string)
+	}
+	for key, value := range modelVars {
+		if _, exists := cfg.Templates.Variables[key]; !exists {
+			cfg.Templates.Variables[key] = value
+		}
+	}
 }
