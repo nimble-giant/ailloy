@@ -235,7 +235,25 @@ When models are disabled (the default), conditional template sections that depen
 
 ### Finding GitHub Projects Field IDs
 
-To populate model field IDs and option IDs:
+The recommended way to populate model field IDs and option IDs is through the interactive wizard:
+
+```bash
+# Launch the interactive wizard with automatic GitHub discovery
+ailloy customize
+```
+
+The wizard's **GitHub Integration** section uses `gh api graphql` to automatically:
+
+1. Discover all ProjectV2 boards in your organization
+2. List fields and their types for the selected board
+3. Smart-match model names (Status, Priority, Iteration) to GitHub field names
+4. Auto-map option labels (e.g., "In Progress" matches "In progress")
+
+The discovery layer caches responses for the duration of the session to avoid redundant API calls.
+
+**Requirements**: The `gh` CLI must be installed and authenticated (`gh auth login`).
+
+If you prefer to query manually:
 
 ```bash
 # List your organization's projects
@@ -345,12 +363,16 @@ ailloy customize --set default_board="Backend Team"
 
 ### Interactive Configuration
 
-The interactive mode (`ailloy customize`) guides you through setting up:
+The interactive mode (`ailloy customize`) launches a guided wizard with five sections:
 
-1. **Basic variables**: Essential settings like board name, priority, status, and organization
-2. **Advanced GitHub Project API**: Optional integration with GitHub Projects v2 API
-3. **Custom variables**: Any additional template variables your team needs
+1. **Project Basics**: Board name and organization name
+2. **GitHub Integration**: Enable automatic project discovery via `gh api graphql`, select a board from discovered ProjectV2 boards
+3. **Model Configuration**: Enable Status, Priority, and Iteration models; map each to a GitHub Project field with smart matching and auto-map options
+4. **Custom Variables**: Add freeform key-value pairs for template rendering
+5. **Review & Save**: See a styled summary of all changes before writing to disk
 
-The interactive mode provides examples but doesn't force any defaults, ensuring you only configure what's relevant to your team.
+Each section can be skipped by pressing Enter to keep existing values. The wizard uses `charmbracelet/huh` for a polished terminal UI experience.
+
+Non-interactive flag operations (`--set`, `--list`, `--delete`) remain available for scripting and CI use.
 
 This setup ensures consistency across projects while allowing project-specific customization.

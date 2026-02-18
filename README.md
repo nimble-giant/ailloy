@@ -110,7 +110,7 @@ Configure template variables for team-specific defaults:
 - `--list`: List current template variables
 - `--delete key`: Delete a template variable
 - `--global`: Work with global configuration (vs project-specific)
-- Interactive mode (no flags): Guided setup for common variables
+- Interactive mode (no flags): 5-section guided wizard with automatic GitHub Project field discovery, model configuration, and change review
 
 ### `ailloy template`
 
@@ -247,7 +247,13 @@ When both global and project configurations exist:
 ```text
 /cmd/ailloy          # CLI tool entry point
 /internal            # Private Go packages
-  /commands          # CLI command implementations
+  /commands          # CLI command implementations (customize wizard, init, etc.)
+/pkg
+  /config            # Configuration types, YAML I/O, template engine
+  /github            # GitHub ProjectV2 discovery via gh API GraphQL
+  /plugin            # Plugin generation pipeline
+  /styles            # Terminal UI styles (lipgloss)
+  /templates         # Embedded template filesystem
 /templates           # AI command templates
   /claude            # Claude Code-specific templates
 /docs                # Documentation
@@ -264,6 +270,8 @@ When both global and project configurations exist:
 - ✅ Conditional template rendering with model-aware context
 - ✅ YAML configuration system with global and project scopes
 - ✅ Claude Code-optimized workflow templates
+- ✅ Automatic GitHub Project field discovery via GraphQL
+- ✅ Interactive wizard with charmbracelet/huh for guided configuration
 - 🔄 Additional AI provider support (planned)
 - 🔄 Advanced workflow automation (planned)
 
