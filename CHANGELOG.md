@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.7](https://github.com/nimble-giant/ailloy/compare/v0.1.6...v0.1.7) (2026-02-18)
+
+
+### Features
+
+* allows ignoring templates ([a3cd65c](https://github.com/nimble-giant/ailloy/commit/a3cd65ca368a155bf701fe7f20ad365c6261a853))
+* rebuild interactive ux ([ba66237](https://github.com/nimble-giant/ailloy/commit/ba66237af120a53dacfee4c28108407f5d21b0bc))
+* upgrade template engine with conditionals and model rendering ([e5adcf0](https://github.com/nimble-giant/ailloy/commit/e5adcf06ea1d0102a3581510795eef209734d0c3)), closes [#26](https://github.com/nimble-giant/ailloy/issues/26)
+
 ## [0.1.6](https://github.com/nimble-giant/ailloy/compare/v0.1.5...v0.1.6) (2026-02-17)
 
 
