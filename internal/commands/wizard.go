@@ -21,7 +21,7 @@ func runWizardAnneal(cfg *config.Config) error {
 
 	// Snapshot original config for diff summary
 	origVars := snapshotVars(cfg)
-	origModels := snapshotModels(cfg)
+	origOre := snapshotOre(cfg)
 
 	// Wizard state
 	var (
@@ -31,7 +31,7 @@ func runWizardAnneal(cfg *config.Config) error {
 		enableGitHub  bool
 		selectedBoard string // "number:id" format for select value
 
-		enabledModels []string
+		enabledOreModels []string
 
 		statusField    string // field ID
 		priorityField  string // field ID
@@ -43,24 +43,24 @@ func runWizardAnneal(cfg *config.Config) error {
 	)
 
 	// Pre-populate from existing config
-	projectName = cfg.Templates.Variables["default_board"]
-	orgName = cfg.Templates.Variables["organization"]
+	projectName = cfg.Templates.Flux["default_board"]
+	orgName = cfg.Templates.Flux["organization"]
 
-	// Pre-populate enabled models
-	if cfg.Models.Status.Enabled {
-		enabledModels = append(enabledModels, "status")
+	// Pre-populate enabled ore models
+	if cfg.Ore.Status.Enabled {
+		enabledOreModels = append(enabledOreModels, "status")
 	}
-	if cfg.Models.Priority.Enabled {
-		enabledModels = append(enabledModels, "priority")
+	if cfg.Ore.Priority.Enabled {
+		enabledOreModels = append(enabledOreModels, "priority")
 	}
-	if cfg.Models.Iteration.Enabled {
-		enabledModels = append(enabledModels, "iteration")
+	if cfg.Ore.Iteration.Enabled {
+		enabledOreModels = append(enabledOreModels, "iteration")
 	}
 
 	// Pre-populate field IDs
-	statusField = cfg.Models.Status.FieldID
-	priorityField = cfg.Models.Priority.FieldID
-	iterationField = cfg.Models.Iteration.FieldID
+	statusField = cfg.Ore.Status.FieldID
+	priorityField = cfg.Ore.Priority.FieldID
+	iterationField = cfg.Ore.Iteration.FieldID
 
 	// Pre-populate custom vars
 	customVarsRaw = buildCustomVarsText(cfg)
@@ -112,24 +112,24 @@ func runWizardAnneal(cfg *config.Config) error {
 		return !enableGitHub || orgName == ""
 	})
 
-	// --- Section 3: Model Configuration ---
+	// --- Section 3: Ore Configuration ---
 	group3 := huh.NewGroup(
 		huh.NewMultiSelect[string]().
-			Title("Which models to enable?").
-			Description("Models map your workflow concepts to GitHub Project fields").
+			Title("Which ore models to enable?").
+			Description("Ore models map your workflow concepts to GitHub Project fields").
 			Options(
-				huh.NewOption("Status (track issue lifecycle)", "status").Selected(contains(enabledModels, "status")),
-				huh.NewOption("Priority (P0-P3 ranking)", "priority").Selected(contains(enabledModels, "priority")),
-				huh.NewOption("Iteration (sprint/cycle tracking)", "iteration").Selected(contains(enabledModels, "iteration")),
+				huh.NewOption("Status (track issue lifecycle)", "status").Selected(contains(enabledOreModels, "status")),
+				huh.NewOption("Priority (P0-P3 ranking)", "priority").Selected(contains(enabledOreModels, "priority")),
+				huh.NewOption("Iteration (sprint/cycle tracking)", "iteration").Selected(contains(enabledOreModels, "iteration")),
 			).
-			Value(&enabledModels),
-	).Title("Section 3: Model Configuration").
-		Description("Configure semantic models for your workflow")
+			Value(&enabledOreModels),
+	).Title("Section 3: Ore Configuration").
+		Description("Configure semantic ore models for your workflow")
 
 	// Field mapping for Status — hidden unless status is enabled AND GitHub integration is on
 	group3status := huh.NewGroup(
 		huh.NewSelect[string]().
-			Title("Map Status model to GitHub field").
+			Title("Map Status ore to GitHub field").
 			Description("Select which GitHub Project field represents status").
 			OptionsFunc(func() []huh.Option[string] {
 				return discoverFieldOptions(ghClient, orgName, selectedBoard, "Status")
@@ -137,13 +137,13 @@ func runWizardAnneal(cfg *config.Config) error {
 			Value(&statusField).
 			Height(8),
 	).WithHideFunc(func() bool {
-		return !enableGitHub || !contains(enabledModels, "status") || selectedBoard == ""
+		return !enableGitHub || !contains(enabledOreModels, "status") || selectedBoard == ""
 	})
 
 	// Field mapping for Priority
 	group3priority := huh.NewGroup(
 		huh.NewSelect[string]().
-			Title("Map Priority model to GitHub field").
+			Title("Map Priority ore to GitHub field").
 			Description("Select which GitHub Project field represents priority").
 			OptionsFunc(func() []huh.Option[string] {
 				return discoverFieldOptions(ghClient, orgName, selectedBoard, "Priority")
@@ -151,13 +151,13 @@ func runWizardAnneal(cfg *config.Config) error {
 			Value(&priorityField).
 			Height(8),
 	).WithHideFunc(func() bool {
-		return !enableGitHub || !contains(enabledModels, "priority") || selectedBoard == ""
+		return !enableGitHub || !contains(enabledOreModels, "priority") || selectedBoard == ""
 	})
 
 	// Field mapping for Iteration
 	group3iteration := huh.NewGroup(
 		huh.NewSelect[string]().
-			Title("Map Iteration model to GitHub field").
+			Title("Map Iteration ore to GitHub field").
 			Description("Select which GitHub Project field represents iteration/sprint").
 			OptionsFunc(func() []huh.Option[string] {
 				return discoverFieldOptions(ghClient, orgName, selectedBoard, "Iteration")
@@ -165,18 +165,18 @@ func runWizardAnneal(cfg *config.Config) error {
 			Value(&iterationField).
 			Height(8),
 	).WithHideFunc(func() bool {
-		return !enableGitHub || !contains(enabledModels, "iteration") || selectedBoard == ""
+		return !enableGitHub || !contains(enabledOreModels, "iteration") || selectedBoard == ""
 	})
 
-	// --- Section 4: Custom Variables ---
+	// --- Section 4: Custom Flux Variables ---
 	group4 := huh.NewGroup(
 		huh.NewText().
-			Title("Custom variables").
+			Title("Custom flux variables").
 			Description("One per line, format: key=value. Leave empty to skip.").
 			Placeholder("default_reviewer=alice\nslack_channel=#eng").
 			Value(&customVarsRaw).
 			Lines(6),
-	).Title("Section 4: Custom Variables").
+	).Title("Section 4: Custom Flux Variables").
 		Description("Add freeform key-value pairs for template rendering")
 
 	// --- Section 5: Review & Save ---
@@ -185,9 +185,9 @@ func runWizardAnneal(cfg *config.Config) error {
 			Title("Review Changes").
 			DescriptionFunc(func() string {
 				return buildSummaryDiff(
-					origVars, origModels,
+					origVars, origOre,
 					projectName, orgName,
-					enabledModels,
+					enabledOreModels,
 					statusField, priorityField, iterationField,
 					customVarsRaw,
 				)
@@ -224,7 +224,7 @@ func runWizardAnneal(cfg *config.Config) error {
 	}
 
 	// Apply wizard results to config
-	applyWizardResults(cfg, projectName, orgName, enabledModels,
+	applyWizardResults(cfg, projectName, orgName, enabledOreModels,
 		statusField, priorityField, iterationField,
 		customVarsRaw, enableGitHub, selectedBoard, ghClient)
 
@@ -269,7 +269,7 @@ func discoverBoards(client *github.Client, org string) []huh.Option[string] {
 }
 
 // discoverFieldOptions queries GitHub for project fields and returns huh options
-func discoverFieldOptions(client *github.Client, org, boardValue, modelName string) []huh.Option[string] {
+func discoverFieldOptions(client *github.Client, org, boardValue, oreName string) []huh.Option[string] {
 	if boardValue == "" {
 		return []huh.Option[string]{huh.NewOption("(select a board first)", "")}
 	}
@@ -286,17 +286,17 @@ func discoverFieldOptions(client *github.Client, org, boardValue, modelName stri
 
 	// Filter to relevant field types
 	var relevantTypes []github.FieldType
-	switch strings.ToLower(modelName) {
+	switch strings.ToLower(oreName) {
 	case "iteration":
 		relevantTypes = []github.FieldType{github.FieldTypeIteration, github.FieldTypeSingleSelect}
 	default:
 		relevantTypes = []github.FieldType{github.FieldTypeSingleSelect}
 	}
 
-	opts := []huh.Option[string]{huh.NewOption("(skip - don't map this model)", "")}
+	opts := []huh.Option[string]{huh.NewOption("(skip - don't map this ore)", "")}
 
 	// Try smart matching to determine which to pre-select
-	smartMatch := github.MatchFieldByName(result.Fields, modelName)
+	smartMatch := github.MatchFieldByName(result.Fields, oreName)
 
 	for _, f := range result.Fields {
 		if !isRelevantType(f.Type, relevantTypes) {
@@ -316,57 +316,57 @@ func discoverFieldOptions(client *github.Client, org, boardValue, modelName stri
 func applyWizardResults(
 	cfg *config.Config,
 	projectName, orgName string,
-	enabledModels []string,
+	enabledOreModels []string,
 	statusFieldID, priorityFieldID, iterationFieldID string,
 	customVarsRaw string,
 	enableGitHub bool,
 	selectedBoard string,
 	ghClient *github.Client,
 ) {
-	// Basic variables
+	// Basic flux variables
 	if projectName != "" {
-		cfg.Templates.Variables["default_board"] = projectName
+		cfg.Templates.Flux["default_board"] = projectName
 	}
 	if orgName != "" {
-		cfg.Templates.Variables["organization"] = orgName
+		cfg.Templates.Flux["organization"] = orgName
 	}
 
 	// Store project ID if board was selected
 	if enableGitHub && selectedBoard != "" {
 		boardID := parseBoardID(selectedBoard)
 		if boardID != "" {
-			cfg.Templates.Variables["project_id"] = boardID
+			cfg.Templates.Flux["project_id"] = boardID
 		}
 	}
 
-	// Model configuration
-	cfg.Models.Status.Enabled = contains(enabledModels, "status")
-	cfg.Models.Priority.Enabled = contains(enabledModels, "priority")
-	cfg.Models.Iteration.Enabled = contains(enabledModels, "iteration")
+	// Ore configuration
+	cfg.Ore.Status.Enabled = contains(enabledOreModels, "status")
+	cfg.Ore.Priority.Enabled = contains(enabledOreModels, "priority")
+	cfg.Ore.Iteration.Enabled = contains(enabledOreModels, "iteration")
 
 	// Field mapping
 	if statusFieldID != "" {
-		cfg.Models.Status.FieldID = statusFieldID
-		applyFieldMapping(cfg, ghClient, orgName, selectedBoard, &cfg.Models.Status, statusFieldID)
+		cfg.Ore.Status.FieldID = statusFieldID
+		applyFieldMapping(cfg, ghClient, orgName, selectedBoard, &cfg.Ore.Status, statusFieldID)
 	}
 	if priorityFieldID != "" {
-		cfg.Models.Priority.FieldID = priorityFieldID
-		applyFieldMapping(cfg, ghClient, orgName, selectedBoard, &cfg.Models.Priority, priorityFieldID)
+		cfg.Ore.Priority.FieldID = priorityFieldID
+		applyFieldMapping(cfg, ghClient, orgName, selectedBoard, &cfg.Ore.Priority, priorityFieldID)
 	}
 	if iterationFieldID != "" {
-		cfg.Models.Iteration.FieldID = iterationFieldID
-		applyFieldMapping(cfg, ghClient, orgName, selectedBoard, &cfg.Models.Iteration, iterationFieldID)
+		cfg.Ore.Iteration.FieldID = iterationFieldID
+		applyFieldMapping(cfg, ghClient, orgName, selectedBoard, &cfg.Ore.Iteration, iterationFieldID)
 	}
 
-	// Custom variables
+	// Custom flux variables
 	customVars := parseCustomVars(customVarsRaw)
 	for k, v := range customVars {
-		cfg.Templates.Variables[k] = v
+		cfg.Templates.Flux[k] = v
 	}
 }
 
 // applyFieldMapping looks up the field name and auto-maps options
-func applyFieldMapping(cfg *config.Config, ghClient *github.Client, org, boardValue string, model *config.ModelConfig, fieldID string) {
+func applyFieldMapping(cfg *config.Config, ghClient *github.Client, org, boardValue string, ore *config.OreConfig, fieldID string) {
 	if boardValue == "" || org == "" {
 		return
 	}
@@ -383,14 +383,14 @@ func applyFieldMapping(cfg *config.Config, ghClient *github.Client, org, boardVa
 	// Find the field by ID and set the mapping name
 	for _, f := range result.Fields {
 		if f.ID == fieldID {
-			model.FieldMapping = f.Name
+			ore.FieldMapping = f.Name
 
 			// Auto-map options by label matching
-			if model.Options != nil {
-				for conceptKey, opt := range model.Options {
+			if ore.Options != nil {
+				for conceptKey, opt := range ore.Options {
 					if matched := github.MatchOptionByName(f.Options, opt.Label); matched != nil {
 						opt.ID = matched.ID
-						model.Options[conceptKey] = opt
+						ore.Options[conceptKey] = opt
 					}
 				}
 			}
@@ -435,7 +435,7 @@ func buildCustomVarsText(cfg *config.Config) string {
 	}
 
 	var lines []string
-	for k, v := range cfg.Templates.Variables {
+	for k, v := range cfg.Templates.Flux {
 		if managed[k] {
 			continue
 		}
@@ -444,16 +444,16 @@ func buildCustomVarsText(cfg *config.Config) string {
 	return strings.Join(lines, "\n")
 }
 
-// snapshotVars captures current variable state for diff comparison
+// snapshotVars captures current flux variable state for diff comparison
 func snapshotVars(cfg *config.Config) map[string]string {
-	snap := make(map[string]string, len(cfg.Templates.Variables))
-	for k, v := range cfg.Templates.Variables {
+	snap := make(map[string]string, len(cfg.Templates.Flux))
+	for k, v := range cfg.Templates.Flux {
 		snap[k] = v
 	}
 	return snap
 }
 
-type modelSnapshot struct {
+type oreSnapshot struct {
 	StatusEnabled    bool
 	PriorityEnabled  bool
 	IterationEnabled bool
@@ -462,23 +462,23 @@ type modelSnapshot struct {
 	IterationFieldID string
 }
 
-func snapshotModels(cfg *config.Config) modelSnapshot {
-	return modelSnapshot{
-		StatusEnabled:    cfg.Models.Status.Enabled,
-		PriorityEnabled:  cfg.Models.Priority.Enabled,
-		IterationEnabled: cfg.Models.Iteration.Enabled,
-		StatusFieldID:    cfg.Models.Status.FieldID,
-		PriorityFieldID:  cfg.Models.Priority.FieldID,
-		IterationFieldID: cfg.Models.Iteration.FieldID,
+func snapshotOre(cfg *config.Config) oreSnapshot {
+	return oreSnapshot{
+		StatusEnabled:    cfg.Ore.Status.Enabled,
+		PriorityEnabled:  cfg.Ore.Priority.Enabled,
+		IterationEnabled: cfg.Ore.Iteration.Enabled,
+		StatusFieldID:    cfg.Ore.Status.FieldID,
+		PriorityFieldID:  cfg.Ore.Priority.FieldID,
+		IterationFieldID: cfg.Ore.Iteration.FieldID,
 	}
 }
 
 // buildSummaryDiff creates a styled diff of changes for the review section
 func buildSummaryDiff(
 	origVars map[string]string,
-	origModels modelSnapshot,
+	origOre oreSnapshot,
 	projectName, orgName string,
-	enabledModels []string,
+	enabledOreModels []string,
 	statusFieldID, priorityFieldID, iterationFieldID string,
 	customVarsRaw string,
 ) string {
@@ -492,20 +492,20 @@ func buildSummaryDiff(
 
 	b.WriteString("\n")
 
-	// Models
-	diffBool(&b, "Status model", origModels.StatusEnabled, contains(enabledModels, "status"))
-	diffBool(&b, "Priority model", origModels.PriorityEnabled, contains(enabledModels, "priority"))
-	diffBool(&b, "Iteration model", origModels.IterationEnabled, contains(enabledModels, "iteration"))
+	// Ore models
+	diffBool(&b, "Status ore", origOre.StatusEnabled, contains(enabledOreModels, "status"))
+	diffBool(&b, "Priority ore", origOre.PriorityEnabled, contains(enabledOreModels, "priority"))
+	diffBool(&b, "Iteration ore", origOre.IterationEnabled, contains(enabledOreModels, "iteration"))
 
 	// Field IDs
-	if statusFieldID != "" || origModels.StatusFieldID != "" {
-		diffVar(&b, "Status field ID", origModels.StatusFieldID, statusFieldID)
+	if statusFieldID != "" || origOre.StatusFieldID != "" {
+		diffVar(&b, "Status field ID", origOre.StatusFieldID, statusFieldID)
 	}
-	if priorityFieldID != "" || origModels.PriorityFieldID != "" {
-		diffVar(&b, "Priority field ID", origModels.PriorityFieldID, priorityFieldID)
+	if priorityFieldID != "" || origOre.PriorityFieldID != "" {
+		diffVar(&b, "Priority field ID", origOre.PriorityFieldID, priorityFieldID)
 	}
-	if iterationFieldID != "" || origModels.IterationFieldID != "" {
-		diffVar(&b, "Iteration field ID", origModels.IterationFieldID, iterationFieldID)
+	if iterationFieldID != "" || origOre.IterationFieldID != "" {
+		diffVar(&b, "Iteration field ID", origOre.IterationFieldID, iterationFieldID)
 	}
 
 	// Custom variables

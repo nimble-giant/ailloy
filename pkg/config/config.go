@@ -4,29 +4,30 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-// ModelOption represents a single option within a model (e.g., "P0" in Priority)
-type ModelOption struct {
+// OreOption represents a single option within an ore config (e.g., "P0" in Priority)
+type OreOption struct {
 	Label string `yaml:"label"`        // User-facing label (or their GitHub field option name)
 	ID    string `yaml:"id,omitempty"` // Resolved GraphQL option ID (populated by discovery layer)
 }
 
-// ModelConfig represents a single semantic model (Status, Priority, or Iteration)
-type ModelConfig struct {
-	Enabled      bool                   `yaml:"enabled"`
-	FieldMapping string                 `yaml:"field_mapping,omitempty"` // User's GitHub Project field name
-	FieldID      string                 `yaml:"field_id,omitempty"`      // Resolved GraphQL field ID
-	Options      map[string]ModelOption `yaml:"options,omitempty"`       // concept name → option
+// OreConfig represents a single semantic ore model (Status, Priority, or Iteration)
+type OreConfig struct {
+	Enabled      bool                 `yaml:"enabled"`
+	FieldMapping string               `yaml:"field_mapping,omitempty"` // User's GitHub Project field name
+	FieldID      string               `yaml:"field_id,omitempty"`      // Resolved GraphQL field ID
+	Options      map[string]OreOption `yaml:"options,omitempty"`       // concept name → option
 }
 
-// Models holds all semantic model configurations
-type Models struct {
-	Status    ModelConfig `yaml:"status"`
-	Priority  ModelConfig `yaml:"priority"`
-	Iteration ModelConfig `yaml:"iteration"`
+// Ore holds all semantic ore configurations
+type Ore struct {
+	Status    OreConfig `yaml:"status"`
+	Priority  OreConfig `yaml:"priority"`
+	Iteration OreConfig `yaml:"iteration"`
 }
 
 // Config represents the Ailloy configuration structure
@@ -36,7 +37,7 @@ type Config struct {
 	Workflows WorkflowConfig  `yaml:"workflows"`
 	User      UserConfig      `yaml:"user"`
 	Providers ProvidersConfig `yaml:"providers"`
-	Models    Models          `yaml:"models"`
+	Ore       Ore             `yaml:"ore"`
 }
 
 // ProjectConfig holds project-specific settings
@@ -52,7 +53,7 @@ type TemplateConfig struct {
 	DefaultProvider string            `yaml:"default_provider"`
 	AutoUpdate      bool              `yaml:"auto_update"`
 	Repositories    []string          `yaml:"repositories"`
-	Variables       map[string]string `yaml:"variables"`
+	Flux            map[string]string `yaml:"flux"`
 	Ignore          []string          `yaml:"ignore"` // Patterns to exclude from template list
 }
 
@@ -91,6 +92,27 @@ type GPTConfig struct {
 	APIKeyEnv string `yaml:"api_key_env"`
 }
 
+// projectConfigPaths returns candidate config file paths for project-level config, in priority order.
+func projectConfigPaths() []string {
+	return []string{
+		".ailloyrc",
+		"ailloy.yaml",
+		filepath.Join(".ailloy", "ailloy.yaml"),
+	}
+}
+
+// globalConfigPaths returns candidate config file paths for global-level config, in priority order.
+func globalConfigPaths() ([]string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	return []string{
+		filepath.Join(homeDir, ".ailloy", ".ailloyrc"),
+		filepath.Join(homeDir, ".ailloy", "ailloy.yaml"),
+	}, nil
+}
+
 // GetConfigDir returns the appropriate config directory
 func GetConfigDir(global bool) (string, error) {
 	if global {
@@ -120,21 +142,45 @@ func GetConfigPath(global bool) (string, error) {
 	return filepath.Join(configDir, configFile), nil
 }
 
-// LoadConfig loads configuration from the specified file
+// findConfigFile searches candidate paths and returns the first that exists.
+func findConfigFile(global bool) (string, error) {
+	if global {
+		paths, err := globalConfigPaths()
+		if err != nil {
+			return "", err
+		}
+		for _, p := range paths {
+			if _, err := os.Stat(p); err == nil {
+				return p, nil
+			}
+		}
+		return "", nil // none found
+	}
+
+	for _, p := range projectConfigPaths() {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", nil // none found
+}
+
+// LoadConfig loads configuration from the specified scope (project or global).
+// It searches multiple candidate file locations and returns the first found.
 func LoadConfig(global bool) (*Config, error) {
-	configPath, err := GetConfigPath(global)
+	configPath, err := findConfigFile(global)
 	if err != nil {
 		return nil, err
 	}
 
-	// If config file doesn't exist, return default config
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		defaults := DefaultModels()
+	// If no config file found, return default config
+	if configPath == "" {
+		defaults := DefaultOre()
 		return &Config{
 			Templates: TemplateConfig{
-				Variables: make(map[string]string),
+				Flux: make(map[string]string),
 			},
-			Models: defaults,
+			Ore: defaults,
 		}, nil
 	}
 
@@ -148,15 +194,88 @@ func LoadConfig(global bool) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// Initialize Variables map if nil
-	if config.Templates.Variables == nil {
-		config.Templates.Variables = make(map[string]string)
+	// Initialize Flux map if nil
+	if config.Templates.Flux == nil {
+		config.Templates.Flux = make(map[string]string)
 	}
 
-	// Initialize models with defaults for any missing options
-	initModels(&config.Models)
+	// Initialize ore with defaults for any missing options
+	initOre(&config.Ore)
 
 	return &config, nil
+}
+
+// LoadLayeredConfig loads configuration with full layering:
+// mold defaults < project config < global config < set overrides.
+func LoadLayeredConfig(setFlags []string) (*Config, error) {
+	// Layer 1: Start with defaults (includes mold flux defaults)
+	cfg := &Config{
+		Templates: TemplateConfig{
+			Flux: make(map[string]string),
+		},
+		Ore: DefaultOre(),
+	}
+
+	// Layer 2: Load project config
+	projectCfg, err := LoadConfig(false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load project config: %w", err)
+	}
+	mergeConfig(cfg, projectCfg)
+
+	// Layer 3: Load global config
+	globalCfg, err := LoadConfig(true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load global config: %w", err)
+	}
+	mergeConfig(cfg, globalCfg)
+
+	// Layer 4: Apply --set flag overrides
+	for _, flag := range setFlags {
+		parts := strings.SplitN(flag, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid --set format: %q (expected key=value)", flag)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			return nil, fmt.Errorf("--set key cannot be empty")
+		}
+		cfg.Templates.Flux[key] = value
+	}
+
+	return cfg, nil
+}
+
+// mergeConfig merges source config values into dest.
+// Non-zero source values override dest values; flux maps are merged with source taking precedence.
+func mergeConfig(dest, src *Config) {
+	// Merge flux: source values override dest
+	for k, v := range src.Templates.Flux {
+		dest.Templates.Flux[k] = v
+	}
+
+	// Merge ore: only override if source has enabled models
+	if src.Ore.Status.Enabled {
+		dest.Ore.Status = src.Ore.Status
+	}
+	if src.Ore.Priority.Enabled {
+		dest.Ore.Priority = src.Ore.Priority
+	}
+	if src.Ore.Iteration.Enabled {
+		dest.Ore.Iteration = src.Ore.Iteration
+	}
+
+	// Merge project info if set
+	if src.Project.Name != "" {
+		dest.Project = src.Project
+	}
+	if src.User.Name != "" || src.User.Email != "" {
+		dest.User = src.User
+	}
+	if src.Providers.Claude.Enabled || src.Providers.GPT.Enabled {
+		dest.Providers = src.Providers
+	}
 }
 
 // SaveConfig saves configuration to the specified file
@@ -184,106 +303,106 @@ func SaveConfig(config *Config, global bool) error {
 	return nil
 }
 
-// DefaultModels returns the default model definitions with ailloy-native concepts
-func DefaultModels() Models {
-	return Models{
-		Status: ModelConfig{
+// DefaultOre returns the default ore definitions with ailloy-native concepts
+func DefaultOre() Ore {
+	return Ore{
+		Status: OreConfig{
 			Enabled: false,
-			Options: map[string]ModelOption{
+			Options: map[string]OreOption{
 				"ready":       {Label: "Ready"},
 				"in_progress": {Label: "In Progress"},
 				"in_review":   {Label: "In Review"},
 				"done":        {Label: "Done"},
 			},
 		},
-		Priority: ModelConfig{
+		Priority: OreConfig{
 			Enabled: false,
-			Options: map[string]ModelOption{
+			Options: map[string]OreOption{
 				"p0": {Label: "P0"},
 				"p1": {Label: "P1"},
 				"p2": {Label: "P2"},
 				"p3": {Label: "P3"},
 			},
 		},
-		Iteration: ModelConfig{
+		Iteration: OreConfig{
 			Enabled: false,
 		},
 	}
 }
 
-// initModels fills in missing default options without overwriting user-customized values
-func initModels(models *Models) {
-	defaults := DefaultModels()
+// initOre fills in missing default options without overwriting user-customized values
+func initOre(ore *Ore) {
+	defaults := DefaultOre()
 
-	initModelConfig(&models.Status, &defaults.Status)
-	initModelConfig(&models.Priority, &defaults.Priority)
+	initOreConfig(&ore.Status, &defaults.Status)
+	initOreConfig(&ore.Priority, &defaults.Priority)
 	// Iteration has no predefined options, just ensure the struct exists
 }
 
-// initModelConfig fills in missing options for a single model
-func initModelConfig(model *ModelConfig, defaults *ModelConfig) {
-	if model.Options == nil && defaults.Options != nil {
-		model.Options = make(map[string]ModelOption, len(defaults.Options))
+// initOreConfig fills in missing options for a single ore config
+func initOreConfig(ore *OreConfig, defaults *OreConfig) {
+	if ore.Options == nil && defaults.Options != nil {
+		ore.Options = make(map[string]OreOption, len(defaults.Options))
 		for key, opt := range defaults.Options {
-			model.Options[key] = opt
+			ore.Options[key] = opt
 		}
 		return
 	}
 
 	// Fill in any missing default options
 	if defaults.Options != nil {
-		if model.Options == nil {
-			model.Options = make(map[string]ModelOption)
+		if ore.Options == nil {
+			ore.Options = make(map[string]OreOption)
 		}
 		for key, opt := range defaults.Options {
-			if _, exists := model.Options[key]; !exists {
-				model.Options[key] = opt
+			if _, exists := ore.Options[key]; !exists {
+				ore.Options[key] = opt
 			}
 		}
 	}
 }
 
-// ModelsToVariables converts model state into the flat variable format that existing templates expect
-func ModelsToVariables(models Models) map[string]string {
+// OreToFlux converts ore state into the flat flux variable format that existing templates expect
+func OreToFlux(ore Ore) map[string]string {
 	vars := make(map[string]string)
 
-	if models.Status.Enabled {
-		if opt, ok := models.Status.Options["ready"]; ok {
+	if ore.Status.Enabled {
+		if opt, ok := ore.Status.Options["ready"]; ok {
 			vars["default_status"] = opt.Label
 		}
-		if models.Status.FieldID != "" {
-			vars["status_field_id"] = models.Status.FieldID
+		if ore.Status.FieldID != "" {
+			vars["status_field_id"] = ore.Status.FieldID
 		}
 	}
 
-	if models.Priority.Enabled {
-		if opt, ok := models.Priority.Options["p1"]; ok {
+	if ore.Priority.Enabled {
+		if opt, ok := ore.Priority.Options["p1"]; ok {
 			vars["default_priority"] = opt.Label
 		}
-		if models.Priority.FieldID != "" {
-			vars["priority_field_id"] = models.Priority.FieldID
+		if ore.Priority.FieldID != "" {
+			vars["priority_field_id"] = ore.Priority.FieldID
 		}
 	}
 
-	if models.Iteration.Enabled {
-		if models.Iteration.FieldID != "" {
-			vars["iteration_field_id"] = models.Iteration.FieldID
+	if ore.Iteration.Enabled {
+		if ore.Iteration.FieldID != "" {
+			vars["iteration_field_id"] = ore.Iteration.FieldID
 		}
 	}
 
 	return vars
 }
 
-// MergeModelVariables merges model-derived variables into the config's template variables.
-// Existing flat variables take precedence over model-derived values.
-func MergeModelVariables(cfg *Config) {
-	modelVars := ModelsToVariables(cfg.Models)
-	if cfg.Templates.Variables == nil {
-		cfg.Templates.Variables = make(map[string]string)
+// MergeOreFlux merges ore-derived variables into the config's template flux.
+// Existing flat flux values take precedence over ore-derived values.
+func MergeOreFlux(cfg *Config) {
+	oreVars := OreToFlux(cfg.Ore)
+	if cfg.Templates.Flux == nil {
+		cfg.Templates.Flux = make(map[string]string)
 	}
-	for key, value := range modelVars {
-		if _, exists := cfg.Templates.Variables[key]; !exists {
-			cfg.Templates.Variables[key] = value
+	for key, value := range oreVars {
+		if _, exists := cfg.Templates.Flux[key]; !exists {
+			cfg.Templates.Flux[key] = value
 		}
 	}
 }

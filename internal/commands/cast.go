@@ -27,6 +27,7 @@ Use -g or --global to install user-level configuration instead.`,
 var (
 	globalInit    bool
 	withWorkflows bool
+	setFlags      []string
 )
 
 func init() {
@@ -34,6 +35,7 @@ func init() {
 
 	castCmd.Flags().BoolVarP(&globalInit, "global", "g", false, "install user-level configuration instead of project-level")
 	castCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow templates (e.g. Claude Code agent)")
+	castCmd.Flags().StringArrayVar(&setFlags, "set", nil, "override flux variable (format: key=value, can be repeated)")
 }
 
 func runCast(cmd *cobra.Command, args []string) error {
@@ -129,34 +131,48 @@ func castProject() error {
 	return nil
 }
 
-// copyTemplateFiles copies markdown template files from embedded sources to the project directory
-func copyTemplateFiles() error {
-	templateDir := ".claude/commands"
+// loadLayeredFluxConfig loads flux variables and ore config using full layering,
+// including --set flag overrides.
+func loadLayeredFluxConfig() (*config.Config, error) {
+	if len(setFlags) > 0 {
+		return config.LoadLayeredConfig(setFlags)
+	}
 
-	// Load configuration to get template variables
-	cfg, err := config.LoadConfig(false) // Load project config
+	// Standard two-layer merge: project + global
+	cfg, err := config.LoadConfig(false)
 	if err != nil {
-		// If config loading fails, continue with empty variables
 		cfg = &config.Config{
 			Templates: config.TemplateConfig{
-				Variables: make(map[string]string),
+				Flux: make(map[string]string),
 			},
 		}
 	}
 
-	// Try to load global config and merge variables
 	globalCfg, err := config.LoadConfig(true)
-	if err == nil && globalCfg.Templates.Variables != nil {
-		// Merge global variables (project variables take precedence)
-		for key, value := range globalCfg.Templates.Variables {
-			if _, exists := cfg.Templates.Variables[key]; !exists {
-				cfg.Templates.Variables[key] = value
+	if err == nil && globalCfg.Templates.Flux != nil {
+		for key, value := range globalCfg.Templates.Flux {
+			if _, exists := cfg.Templates.Flux[key]; !exists {
+				cfg.Templates.Flux[key] = value
 			}
 		}
 	}
 
-	// Merge model-derived variables into template variables
-	config.MergeModelVariables(cfg)
+	config.MergeOreFlux(cfg)
+	return cfg, nil
+}
+
+// copyTemplateFiles copies markdown template files from embedded sources to the project directory
+func copyTemplateFiles() error {
+	templateDir := ".claude/commands"
+
+	cfg, err := loadLayeredFluxConfig()
+	if err != nil {
+		cfg = &config.Config{
+			Templates: config.TemplateConfig{
+				Flux: make(map[string]string),
+			},
+		}
+	}
 
 	// Define template files to copy
 	templates := []string{
@@ -191,8 +207,8 @@ Add your Claude Code command documentation here.
 `, strings.TrimSuffix(templateName, ".md"), strings.TrimSuffix(templateName, ".md")))
 		}
 
-		// Process template variables (with model-aware rendering)
-		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Variables, &cfg.Models)
+		// Process template variables (with ore-aware rendering)
+		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore)
 		if err != nil {
 			return fmt.Errorf("failed to process template %s: %w", templateName, err)
 		}
@@ -241,28 +257,14 @@ func copyWorkflowTemplates() error {
 func copySkillFiles() error {
 	skillDir := ".claude/skills"
 
-	// Load configuration to get template variables
-	cfg, err := config.LoadConfig(false)
+	cfg, err := loadLayeredFluxConfig()
 	if err != nil {
 		cfg = &config.Config{
 			Templates: config.TemplateConfig{
-				Variables: make(map[string]string),
+				Flux: make(map[string]string),
 			},
 		}
 	}
-
-	// Try to load global config and merge variables
-	globalCfg, err := config.LoadConfig(true)
-	if err == nil && globalCfg.Templates.Variables != nil {
-		for key, value := range globalCfg.Templates.Variables {
-			if _, exists := cfg.Templates.Variables[key]; !exists {
-				cfg.Templates.Variables[key] = value
-			}
-		}
-	}
-
-	// Merge model-derived variables into template variables
-	config.MergeModelVariables(cfg)
 
 	// Define skill files to copy
 	skills := []string{
@@ -289,8 +291,8 @@ Add your Claude Code skill documentation here.
 `, strings.TrimSuffix(skillName, ".md"), strings.TrimSuffix(skillName, ".md")))
 		}
 
-		// Process template variables (with model-aware rendering)
-		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Variables, &cfg.Models)
+		// Process template variables (with ore-aware rendering)
+		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore)
 		if err != nil {
 			return fmt.Errorf("failed to process skill %s: %w", skillName, err)
 		}
@@ -342,7 +344,7 @@ providers:
   claude:
     enabled: true
     api_key_env: "ANTHROPIC_API_KEY"
-  
+
   gpt:
     enabled: false
     api_key_env: "OPENAI_API_KEY"

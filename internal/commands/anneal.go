@@ -13,10 +13,10 @@ import (
 var annealCmd = &cobra.Command{
 	Use:     "anneal",
 	Aliases: []string{"configure"},
-	Short:   "Anneal template variables",
+	Short:   "Anneal template flux variables",
 	Long: `Anneal team-specific defaults for templates (alias: configure).
 
-This command allows you to set variables that will be used to customize
+This command allows you to set flux variables that will be used to customize
 templates during casting. For example, you can set default board
 names, priorities, and other team-specific values.
 
@@ -35,9 +35,9 @@ var (
 func init() {
 	rootCmd.AddCommand(annealCmd)
 
-	annealCmd.Flags().StringArrayVarP(&setVar, "set", "s", nil, "set variable (format: key=value)")
-	annealCmd.Flags().BoolVarP(&listVars, "list", "l", false, "list current variables")
-	annealCmd.Flags().StringVarP(&deleteVar, "delete", "d", "", "delete variable")
+	annealCmd.Flags().StringArrayVarP(&setVar, "set", "s", nil, "set flux variable (format: key=value)")
+	annealCmd.Flags().BoolVarP(&listVars, "list", "l", false, "list current flux variables")
+	annealCmd.Flags().StringVarP(&deleteVar, "delete", "d", "", "delete flux variable")
 	annealCmd.Flags().BoolVarP(&globalCustomize, "global", "g", false, "customize global configuration")
 }
 
@@ -77,15 +77,15 @@ func listTemplateVariables(cfg *config.Config) error {
 	header := lipgloss.JoinVertical(
 		lipgloss.Center,
 		styles.FoxArt("sleepy"),
-		styles.HeaderStyle.Render("Template Variables ("+scope+")"),
+		styles.HeaderStyle.Render("Flux Variables ("+scope+")"),
 	)
 	fmt.Println(header)
 	fmt.Println()
 
-	if len(cfg.Templates.Variables) == 0 {
+	if len(cfg.Templates.Flux) == 0 {
 		noVarsMsg := styles.InfoBoxStyle.Render(
-			styles.InfoStyle.Render("ℹ️  No variables configured.\n\n") +
-				"Use " + styles.CodeStyle.Render("ailloy anneal") + " to set up variables interactively.",
+			styles.InfoStyle.Render("ℹ️  No flux variables configured.\n\n") +
+				"Use " + styles.CodeStyle.Render("ailloy anneal") + " to set up flux variables interactively.",
 		)
 		fmt.Println(noVarsMsg)
 		return nil
@@ -95,7 +95,7 @@ func listTemplateVariables(cfg *config.Config) error {
 	table := styles.NewTable()
 	table.Headers("Variable", "Value")
 
-	for key, value := range cfg.Templates.Variables {
+	for key, value := range cfg.Templates.Flux {
 		table.Row(
 			styles.AccentStyle.Render(key),
 			styles.CodeStyle.Render(value),
@@ -104,39 +104,39 @@ func listTemplateVariables(cfg *config.Config) error {
 
 	fmt.Println(table.Render())
 
-	// Show models section if any are enabled
-	if hasEnabledModels(cfg) {
+	// Show ore section if any are enabled
+	if hasEnabledOre(cfg) {
 		fmt.Println()
-		fmt.Println(styles.AccentStyle.Render("Semantic Models:"))
+		fmt.Println(styles.AccentStyle.Render("Ore Models:"))
 		fmt.Println()
 
-		printModelSummary("Status", &cfg.Models.Status)
-		printModelSummary("Priority", &cfg.Models.Priority)
-		printModelSummary("Iteration", &cfg.Models.Iteration)
+		printOreSummary("Status", &cfg.Ore.Status)
+		printOreSummary("Priority", &cfg.Ore.Priority)
+		printOreSummary("Iteration", &cfg.Ore.Iteration)
 	}
 
 	return nil
 }
 
-func hasEnabledModels(cfg *config.Config) bool {
-	return cfg.Models.Status.Enabled || cfg.Models.Priority.Enabled || cfg.Models.Iteration.Enabled
+func hasEnabledOre(cfg *config.Config) bool {
+	return cfg.Ore.Status.Enabled || cfg.Ore.Priority.Enabled || cfg.Ore.Iteration.Enabled
 }
 
-func printModelSummary(name string, model *config.ModelConfig) {
-	if !model.Enabled {
+func printOreSummary(name string, ore *config.OreConfig) {
+	if !ore.Enabled {
 		fmt.Println(styles.SubtleStyle.Render("  " + name + ": disabled"))
 		return
 	}
 
 	status := styles.SuccessStyle.Render("enabled")
 	mapping := ""
-	if model.FieldMapping != "" {
-		mapping = " -> " + styles.CodeStyle.Render(model.FieldMapping)
+	if ore.FieldMapping != "" {
+		mapping = " -> " + styles.CodeStyle.Render(ore.FieldMapping)
 	}
 	fmt.Println("  " + styles.AccentStyle.Render(name) + ": " + status + mapping)
 
-	if len(model.Options) > 0 {
-		for concept, opt := range model.Options {
+	if len(ore.Options) > 0 {
+		for concept, opt := range ore.Options {
 			line := "    " + styles.SubtleStyle.Render(concept) + ": " + styles.CodeStyle.Render(opt.Label)
 			if opt.ID != "" {
 				line += styles.SubtleStyle.Render(" (" + opt.ID + ")")
@@ -147,7 +147,7 @@ func printModelSummary(name string, model *config.ModelConfig) {
 }
 
 func deleteTemplateVariable(cfg *config.Config, key string) error {
-	if _, exists := cfg.Templates.Variables[key]; !exists {
+	if _, exists := cfg.Templates.Flux[key]; !exists {
 		errorMsg := styles.ErrorBoxStyle.Render(
 			styles.ErrorStyle.Render("❌ Variable not found: ") +
 				styles.CodeStyle.Render(key),
@@ -156,7 +156,7 @@ func deleteTemplateVariable(cfg *config.Config, key string) error {
 		return nil
 	}
 
-	delete(cfg.Templates.Variables, key)
+	delete(cfg.Templates.Flux, key)
 
 	if err := config.SaveConfig(cfg, globalCustomize); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
@@ -188,7 +188,7 @@ func setTemplateVariables(cfg *config.Config, variables []string) error {
 			return fmt.Errorf("variable key cannot be empty")
 		}
 
-		cfg.Templates.Variables[key] = value
+		cfg.Templates.Flux[key] = value
 	}
 
 	if err := config.SaveConfig(cfg, globalCustomize); err != nil {
