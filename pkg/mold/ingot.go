@@ -26,7 +26,7 @@ func LoadIngot(path string) (*Ingot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading ingot manifest: %w", err)
 	}
-	data, err := os.ReadFile(cleanPath)
+	data, err := os.ReadFile(cleanPath) // #nosec G304 -- path sanitized by safepath.Clean
 	if err != nil {
 		return nil, fmt.Errorf("reading ingot manifest: %w", err)
 	}
