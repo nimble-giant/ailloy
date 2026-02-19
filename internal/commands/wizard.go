@@ -523,16 +523,16 @@ func buildSummaryDiff(
 func diffVar(b *strings.Builder, name, old, new string) {
 	if old == new {
 		if old != "" {
-			b.WriteString(fmt.Sprintf("  %s: %s (unchanged)\n", name, old))
+			fmt.Fprintf(b, "  %s: %s (unchanged)\n", name, old)
 		}
 		return
 	}
 	if old == "" {
-		b.WriteString(fmt.Sprintf("  + %s: %s\n", name, new))
+		fmt.Fprintf(b, "  + %s: %s\n", name, new)
 	} else if new == "" {
-		b.WriteString(fmt.Sprintf("  - %s: %s\n", name, old))
+		fmt.Fprintf(b, "  - %s: %s\n", name, old)
 	} else {
-		b.WriteString(fmt.Sprintf("  ~ %s: %s -> %s\n", name, old, new))
+		fmt.Fprintf(b, "  ~ %s: %s -> %s\n", name, old, new)
 	}
 }
 
@@ -542,13 +542,13 @@ func diffBool(b *strings.Builder, name string, old, new bool) {
 		if old {
 			state = "enabled"
 		}
-		b.WriteString(fmt.Sprintf("  %s: %s (unchanged)\n", name, state))
+		fmt.Fprintf(b, "  %s: %s (unchanged)\n", name, state)
 		return
 	}
 	if new {
-		b.WriteString(fmt.Sprintf("  + %s: enabled\n", name))
+		fmt.Fprintf(b, "  + %s: enabled\n", name)
 	} else {
-		b.WriteString(fmt.Sprintf("  - %s: disabled\n", name))
+		fmt.Fprintf(b, "  - %s: disabled\n", name)
 	}
 }
 
