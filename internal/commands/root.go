@@ -3,8 +3,10 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
 )
@@ -63,6 +65,74 @@ func buildLongDescription(version string) string {
 }
 
 func init() {
-	// Global flags can be added here
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
+
+	// Register custom template function to render commands as a styled table
+	cobra.AddTemplateFunc("commandTable", func(cmd *cobra.Command) string {
+		// Check if any subcommand has aliases
+		hasAliases := false
+		for _, c := range cmd.Commands() {
+			if (c.IsAvailableCommand() || c.Name() == "help") && len(c.Aliases) > 0 {
+				hasAliases = true
+				break
+			}
+		}
+
+		t := table.New().
+			Border(lipgloss.NormalBorder()).
+			BorderStyle(lipgloss.NewStyle().Foreground(styles.Primary1)).
+			StyleFunc(func(row, col int) lipgloss.Style {
+				if row == table.HeaderRow {
+					return lipgloss.NewStyle().Bold(true).Foreground(styles.Primary1)
+				}
+				return lipgloss.NewStyle()
+			})
+
+		if hasAliases {
+			t.Headers("Command", "Aliases", "Description")
+		} else {
+			t.Headers("Command", "Description")
+		}
+
+		for _, c := range cmd.Commands() {
+			if !c.IsAvailableCommand() && c.Name() != "help" {
+				continue
+			}
+			if hasAliases {
+				t.Row(c.Name(), strings.Join(c.Aliases, ", "), c.Short)
+			} else {
+				t.Row(c.Name(), c.Short)
+			}
+		}
+
+		return t.Render()
+	})
+
+	rootCmd.SetUsageTemplate(usageTemplateWithAliases)
 }
+
+// usageTemplateWithAliases is cobra's default usage template modified to render
+// available commands as a styled table with an Aliases column.
+const usageTemplateWithAliases = `Usage:{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
+
+Aliases:
+  {{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+Examples:
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}
+
+{{commandTable .}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+Global Flags:
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+
+Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+`
