@@ -13,14 +13,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize Ailloy configuration",
-	Long: `Initialize Ailloy configuration for a project or globally.
+var castCmd = &cobra.Command{
+	Use:     "cast",
+	Aliases: []string{"install"},
+	Short:   "Cast Ailloy configuration into a project",
+	Long: `Cast Ailloy configuration into a project or globally (alias: install).
 
-By default, initializes Ailloy structure in the current repository.
+By default, casts Ailloy structure into the current repository.
 Use -g or --global to install user-level configuration instead.`,
-	RunE: runInit,
+	RunE: runCast,
 }
 
 var (
@@ -29,24 +30,24 @@ var (
 )
 
 func init() {
-	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(castCmd)
 
-	initCmd.Flags().BoolVarP(&globalInit, "global", "g", false, "install user-level configuration instead of project-level")
-	initCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow templates (e.g. Claude Code agent)")
+	castCmd.Flags().BoolVarP(&globalInit, "global", "g", false, "install user-level configuration instead of project-level")
+	castCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow templates (e.g. Claude Code agent)")
 }
 
-func runInit(cmd *cobra.Command, args []string) error {
+func runCast(cmd *cobra.Command, args []string) error {
 	if globalInit {
-		return initGlobal()
+		return castGlobal()
 	}
 
-	// Default to project initialization
-	return initProject()
+	// Default to project casting
+	return castProject()
 }
 
-func initProject() error {
+func castProject() error {
 	// Welcome message
-	fmt.Println(styles.WorkingBanner("Initializing Ailloy project structure..."))
+	fmt.Println(styles.WorkingBanner("Casting Ailloy project structure..."))
 	fmt.Println()
 
 	// Check runtime dependencies
@@ -100,7 +101,7 @@ func initProject() error {
 	}
 	// Success celebration
 	fmt.Println()
-	successMessage := "Project initialization complete!"
+	successMessage := "Project casting complete!"
 	fmt.Println(styles.SuccessBanner(successMessage))
 	fmt.Println()
 
@@ -185,7 +186,7 @@ Add your Claude Code command documentation here.
 
 ## Notes
 
-- This template was auto-generated during ailloy init
+- This template was auto-generated during ailloy cast
 - Replace this content with your actual Claude Code command
 `, strings.TrimSuffix(templateName, ".md"), strings.TrimSuffix(templateName, ".md")))
 		}
@@ -283,7 +284,7 @@ Add your Claude Code skill documentation here.
 
 ## Notes
 
-- This skill was auto-generated during ailloy init
+- This skill was auto-generated during ailloy cast
 - Replace this content with your actual Claude Code skill
 `, strings.TrimSuffix(skillName, ".md"), strings.TrimSuffix(skillName, ".md")))
 		}
@@ -306,8 +307,8 @@ Add your Claude Code skill documentation here.
 
 	return nil
 }
-func initGlobal() error {
-	fmt.Println("Initializing global Ailloy configuration...")
+func castGlobal() error {
+	fmt.Println("Casting global Ailloy configuration...")
 
 	// Get user home directory
 	homeDir, err := os.UserHomeDir()
@@ -361,7 +362,7 @@ preferences:
 	}
 	fmt.Printf("Created global configuration: %s\n", configPath)
 
-	fmt.Println("\n✅ Global initialization complete!")
+	fmt.Println("\n✅ Global casting complete!")
 	fmt.Printf("Configuration stored in: %s\n", globalDir)
 	fmt.Println("Edit the configuration files to set up your AI providers and preferences.")
 

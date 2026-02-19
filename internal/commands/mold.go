@@ -12,40 +12,57 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var templateCmd = &cobra.Command{
-	Use:   "template",
-	Short: "Work with Ailloy templates",
-	Long: `Commands for managing and executing Ailloy templates.
-	
-Templates are Markdown files that define AI commands and workflows.`,
+var moldCmd = &cobra.Command{
+	Use:   "mold",
+	Short: "Work with Ailloy molds (templates)",
+	Long: `Commands for managing and executing Ailloy molds.
+
+Molds are Markdown files that define AI commands and workflows.`,
 }
 
-var listTemplatesCmd = &cobra.Command{
+var listMoldsCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List available templates",
-	RunE:  runListTemplates,
+	Short: "List available molds",
+	RunE:  runListMolds,
 }
 
-var showTemplateCmd = &cobra.Command{
-	Use:   "show <template-name>",
-	Short: "Display a template's content",
+var showMoldCmd = &cobra.Command{
+	Use:   "show <mold-name>",
+	Short: "Display a mold's content",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runShowTemplate,
+	RunE:  runShowMold,
+}
+
+// showCmd is a top-level command that enables bidirectional syntax: "mold show" and "show mold"
+var showCmd = &cobra.Command{
+	Use:   "show",
+	Short: "Show resources",
+}
+
+var showMoldSubCmd = &cobra.Command{
+	Use:   "mold <mold-name>",
+	Short: "Display a mold's content",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runShowMold,
 }
 
 func init() {
-	rootCmd.AddCommand(templateCmd)
-	templateCmd.AddCommand(listTemplatesCmd)
-	templateCmd.AddCommand(showTemplateCmd)
+	rootCmd.AddCommand(moldCmd)
+	moldCmd.AddCommand(listMoldsCmd)
+	moldCmd.AddCommand(showMoldCmd)
+
+	// Bidirectional: "show mold <name>" also works
+	rootCmd.AddCommand(showCmd)
+	showCmd.AddCommand(showMoldSubCmd)
 }
 
-func runListTemplates(cmd *cobra.Command, args []string) error {
+func runListMolds(cmd *cobra.Command, args []string) error {
 	// Load config to get ignore patterns
 	cfg, _ := config.LoadConfig(false) // Ignore errors, use empty config if not found
 
-	templateDirs := []string{
-		".claude/commands",         // Project commands directory (created by init)
-		".claude/skills",           // Project skills directory (created by init)
+	moldDirs := []string{
+		".claude/commands",         // Project commands directory (created by cast)
+		".claude/skills",           // Project skills directory (created by cast)
 		"commands",                 // Legacy project commands directory
 		"templates/claude",         // Source templates directory
 		".ailloy/templates/claude", // Legacy project templates
@@ -56,18 +73,18 @@ func runListTemplates(cmd *cobra.Command, args []string) error {
 		".github/workflows", // Project workflows directory
 	}
 
-	// Header with inquisitive fox for exploring templates
+	// Header with inquisitive fox for exploring molds
 	header := lipgloss.JoinVertical(
 		lipgloss.Center,
 		styles.FoxArt("inquisitive"),
-		styles.HeaderStyle.Render("Available Claude Code Templates"),
+		styles.HeaderStyle.Render("Available Claude Code Molds"),
 	)
 	fmt.Println(header)
 	fmt.Println()
 
-	foundTemplates := false
+	foundMolds := false
 
-	for _, dir := range templateDirs {
+	for _, dir := range moldDirs {
 		if _, err := os.Stat(dir); os.IsNotExist(err) { // #nosec G703 -- CLI tool intentionally accesses user-specified template directories
 			continue
 		}
@@ -118,12 +135,12 @@ func runListTemplates(cmd *cobra.Command, args []string) error {
 				}
 
 				// Style the template listing
-				icon := getTemplateIcon(templateName)
+				icon := getMoldIcon(templateName)
 				templateDisplay := styles.SuccessStyle.Render(icon+" ") +
 					styles.AccentStyle.Render(category+"/"+templateName) +
 					styles.SubtleStyle.Render(" - "+description)
 				fmt.Println("  " + templateDisplay)
-				foundTemplates = true
+				foundMolds = true
 			}
 
 			return nil
@@ -171,12 +188,12 @@ func runListTemplates(cmd *cobra.Command, args []string) error {
 					description = "GitHub Actions workflow"
 				}
 
-				icon := getTemplateIcon(templateName)
+				icon := getMoldIcon(templateName)
 				templateDisplay := styles.SuccessStyle.Render(icon+" ") +
 					styles.AccentStyle.Render("workflows/"+templateName) +
 					styles.SubtleStyle.Render(" - "+description)
 				fmt.Println("  " + templateDisplay)
-				foundTemplates = true
+				foundMolds = true
 			}
 
 			return nil
@@ -187,49 +204,49 @@ func runListTemplates(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if !foundTemplates {
-		noTemplatesMsg := styles.InfoBoxStyle.Render(
-			styles.InfoStyle.Render("ℹ️  No templates found.\n\n") +
-				"Run " + styles.CodeStyle.Render("ailloy init --project") + " to set up templates.",
+	if !foundMolds {
+		noMoldsMsg := styles.InfoBoxStyle.Render(
+			styles.InfoStyle.Render("ℹ️  No molds found.\n\n") +
+				"Run " + styles.CodeStyle.Render("ailloy cast") + " to set up molds.",
 		)
-		fmt.Println(noTemplatesMsg)
+		fmt.Println(noMoldsMsg)
 	}
 
 	return nil
 }
 
-func runShowTemplate(cmd *cobra.Command, args []string) error {
-	templateName := args[0]
+func runShowMold(cmd *cobra.Command, args []string) error {
+	moldName := args[0]
 
-	// Find template file
-	templatePath, err := findTemplate(templateName)
+	// Find mold file
+	moldPath, err := findMold(moldName)
 	if err != nil {
 		errorMsg := styles.ErrorBoxStyle.Render(
-			styles.ErrorStyle.Render("❌ Template not found: ") +
-				styles.CodeStyle.Render(templateName) + "\n\n" +
-				"Run " + styles.CodeStyle.Render("ailloy template list") + " to see available templates.",
+			styles.ErrorStyle.Render("❌ Mold not found: ") +
+				styles.CodeStyle.Render(moldName) + "\n\n" +
+				"Run " + styles.CodeStyle.Render("ailloy mold list") + " to see available molds.",
 		)
 		fmt.Println(errorMsg)
 		return nil
 	}
 
-	// Read and display the template content
-	content, err := os.ReadFile(templatePath) // #nosec G304 -- CLI tool reads user template files
+	// Read and display the mold content
+	content, err := os.ReadFile(moldPath) // #nosec G304 -- CLI tool reads user template files
 	if err != nil {
-		return fmt.Errorf("failed to read template: %w", err)
+		return fmt.Errorf("failed to read mold: %w", err)
 	}
 
 	// Header with small fox emoji
-	icon := getTemplateIcon(templateName)
+	icon := getMoldIcon(moldName)
 	header := lipgloss.JoinVertical(
 		lipgloss.Center,
 		styles.FoxArt("small"),
-		styles.HeaderStyle.Render(icon+" Template: "+templateName),
+		styles.HeaderStyle.Render(icon+" Mold: "+moldName),
 	)
 	fmt.Println(header)
 
 	// Path info
-	pathInfo := styles.SubtleStyle.Render("📁 Path: " + templatePath)
+	pathInfo := styles.SubtleStyle.Render("📁 Path: " + moldPath)
 	fmt.Println(pathInfo)
 	fmt.Println()
 
@@ -240,17 +257,17 @@ func runShowTemplate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func findTemplate(name string) (string, error) {
-	templateDirs := []string{
-		".claude/commands",         // Project commands directory (created by init)
-		".claude/skills",           // Project skills directory (created by init)
+func findMold(name string) (string, error) {
+	moldDirs := []string{
+		".claude/commands",         // Project commands directory (created by cast)
+		".claude/skills",           // Project skills directory (created by cast)
 		"commands",                 // Legacy project commands directory
 		"templates/claude",         // Source templates directory
 		".ailloy/templates/claude", // Legacy project templates
 		filepath.Join(os.Getenv("HOME"), ".ailloy/templates/claude"), // Global templates
 	}
 
-	for _, dir := range templateDirs {
+	for _, dir := range moldDirs {
 		if _, err := os.Stat(dir); os.IsNotExist(err) { // #nosec G703 -- CLI tool checks template directory existence
 			continue
 		}
@@ -297,7 +314,7 @@ func findTemplate(name string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("template %s not found", name)
+	return "", fmt.Errorf("mold %s not found", name)
 }
 
 // isIgnored checks if a template should be ignored based on the ignore patterns
@@ -319,24 +336,24 @@ func isIgnored(fileName, templateName, fullPath string, patterns []string) bool 
 	return false
 }
 
-// getTemplateIcon returns an appropriate icon based on template name
-func getTemplateIcon(templateName string) string {
+// getMoldIcon returns an appropriate icon based on mold name
+func getMoldIcon(moldName string) string {
 	switch {
-	case strings.Contains(templateName, "brainstorm"):
+	case strings.Contains(moldName, "brainstorm"):
 		return "💡"
-	case strings.Contains(templateName, "claude-code"):
+	case strings.Contains(moldName, "claude-code"):
 		return "🤖"
-	case strings.Contains(templateName, "issue"):
+	case strings.Contains(moldName, "issue"):
 		return "🎯"
-	case strings.Contains(templateName, "pr"):
+	case strings.Contains(moldName, "pr"):
 		return "🔄"
-	case strings.Contains(templateName, "review"):
+	case strings.Contains(moldName, "review"):
 		return "👀"
-	case strings.Contains(templateName, "comment"):
+	case strings.Contains(moldName, "comment"):
 		return "💬"
-	case strings.Contains(templateName, "preflight"):
+	case strings.Contains(moldName, "preflight"):
 		return "✈️"
-	case strings.Contains(templateName, "update"):
+	case strings.Contains(moldName, "update"):
 		return "🔧"
 	default:
 		return "📋"

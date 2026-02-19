@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestGetTemplateIcon(t *testing.T) {
+func TestGetMoldIcon(t *testing.T) {
 	tests := []struct {
 		name     string
 		expected string
@@ -36,9 +36,9 @@ func TestGetTemplateIcon(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getTemplateIcon(tt.name)
+			result := getMoldIcon(tt.name)
 			if result != tt.expected {
-				t.Errorf("getTemplateIcon(%q) = %q, want %q", tt.name, result, tt.expected)
+				t.Errorf("getMoldIcon(%q) = %q, want %q", tt.name, result, tt.expected)
 			}
 		})
 	}

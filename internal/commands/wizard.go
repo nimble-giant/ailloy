@@ -12,8 +12,8 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/styles"
 )
 
-// runWizardCustomize runs the 5-section huh wizard for interactive customization
-func runWizardCustomize(cfg *config.Config) error {
+// runWizardAnneal runs the 5-section huh wizard for interactive annealing
+func runWizardAnneal(cfg *config.Config) error {
 	scope := "project"
 	if globalCustomize {
 		scope = "global"
@@ -69,7 +69,7 @@ func runWizardCustomize(cfg *config.Config) error {
 	ghClient := github.NewClient()
 
 	// Welcome banner
-	fmt.Println(styles.WorkingBanner("Interactive template customization (" + scope + ")"))
+	fmt.Println(styles.WorkingBanner("Interactive template annealing (" + scope + ")"))
 	fmt.Println()
 
 	// --- Section 1: Project Basics ---
@@ -212,7 +212,7 @@ func runWizardCustomize(cfg *config.Config) error {
 
 	if err := form.Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
-			fmt.Println(styles.InfoStyle.Render("Customization cancelled."))
+			fmt.Println(styles.InfoStyle.Render("Annealing cancelled."))
 			return nil
 		}
 		return fmt.Errorf("wizard error: %w", err)
@@ -233,7 +233,7 @@ func runWizardCustomize(cfg *config.Config) error {
 	}
 
 	fmt.Println()
-	fmt.Println(styles.SuccessBanner("Template customization saved to " + scope + " configuration"))
+	fmt.Println(styles.SuccessBanner("Template annealing saved to " + scope + " configuration"))
 	return nil
 }
 
@@ -523,16 +523,16 @@ func buildSummaryDiff(
 func diffVar(b *strings.Builder, name, old, new string) {
 	if old == new {
 		if old != "" {
-			b.WriteString(fmt.Sprintf("  %s: %s (unchanged)\n", name, old))
+			fmt.Fprintf(b, "  %s: %s (unchanged)\n", name, old)
 		}
 		return
 	}
 	if old == "" {
-		b.WriteString(fmt.Sprintf("  + %s: %s\n", name, new))
+		fmt.Fprintf(b, "  + %s: %s\n", name, new)
 	} else if new == "" {
-		b.WriteString(fmt.Sprintf("  - %s: %s\n", name, old))
+		fmt.Fprintf(b, "  - %s: %s\n", name, old)
 	} else {
-		b.WriteString(fmt.Sprintf("  ~ %s: %s -> %s\n", name, old, new))
+		fmt.Fprintf(b, "  ~ %s: %s -> %s\n", name, old, new)
 	}
 }
 
@@ -542,13 +542,13 @@ func diffBool(b *strings.Builder, name string, old, new bool) {
 		if old {
 			state = "enabled"
 		}
-		b.WriteString(fmt.Sprintf("  %s: %s (unchanged)\n", name, state))
+		fmt.Fprintf(b, "  %s: %s (unchanged)\n", name, state)
 		return
 	}
 	if new {
-		b.WriteString(fmt.Sprintf("  + %s: enabled\n", name))
+		fmt.Fprintf(b, "  + %s: enabled\n", name)
 	} else {
-		b.WriteString(fmt.Sprintf("  - %s: disabled\n", name))
+		fmt.Fprintf(b, "  - %s: disabled\n", name)
 	}
 }
 
