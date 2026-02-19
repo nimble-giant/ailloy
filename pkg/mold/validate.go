@@ -20,6 +20,7 @@ var validFluxTypes = map[string]bool{
 	"string": true,
 	"bool":   true,
 	"int":    true,
+	"list":   true,
 }
 
 // ValidateMold validates a Mold manifest for required fields and correct formats.
@@ -54,7 +55,7 @@ func ValidateMold(m *Mold) error {
 		if f.Type == "" {
 			errs = append(errs, fmt.Sprintf("flux[%d].type is required", i))
 		} else if !validFluxTypes[f.Type] {
-			errs = append(errs, fmt.Sprintf("flux[%d].type %q is not valid (allowed: string, bool, int)", i, f.Type))
+			errs = append(errs, fmt.Sprintf("flux[%d].type %q is not valid (allowed: string, bool, int, list)", i, f.Type))
 		}
 	}
 

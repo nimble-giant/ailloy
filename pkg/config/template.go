@@ -32,6 +32,21 @@ var goTemplateKeywords = map[string]bool{
 	"len": true, "index": true, "print": true, "printf": true,
 	"println": true, "call": true,
 	"eq": true, "ne": true, "lt": true, "le": true, "gt": true, "ge": true,
+	"ingot": true,
+}
+
+// TemplateOption configures optional behaviour for ProcessTemplate.
+type TemplateOption func(*templateConfig)
+
+type templateConfig struct {
+	ingotResolver *IngotResolver
+}
+
+// WithIngotResolver enables the {{ingot "name"}} template function.
+func WithIngotResolver(r *IngotResolver) TemplateOption {
+	return func(c *templateConfig) {
+		c.ingotResolver = r
+	}
 }
 
 // preProcessTemplate normalises simple {{variable}} references into
@@ -71,9 +86,14 @@ func preProcessTemplate(content string) string {
 // Simple {{variable}} references are automatically normalised to {{.variable}}
 // before parsing. Unresolved variables produce logged warnings and resolve to
 // empty strings. Returns an error only for template parse/execution failures.
-func ProcessTemplate(content string, flux map[string]string, ore *Ore) (string, error) {
+func ProcessTemplate(content string, flux map[string]string, ore *Ore, opts ...TemplateOption) (string, error) {
 	if content == "" {
 		return "", nil
+	}
+
+	var cfg templateConfig
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 
 	// Normalise simple {{variable}} references to {{.variable}}
@@ -82,8 +102,14 @@ func ProcessTemplate(content string, flux map[string]string, ore *Ore) (string, 
 	// Build the data map available to templates
 	data := BuildTemplateData(flux, ore)
 
+	// Build template function map
+	funcMap := template.FuncMap{}
+	if cfg.ingotResolver != nil {
+		funcMap["ingot"] = cfg.ingotResolver.Resolve
+	}
+
 	// Parse the template
-	tmpl, err := template.New("").Option("missingkey=zero").Parse(content)
+	tmpl, err := template.New("").Funcs(funcMap).Option("missingkey=zero").Parse(content)
 	if err != nil {
 		return "", fmt.Errorf("template parse error: %w", err)
 	}

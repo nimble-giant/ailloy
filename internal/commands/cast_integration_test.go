@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/nimble-giant/ailloy/pkg/config"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 	embeddedtemplates "github.com/nimble-giant/ailloy/pkg/templates"
 )
 
@@ -180,6 +181,13 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 		t.Fatalf("failed to list embedded templates: %v", err)
 	}
 
+	// Load manifest to apply the same flux defaults that copyTemplateFiles now applies
+	manifest, err := embeddedtemplates.LoadManifest()
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+	flux := mold.ApplyFluxDefaults(manifest.Flux, make(map[string]string))
+
 	// Verify each embedded template has a corresponding file
 	// Note: templates are processed through the Go template engine,
 	// so we compare against the processed embedded content (not raw source)
@@ -191,11 +199,11 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 		}
 
 		// Process embedded content through the same template engine
-		// (with default ore and no flux, matching what copyTemplateFiles does)
+		// (with default ore and flux defaults, matching what copyTemplateFiles does)
 		defaultOre := config.DefaultOre()
 		expectedContent, err := config.ProcessTemplate(
 			string(embeddedContent),
-			make(map[string]string),
+			flux,
 			&defaultOre,
 		)
 		if err != nil {
@@ -233,7 +241,7 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 		defaultOre := config.DefaultOre()
 		expectedContent, err := config.ProcessTemplate(
 			string(embeddedContent),
-			make(map[string]string),
+			flux,
 			&defaultOre,
 		)
 		if err != nil {
