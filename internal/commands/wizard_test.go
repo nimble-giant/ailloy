@@ -67,7 +67,7 @@ func TestParseCustomVars_ValueWithEquals(t *testing.T) {
 func TestBuildCustomVarsText_ExcludesManagedVars(t *testing.T) {
 	cfg := &config.Config{
 		Templates: config.TemplateConfig{
-			Variables: map[string]string{
+			Flux: map[string]string{
 				"default_board":      "Engineering",
 				"organization":       "acme",
 				"project_id":         "PVT_123",
@@ -97,10 +97,10 @@ func TestBuildCustomVarsText_ExcludesManagedVars(t *testing.T) {
 
 func TestBuildSummaryDiff_NewValues(t *testing.T) {
 	origVars := map[string]string{}
-	origModels := modelSnapshot{}
+	origOre := oreSnapshot{}
 
 	got := buildSummaryDiff(
-		origVars, origModels,
+		origVars, origOre,
 		"Engineering", "acme",
 		[]string{"status", "priority"},
 		"PVTSSF_1", "", "",
@@ -113,14 +113,14 @@ func TestBuildSummaryDiff_NewValues(t *testing.T) {
 	if !strings.Contains(got, "+ organization: acme") {
 		t.Error("expected new organization in diff")
 	}
-	if !strings.Contains(got, "+ Status model: enabled") {
-		t.Error("expected status model enabled")
+	if !strings.Contains(got, "+ Status ore: enabled") {
+		t.Error("expected status ore enabled")
 	}
-	if !strings.Contains(got, "+ Priority model: enabled") {
-		t.Error("expected priority model enabled")
+	if !strings.Contains(got, "+ Priority ore: enabled") {
+		t.Error("expected priority ore enabled")
 	}
-	if !strings.Contains(got, "Iteration model: disabled (unchanged)") {
-		t.Error("expected iteration model unchanged")
+	if !strings.Contains(got, "Iteration ore: disabled (unchanged)") {
+		t.Error("expected iteration ore unchanged")
 	}
 }
 
@@ -129,12 +129,12 @@ func TestBuildSummaryDiff_ChangedValues(t *testing.T) {
 		"default_board": "OldBoard",
 		"organization":  "oldorg",
 	}
-	origModels := modelSnapshot{
+	origOre := oreSnapshot{
 		StatusEnabled: true,
 	}
 
 	got := buildSummaryDiff(
-		origVars, origModels,
+		origVars, origOre,
 		"NewBoard", "neworg",
 		[]string{"status"},
 		"", "", "",
@@ -147,7 +147,7 @@ func TestBuildSummaryDiff_ChangedValues(t *testing.T) {
 	if !strings.Contains(got, "~ organization: oldorg -> neworg") {
 		t.Error("expected changed organization in diff")
 	}
-	if !strings.Contains(got, "Status model: enabled (unchanged)") {
+	if !strings.Contains(got, "Status ore: enabled (unchanged)") {
 		t.Error("expected status unchanged")
 	}
 }
@@ -157,12 +157,12 @@ func TestBuildSummaryDiff_UnchangedValues(t *testing.T) {
 		"default_board": "Board",
 		"organization":  "org",
 	}
-	origModels := modelSnapshot{
+	origOre := oreSnapshot{
 		StatusEnabled: true,
 	}
 
 	got := buildSummaryDiff(
-		origVars, origModels,
+		origVars, origOre,
 		"Board", "org",
 		[]string{"status"},
 		"", "", "",
@@ -176,7 +176,7 @@ func TestBuildSummaryDiff_UnchangedValues(t *testing.T) {
 
 func TestBuildSummaryDiff_CustomVars(t *testing.T) {
 	got := buildSummaryDiff(
-		map[string]string{}, modelSnapshot{},
+		map[string]string{}, oreSnapshot{},
 		"", "",
 		nil,
 		"", "", "",
@@ -253,14 +253,14 @@ func TestParseBoardID(t *testing.T) {
 func TestSnapshotVars(t *testing.T) {
 	cfg := &config.Config{
 		Templates: config.TemplateConfig{
-			Variables: map[string]string{"a": "1", "b": "2"},
+			Flux: map[string]string{"a": "1", "b": "2"},
 		},
 	}
 
 	snap := snapshotVars(cfg)
 
 	// Modify original
-	cfg.Templates.Variables["a"] = "changed"
+	cfg.Templates.Flux["a"] = "changed"
 
 	// Snapshot should be unaffected
 	if snap["a"] != "1" {
@@ -268,15 +268,15 @@ func TestSnapshotVars(t *testing.T) {
 	}
 }
 
-func TestSnapshotModels(t *testing.T) {
+func TestSnapshotOre(t *testing.T) {
 	cfg := &config.Config{
-		Models: config.Models{
-			Status:   config.ModelConfig{Enabled: true, FieldID: "f1"},
-			Priority: config.ModelConfig{Enabled: false},
+		Ore: config.Ore{
+			Status:   config.OreConfig{Enabled: true, FieldID: "f1"},
+			Priority: config.OreConfig{Enabled: false},
 		},
 	}
 
-	snap := snapshotModels(cfg)
+	snap := snapshotOre(cfg)
 
 	if !snap.StatusEnabled {
 		t.Error("expected status enabled")
@@ -299,9 +299,9 @@ func TestAilloyTheme_NotNil(t *testing.T) {
 func TestApplyWizardResults_BasicVars(t *testing.T) {
 	cfg := &config.Config{
 		Templates: config.TemplateConfig{
-			Variables: make(map[string]string),
+			Flux: make(map[string]string),
 		},
-		Models: config.DefaultModels(),
+		Ore: config.DefaultOre(),
 	}
 
 	applyWizardResults(cfg,
@@ -312,22 +312,22 @@ func TestApplyWizardResults_BasicVars(t *testing.T) {
 		false, "", nil,
 	)
 
-	if cfg.Templates.Variables["default_board"] != "Engineering" {
+	if cfg.Templates.Flux["default_board"] != "Engineering" {
 		t.Error("expected default_board to be set")
 	}
-	if cfg.Templates.Variables["organization"] != "acme" {
+	if cfg.Templates.Flux["organization"] != "acme" {
 		t.Error("expected organization to be set")
 	}
-	if !cfg.Models.Status.Enabled {
-		t.Error("expected status model enabled")
+	if !cfg.Ore.Status.Enabled {
+		t.Error("expected status ore enabled")
 	}
-	if !cfg.Models.Priority.Enabled {
-		t.Error("expected priority model enabled")
+	if !cfg.Ore.Priority.Enabled {
+		t.Error("expected priority ore enabled")
 	}
-	if cfg.Models.Iteration.Enabled {
-		t.Error("expected iteration model disabled")
+	if cfg.Ore.Iteration.Enabled {
+		t.Error("expected iteration ore disabled")
 	}
-	if cfg.Templates.Variables["custom_key"] != "custom_val" {
+	if cfg.Templates.Flux["custom_key"] != "custom_val" {
 		t.Error("expected custom_key to be set")
 	}
 }
@@ -335,9 +335,9 @@ func TestApplyWizardResults_BasicVars(t *testing.T) {
 func TestApplyWizardResults_ProjectID(t *testing.T) {
 	cfg := &config.Config{
 		Templates: config.TemplateConfig{
-			Variables: make(map[string]string),
+			Flux: make(map[string]string),
 		},
-		Models: config.DefaultModels(),
+		Ore: config.DefaultOre(),
 	}
 
 	applyWizardResults(cfg,
@@ -348,7 +348,7 @@ func TestApplyWizardResults_ProjectID(t *testing.T) {
 		true, "5:PVT_abc123", nil,
 	)
 
-	if cfg.Templates.Variables["project_id"] != "PVT_abc123" {
-		t.Errorf("expected project_id PVT_abc123, got %q", cfg.Templates.Variables["project_id"])
+	if cfg.Templates.Flux["project_id"] != "PVT_abc123" {
+		t.Errorf("expected project_id PVT_abc123, got %q", cfg.Templates.Flux["project_id"])
 	}
 }

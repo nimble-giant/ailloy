@@ -41,21 +41,21 @@ func loadForgeConfig(setValues []string) (*config.Config, error) {
 	if err != nil {
 		cfg = &config.Config{
 			Templates: config.TemplateConfig{
-				Variables: make(map[string]string),
+				Flux: make(map[string]string),
 			},
 		}
 	}
 
 	globalCfg, err := config.LoadConfig(true)
-	if err == nil && globalCfg.Templates.Variables != nil {
-		for key, value := range globalCfg.Templates.Variables {
-			if _, exists := cfg.Templates.Variables[key]; !exists {
-				cfg.Templates.Variables[key] = value
+	if err == nil && globalCfg.Templates.Flux != nil {
+		for key, value := range globalCfg.Templates.Flux {
+			if _, exists := cfg.Templates.Flux[key]; !exists {
+				cfg.Templates.Flux[key] = value
 			}
 		}
 	}
 
-	config.MergeModelVariables(cfg)
+	config.MergeOreFlux(cfg)
 
 	// Apply --set overrides (highest precedence)
 	for _, kv := range setValues {
@@ -63,7 +63,7 @@ func loadForgeConfig(setValues []string) (*config.Config, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid --set value %q: expected key=value", kv)
 		}
-		cfg.Templates.Variables[key] = value
+		cfg.Templates.Flux[key] = value
 	}
 
 	return cfg, nil
@@ -71,7 +71,7 @@ func loadForgeConfig(setValues []string) (*config.Config, error) {
 
 // renderFile processes a single template and returns the rendered content.
 func renderFile(name string, content []byte, cfg *config.Config) (string, error) {
-	rendered, err := config.ProcessTemplate(string(content), cfg.Templates.Variables, &cfg.Models)
+	rendered, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore)
 	if err != nil {
 		return "", fmt.Errorf("template %s: %w", name, err)
 	}

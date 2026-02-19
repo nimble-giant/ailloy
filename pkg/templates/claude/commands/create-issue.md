@@ -224,27 +224,27 @@ gh issue edit <issue-number> --add-project "Engineering"
 # - "Reporting"
 ```
 
-{{- if or .models.status.enabled .models.priority.enabled .models.iteration.enabled}}
+{{- if or .ore.status.enabled .ore.priority.enabled .ore.iteration.enabled}}
 
 ## Project Field Management
 
 ### {{.default_board}} Board Field IDs
 
 - Project ID: `{{.project_id}}`
-{{- if .models.status.enabled}}
-- Status Field ID: `{{.models.status.field_id}}`
+{{- if .ore.status.enabled}}
+- Status Field ID: `{{.ore.status.field_id}}`
 {{- end}}
-{{- if .models.priority.enabled}}
-- Priority Field ID: `{{.models.priority.field_id}}`
+{{- if .ore.priority.enabled}}
+- Priority Field ID: `{{.ore.priority.field_id}}`
 {{- end}}
-{{- if .models.iteration.enabled}}
-- Iteration Field ID: `{{.models.iteration.field_id}}`
+{{- if .ore.iteration.enabled}}
+- Iteration Field ID: `{{.ore.iteration.field_id}}`
 {{- end}}
-{{- if .models.status.enabled}}
+{{- if .ore.status.enabled}}
 
 **Status Options:**
 
-{{range $key, $opt := .models.status.options -}}
+{{range $key, $opt := .ore.status.options -}}
 - {{$opt.label}}{{if $opt.id}}: `{{$opt.id}}`{{end}}
 {{end}}
 
@@ -256,7 +256,7 @@ mutation {
     input: {
       projectId: "{{.project_id}}"
       itemId: "<ITEM_ID>"
-      fieldId: "{{.models.status.field_id}}"
+      fieldId: "{{.ore.status.field_id}}"
       value: {
         singleSelectOptionId: "<OPTION_ID>"
       }
@@ -268,11 +268,11 @@ mutation {
 ```
 
 {{- end}}
-{{- if .models.priority.enabled}}
+{{- if .ore.priority.enabled}}
 
 **Priority Options:**
 
-{{range $key, $opt := .models.priority.options -}}
+{{range $key, $opt := .ore.priority.options -}}
 - {{$opt.label}}{{if $opt.id}}: `{{$opt.id}}`{{end}}
 {{end}}
 
@@ -284,7 +284,7 @@ mutation {
     input: {
       projectId: "{{.project_id}}"
       itemId: "<ITEM_ID>"
-      fieldId: "{{.models.priority.field_id}}"
+      fieldId: "{{.ore.priority.field_id}}"
       value: {
         singleSelectOptionId: "<OPTION_ID>"
       }

@@ -63,15 +63,15 @@ func preProcessTemplate(content string) string {
 //
 // It supports:
 //   - Simple variable access: {{default_board}}, {{project_id}}
-//   - Dotted path access: {{models.status.field_id}}
-//   - Go template conditionals: {{if .models.status.enabled}}...{{end}}
-//   - Go template ranges: {{range $k, $v := .models.status.options}}...{{end}}
-//   - Nested model data access: {{.models.status.options.ready.id}}
+//   - Dotted path access: {{ore.status.field_id}}
+//   - Go template conditionals: {{if .ore.status.enabled}}...{{end}}
+//   - Go template ranges: {{range $k, $v := .ore.status.options}}...{{end}}
+//   - Nested ore data access: {{.ore.status.options.ready.id}}
 //
 // Simple {{variable}} references are automatically normalised to {{.variable}}
 // before parsing. Unresolved variables produce logged warnings and resolve to
 // empty strings. Returns an error only for template parse/execution failures.
-func ProcessTemplate(content string, variables map[string]string, models *Models) (string, error) {
+func ProcessTemplate(content string, flux map[string]string, ore *Ore) (string, error) {
 	if content == "" {
 		return "", nil
 	}
@@ -80,7 +80,7 @@ func ProcessTemplate(content string, variables map[string]string, models *Models
 	content = preProcessTemplate(content)
 
 	// Build the data map available to templates
-	data := BuildTemplateData(variables, models)
+	data := BuildTemplateData(flux, ore)
 
 	// Parse the template
 	tmpl, err := template.New("").Option("missingkey=zero").Parse(content)
@@ -101,45 +101,45 @@ func ProcessTemplate(content string, variables map[string]string, models *Models
 }
 
 // BuildTemplateData creates the data map passed to Go's text/template.Execute.
-// Flat variables are placed at the top level; model data is nested under "models".
-func BuildTemplateData(variables map[string]string, models *Models) map[string]any {
+// Flat flux variables are placed at the top level; ore data is nested under "ore".
+func BuildTemplateData(flux map[string]string, ore *Ore) map[string]any {
 	data := make(map[string]any)
 
-	// Add flat variables at top level
-	for k, v := range variables {
+	// Add flat flux variables at top level
+	for k, v := range flux {
 		data[k] = v
 	}
 
-	// Add models as nested structure (always present so conditionals work)
-	if models != nil {
-		data["models"] = modelsToTemplateMap(*models)
+	// Add ore as nested structure (always present so conditionals work)
+	if ore != nil {
+		data["ore"] = oreToTemplateMap(*ore)
 	} else {
-		data["models"] = modelsToTemplateMap(DefaultModels())
+		data["ore"] = oreToTemplateMap(DefaultOre())
 	}
 
 	return data
 }
 
-// modelsToTemplateMap converts the Models struct into a nested map structure
-// suitable for Go template field access (e.g., {{.models.status.enabled}}).
-func modelsToTemplateMap(models Models) map[string]any {
+// oreToTemplateMap converts the Ore struct into a nested map structure
+// suitable for Go template field access (e.g., {{.ore.status.enabled}}).
+func oreToTemplateMap(ore Ore) map[string]any {
 	return map[string]any{
-		"status":    modelConfigToMap(models.Status),
-		"priority":  modelConfigToMap(models.Priority),
-		"iteration": modelConfigToMap(models.Iteration),
+		"status":    oreConfigToMap(ore.Status),
+		"priority":  oreConfigToMap(ore.Priority),
+		"iteration": oreConfigToMap(ore.Iteration),
 	}
 }
 
-// modelConfigToMap converts a single ModelConfig into a map for template access.
-func modelConfigToMap(mc ModelConfig) map[string]any {
+// oreConfigToMap converts a single OreConfig into a map for template access.
+func oreConfigToMap(oc OreConfig) map[string]any {
 	m := map[string]any{
-		"enabled":       mc.Enabled,
-		"field_mapping": mc.FieldMapping,
-		"field_id":      mc.FieldID,
+		"enabled":       oc.Enabled,
+		"field_mapping": oc.FieldMapping,
+		"field_id":      oc.FieldID,
 	}
 
 	opts := make(map[string]any)
-	for k, v := range mc.Options {
+	for k, v := range oc.Options {
 		opts[k] = map[string]any{
 			"label": v.Label,
 			"id":    v.ID,
@@ -173,7 +173,7 @@ func warnUnresolvedVars(content string, data map[string]any) {
 	}
 }
 
-// resolveDataPath checks whether a dotted path (e.g., "models.status.field_id")
+// resolveDataPath checks whether a dotted path (e.g., "ore.status.field_id")
 // can be resolved against the given data map.
 func resolveDataPath(data map[string]any, path string) bool {
 	parts := strings.Split(path, ".")

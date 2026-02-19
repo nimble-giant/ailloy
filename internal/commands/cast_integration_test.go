@@ -97,10 +97,10 @@ func TestIntegration_CopyTemplateFiles_WithVariableSubstitution(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
-	// Create config with variables
+	// Create config with flux variables
 	cfg := &config.Config{
 		Templates: config.TemplateConfig{
-			Variables: map[string]string{
+			Flux: map[string]string{
 				"organization":  "test-org",
 				"default_board": "TestBoard",
 			},
@@ -191,12 +191,12 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 		}
 
 		// Process embedded content through the same template engine
-		// (with default models and no variables, matching what copyTemplateFiles does)
-		defaultModels := config.DefaultModels()
+		// (with default ore and no flux, matching what copyTemplateFiles does)
+		defaultOre := config.DefaultOre()
 		expectedContent, err := config.ProcessTemplate(
 			string(embeddedContent),
 			make(map[string]string),
-			&defaultModels,
+			&defaultOre,
 		)
 		if err != nil {
 			t.Errorf("failed to process embedded template %s: %v", tmplName, err)
@@ -230,11 +230,11 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 		}
 
 		// Process embedded content through the same template engine
-		defaultModels := config.DefaultModels()
+		defaultOre := config.DefaultOre()
 		expectedContent, err := config.ProcessTemplate(
 			string(embeddedContent),
 			make(map[string]string),
-			&defaultModels,
+			&defaultOre,
 		)
 		if err != nil {
 			t.Errorf("failed to process embedded skill %s: %v", skillName, err)

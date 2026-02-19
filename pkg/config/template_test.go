@@ -19,8 +19,8 @@ func TestPreProcessTemplate_BareVariable(t *testing.T) {
 }
 
 func TestPreProcessTemplate_DottedPath(t *testing.T) {
-	input := "Field: {{models.status.field_id}}"
-	expected := "Field: {{.models.status.field_id}}"
+	input := "Field: {{ore.status.field_id}}"
+	expected := "Field: {{.ore.status.field_id}}"
 	result := preProcessTemplate(input)
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
@@ -28,7 +28,7 @@ func TestPreProcessTemplate_DottedPath(t *testing.T) {
 }
 
 func TestPreProcessTemplate_AlreadyDotted(t *testing.T) {
-	input := "Field: {{.models.status.field_id}}"
+	input := "Field: {{.ore.status.field_id}}"
 	result := preProcessTemplate(input)
 	if result != input {
 		t.Errorf("expected no change, got %q", result)
@@ -61,9 +61,9 @@ func TestPreProcessTemplate_GoTemplateDirectives(t *testing.T) {
 		name  string
 		input string
 	}{
-		{"if", "{{if .models.status.enabled}}content{{end}}"},
-		{"range", "{{range $k, $v := .models.status.options}}item{{end}}"},
-		{"with", "{{with .models}}data{{end}}"},
+		{"if", "{{if .ore.status.enabled}}content{{end}}"},
+		{"range", "{{range $k, $v := .ore.status.options}}item{{end}}"},
+		{"with", "{{with .ore}}data{{end}}"},
 		{"trim markers", "{{- if .X -}}content{{- end -}}"},
 	}
 	for _, tt := range tests {
@@ -77,8 +77,8 @@ func TestPreProcessTemplate_GoTemplateDirectives(t *testing.T) {
 }
 
 func TestPreProcessTemplate_MixedContent(t *testing.T) {
-	input := `Hello {{name}}! {{if .models.status.enabled}}Status: {{default_status}}{{end}}`
-	expected := `Hello {{.name}}! {{if .models.status.enabled}}Status: {{.default_status}}{{end}}`
+	input := `Hello {{name}}! {{if .ore.status.enabled}}Status: {{default_status}}{{end}}`
+	expected := `Hello {{.name}}! {{if .ore.status.enabled}}Status: {{.default_status}}{{end}}`
 	result := preProcessTemplate(input)
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
@@ -106,11 +106,11 @@ func TestPreProcessTemplate_MultipleVariables(t *testing.T) {
 // --- BuildTemplateData tests ---
 
 func TestBuildTemplateData_FlatVariables(t *testing.T) {
-	vars := map[string]string{
+	flux := map[string]string{
 		"name":  "test",
 		"board": "Engineering",
 	}
-	data := BuildTemplateData(vars, nil)
+	data := BuildTemplateData(flux, nil)
 
 	if data["name"] != "test" {
 		t.Errorf("expected name='test', got %v", data["name"])
@@ -120,23 +120,23 @@ func TestBuildTemplateData_FlatVariables(t *testing.T) {
 	}
 }
 
-func TestBuildTemplateData_ModelsPresent(t *testing.T) {
-	models := &Models{
-		Status: ModelConfig{
+func TestBuildTemplateData_OrePresent(t *testing.T) {
+	ore := &Ore{
+		Status: OreConfig{
 			Enabled: true,
 			FieldID: "PVTSSF_abc",
-			Options: map[string]ModelOption{
+			Options: map[string]OreOption{
 				"ready": {Label: "Ready", ID: "opt_1"},
 			},
 		},
 	}
-	data := BuildTemplateData(nil, models)
+	data := BuildTemplateData(nil, ore)
 
-	modelsData, ok := data["models"].(map[string]any)
+	oreData, ok := data["ore"].(map[string]any)
 	if !ok {
-		t.Fatal("expected models to be a map")
+		t.Fatal("expected ore to be a map")
 	}
-	statusData, ok := modelsData["status"].(map[string]any)
+	statusData, ok := oreData["status"].(map[string]any)
 	if !ok {
 		t.Fatal("expected status to be a map")
 	}
@@ -162,16 +162,16 @@ func TestBuildTemplateData_ModelsPresent(t *testing.T) {
 	}
 }
 
-func TestBuildTemplateData_NilModelsGetsDefaults(t *testing.T) {
+func TestBuildTemplateData_NilOreGetsDefaults(t *testing.T) {
 	data := BuildTemplateData(nil, nil)
 
-	modelsData, ok := data["models"].(map[string]any)
+	oreData, ok := data["ore"].(map[string]any)
 	if !ok {
-		t.Fatal("expected models to be present even with nil input")
+		t.Fatal("expected ore to be present even with nil input")
 	}
-	statusData, ok := modelsData["status"].(map[string]any)
+	statusData, ok := oreData["status"].(map[string]any)
 	if !ok {
-		t.Fatal("expected status to be present in default models")
+		t.Fatal("expected status to be present in default ore")
 	}
 	if statusData["enabled"] != false {
 		t.Error("expected default status to be disabled")
@@ -181,12 +181,12 @@ func TestBuildTemplateData_NilModelsGetsDefaults(t *testing.T) {
 // --- ProcessTemplate conditional rendering tests ---
 
 func TestProcessTemplate_ConditionalEnabled(t *testing.T) {
-	content := `{{if .models.status.enabled}}Status is ON{{end}}`
-	models := &Models{
-		Status: ModelConfig{Enabled: true},
+	content := `{{if .ore.status.enabled}}Status is ON{{end}}`
+	ore := &Ore{
+		Status: OreConfig{Enabled: true},
 	}
 
-	result, err := ProcessTemplate(content, nil, models)
+	result, err := ProcessTemplate(content, nil, ore)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -196,12 +196,12 @@ func TestProcessTemplate_ConditionalEnabled(t *testing.T) {
 }
 
 func TestProcessTemplate_ConditionalDisabled(t *testing.T) {
-	content := `{{if .models.status.enabled}}Status is ON{{end}}`
-	models := &Models{
-		Status: ModelConfig{Enabled: false},
+	content := `{{if .ore.status.enabled}}Status is ON{{end}}`
+	ore := &Ore{
+		Status: OreConfig{Enabled: false},
 	}
 
-	result, err := ProcessTemplate(content, nil, models)
+	result, err := ProcessTemplate(content, nil, ore)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -211,12 +211,12 @@ func TestProcessTemplate_ConditionalDisabled(t *testing.T) {
 }
 
 func TestProcessTemplate_ConditionalElse(t *testing.T) {
-	content := `{{if .models.status.enabled}}ON{{else}}OFF{{end}}`
-	models := &Models{
-		Status: ModelConfig{Enabled: false},
+	content := `{{if .ore.status.enabled}}ON{{else}}OFF{{end}}`
+	ore := &Ore{
+		Status: OreConfig{Enabled: false},
 	}
 
-	result, err := ProcessTemplate(content, nil, models)
+	result, err := ProcessTemplate(content, nil, ore)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -225,16 +225,16 @@ func TestProcessTemplate_ConditionalElse(t *testing.T) {
 	}
 }
 
-func TestProcessTemplate_NestedModelAccess(t *testing.T) {
-	content := `Field: {{.models.status.field_id}}`
-	models := &Models{
-		Status: ModelConfig{
+func TestProcessTemplate_NestedOreAccess(t *testing.T) {
+	content := `Field: {{.ore.status.field_id}}`
+	ore := &Ore{
+		Status: OreConfig{
 			Enabled: true,
 			FieldID: "PVTSSF_abc123",
 		},
 	}
 
-	result, err := ProcessTemplate(content, nil, models)
+	result, err := ProcessTemplate(content, nil, ore)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -245,17 +245,17 @@ func TestProcessTemplate_NestedModelAccess(t *testing.T) {
 }
 
 func TestProcessTemplate_OptionAccess(t *testing.T) {
-	content := `Ready: {{.models.status.options.ready.label}} ({{.models.status.options.ready.id}})`
-	models := &Models{
-		Status: ModelConfig{
+	content := `Ready: {{.ore.status.options.ready.label}} ({{.ore.status.options.ready.id}})`
+	ore := &Ore{
+		Status: OreConfig{
 			Enabled: true,
-			Options: map[string]ModelOption{
+			Options: map[string]OreOption{
 				"ready": {Label: "Not Started", ID: "opt_abc"},
 			},
 		},
 	}
 
-	result, err := ProcessTemplate(content, nil, models)
+	result, err := ProcessTemplate(content, nil, ore)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -266,18 +266,18 @@ func TestProcessTemplate_OptionAccess(t *testing.T) {
 }
 
 func TestProcessTemplate_RangeOverOptions(t *testing.T) {
-	content := `{{range $key, $opt := .models.priority.options}}{{$opt.label}} {{end}}`
-	models := &Models{
-		Priority: ModelConfig{
+	content := `{{range $key, $opt := .ore.priority.options}}{{$opt.label}} {{end}}`
+	ore := &Ore{
+		Priority: OreConfig{
 			Enabled: true,
-			Options: map[string]ModelOption{
+			Options: map[string]OreOption{
 				"p0": {Label: "P0"},
 				"p1": {Label: "P1"},
 			},
 		},
 	}
 
-	result, err := ProcessTemplate(content, nil, models)
+	result, err := ProcessTemplate(content, nil, ore)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -291,18 +291,18 @@ func TestProcessTemplate_RangeOverOptions(t *testing.T) {
 }
 
 func TestProcessTemplate_OrConditional(t *testing.T) {
-	content := `{{if or .models.status.enabled .models.priority.enabled}}HAS MODELS{{end}}`
-	models := &Models{
-		Status:   ModelConfig{Enabled: false},
-		Priority: ModelConfig{Enabled: true},
+	content := `{{if or .ore.status.enabled .ore.priority.enabled}}HAS ORE{{end}}`
+	ore := &Ore{
+		Status:   OreConfig{Enabled: false},
+		Priority: OreConfig{Enabled: true},
 	}
 
-	result, err := ProcessTemplate(content, nil, models)
+	result, err := ProcessTemplate(content, nil, ore)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != "HAS MODELS" {
-		t.Errorf("expected 'HAS MODELS', got %q", result)
+	if result != "HAS ORE" {
+		t.Errorf("expected 'HAS ORE', got %q", result)
 	}
 }
 
@@ -310,12 +310,12 @@ func TestProcessTemplate_OrConditional(t *testing.T) {
 
 func TestProcessTemplate_BareVariables(t *testing.T) {
 	content := "Board: {{default_board}}, Status: {{default_status}}"
-	variables := map[string]string{
+	flux := map[string]string{
 		"default_board":  "Engineering",
 		"default_status": "Ready",
 	}
 
-	result, err := ProcessTemplate(content, variables, nil)
+	result, err := ProcessTemplate(content, flux, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -327,19 +327,19 @@ func TestProcessTemplate_BareVariables(t *testing.T) {
 
 func TestProcessTemplate_MixedBareAndConditionals(t *testing.T) {
 	content := `Board: {{default_board}}
-{{if .models.status.enabled}}Status Field: {{.models.status.field_id}}{{end}}`
+{{if .ore.status.enabled}}Status Field: {{.ore.status.field_id}}{{end}}`
 
-	variables := map[string]string{
+	flux := map[string]string{
 		"default_board": "Engineering",
 	}
-	models := &Models{
-		Status: ModelConfig{
+	ore := &Ore{
+		Status: OreConfig{
 			Enabled: true,
 			FieldID: "PVTSSF_xyz",
 		},
 	}
 
-	result, err := ProcessTemplate(content, variables, models)
+	result, err := ProcessTemplate(content, flux, ore)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -347,20 +347,20 @@ func TestProcessTemplate_MixedBareAndConditionals(t *testing.T) {
 		t.Error("expected bare variable to be resolved")
 	}
 	if !strings.Contains(result, "Status Field: PVTSSF_xyz") {
-		t.Error("expected model field to be resolved")
+		t.Error("expected ore field to be resolved")
 	}
 }
 
 func TestProcessTemplate_BareDottedPath(t *testing.T) {
-	content := "Field: {{models.status.field_id}}"
-	models := &Models{
-		Status: ModelConfig{
+	content := "Field: {{ore.status.field_id}}"
+	ore := &Ore{
+		Status: OreConfig{
 			Enabled: true,
 			FieldID: "PVTSSF_test",
 		},
 	}
 
-	result, err := ProcessTemplate(content, nil, models)
+	result, err := ProcessTemplate(content, nil, ore)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -406,8 +406,8 @@ func TestWarnUnresolvedVars_NoWarningForResolved(t *testing.T) {
 	}()
 
 	content := "Board: {{default_board}}"
-	variables := map[string]string{"default_board": "Engineering"}
-	_, err := ProcessTemplate(content, variables, nil)
+	flux := map[string]string{"default_board": "Engineering"}
+	_, err := ProcessTemplate(content, flux, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -429,14 +429,14 @@ func TestResolveDataPath_TopLevel(t *testing.T) {
 
 func TestResolveDataPath_Nested(t *testing.T) {
 	data := map[string]any{
-		"models": map[string]any{
+		"ore": map[string]any{
 			"status": map[string]any{
 				"field_id": "abc",
 			},
 		},
 	}
-	if !resolveDataPath(data, "models.status.field_id") {
-		t.Error("expected 'models.status.field_id' to resolve")
+	if !resolveDataPath(data, "ore.status.field_id") {
+		t.Error("expected 'ore.status.field_id' to resolve")
 	}
 }
 
@@ -449,11 +449,11 @@ func TestResolveDataPath_Missing(t *testing.T) {
 
 func TestResolveDataPath_PartiallyMissing(t *testing.T) {
 	data := map[string]any{
-		"models": map[string]any{
+		"ore": map[string]any{
 			"status": map[string]any{},
 		},
 	}
-	if resolveDataPath(data, "models.status.nonexistent") {
+	if resolveDataPath(data, "ore.status.nonexistent") {
 		t.Error("expected partial path to not resolve")
 	}
 }
