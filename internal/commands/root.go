@@ -47,9 +47,9 @@ func buildLongDescription(version string) string {
 
 	quickStart := styles.InfoBoxStyle.Render(
 		"Quick Start:\n\n" +
-			"🦊 ailloy init            # Set up project\n" +
-			"🦊 ailloy template list   # View templates\n" +
-			"🦊 ailloy customize       # Configure settings",
+			"🦊 ailloy cast            # Cast project (alias: install)\n" +
+			"🦊 ailloy mold list       # View molds\n" +
+			"🦊 ailloy anneal          # Anneal settings (alias: configure)",
 	)
 
 	return lipgloss.JoinVertical(

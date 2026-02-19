@@ -254,7 +254,7 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 	}
 }
 
-func TestIntegration_InitProject_DirectoryCreation(t *testing.T) {
+func TestIntegration_CastProject_DirectoryCreation(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -262,7 +262,7 @@ func TestIntegration_InitProject_DirectoryCreation(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
-	// Simulate the directory creation part of initProject (default, no workflows)
+	// Simulate the directory creation part of castProject (default, no workflows)
 	dirs := []string{
 		".claude",
 		".claude/commands",
@@ -288,7 +288,7 @@ func TestIntegration_InitProject_DirectoryCreation(t *testing.T) {
 	}
 }
 
-func TestIntegration_InitGlobal_DirectoryCreation(t *testing.T) {
+func TestIntegration_CastGlobal_DirectoryCreation(t *testing.T) {
 	// Create a temp "home" directory to avoid modifying real home
 	tmpHome := t.TempDir()
 
@@ -404,7 +404,7 @@ func TestIntegration_TemplateFilePermissions(t *testing.T) {
 	checkPermissions(".claude/skills")
 }
 
-func TestIntegration_InitProject_DefaultSkipsWorkflows(t *testing.T) {
+func TestIntegration_CastProject_DefaultSkipsWorkflows(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -418,7 +418,7 @@ func TestIntegration_InitProject_DefaultSkipsWorkflows(t *testing.T) {
 	// Ensure withWorkflows is false (default)
 	withWorkflows = false
 
-	err := initProject()
+	err := castProject()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -439,7 +439,7 @@ func TestIntegration_InitProject_DefaultSkipsWorkflows(t *testing.T) {
 	}
 }
 
-func TestIntegration_InitProject_WithWorkflowsFlag(t *testing.T) {
+func TestIntegration_CastProject_WithWorkflowsFlag(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -453,7 +453,7 @@ func TestIntegration_InitProject_WithWorkflowsFlag(t *testing.T) {
 	// Enable workflows
 	withWorkflows = true
 
-	err := initProject()
+	err := castProject()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

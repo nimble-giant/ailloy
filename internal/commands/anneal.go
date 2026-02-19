@@ -10,18 +10,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var customizeCmd = &cobra.Command{
-	Use:   "customize",
-	Short: "Customize template variables",
-	Long: `Configure team-specific defaults for templates.
-	
+var annealCmd = &cobra.Command{
+	Use:     "anneal",
+	Aliases: []string{"configure"},
+	Short:   "Anneal template variables",
+	Long: `Anneal team-specific defaults for templates (alias: configure).
+
 This command allows you to set variables that will be used to customize
-templates during initialization. For example, you can set default board
+templates during casting. For example, you can set default board
 names, priorities, and other team-specific values.
 
 Interactive mode provides guided setup without forcing any defaults,
 ensuring you only configure what's relevant to your team.`,
-	RunE: runCustomize,
+	RunE: runAnneal,
 }
 
 var (
@@ -32,15 +33,15 @@ var (
 )
 
 func init() {
-	rootCmd.AddCommand(customizeCmd)
+	rootCmd.AddCommand(annealCmd)
 
-	customizeCmd.Flags().StringArrayVarP(&setVar, "set", "s", nil, "set variable (format: key=value)")
-	customizeCmd.Flags().BoolVarP(&listVars, "list", "l", false, "list current variables")
-	customizeCmd.Flags().StringVarP(&deleteVar, "delete", "d", "", "delete variable")
-	customizeCmd.Flags().BoolVarP(&globalCustomize, "global", "g", false, "customize global configuration")
+	annealCmd.Flags().StringArrayVarP(&setVar, "set", "s", nil, "set variable (format: key=value)")
+	annealCmd.Flags().BoolVarP(&listVars, "list", "l", false, "list current variables")
+	annealCmd.Flags().StringVarP(&deleteVar, "delete", "d", "", "delete variable")
+	annealCmd.Flags().BoolVarP(&globalCustomize, "global", "g", false, "customize global configuration")
 }
 
-func runCustomize(cmd *cobra.Command, args []string) error {
+func runAnneal(cmd *cobra.Command, args []string) error {
 	// Load existing config
 	cfg, err := config.LoadConfig(globalCustomize)
 	if err != nil {
@@ -63,7 +64,7 @@ func runCustomize(cmd *cobra.Command, args []string) error {
 	}
 
 	// Interactive mode
-	return runInteractiveCustomize(cfg)
+	return runInteractiveAnneal(cfg)
 }
 
 func listTemplateVariables(cfg *config.Config) error {
@@ -84,7 +85,7 @@ func listTemplateVariables(cfg *config.Config) error {
 	if len(cfg.Templates.Variables) == 0 {
 		noVarsMsg := styles.InfoBoxStyle.Render(
 			styles.InfoStyle.Render("ℹ️  No variables configured.\n\n") +
-				"Use " + styles.CodeStyle.Render("ailloy customize") + " to set up variables interactively.",
+				"Use " + styles.CodeStyle.Render("ailloy anneal") + " to set up variables interactively.",
 		)
 		fmt.Println(noVarsMsg)
 		return nil
@@ -206,6 +207,6 @@ func setTemplateVariables(cfg *config.Config, variables []string) error {
 	return nil
 }
 
-func runInteractiveCustomize(cfg *config.Config) error {
-	return runWizardCustomize(cfg)
+func runInteractiveAnneal(cfg *config.Config) error {
+	return runWizardAnneal(cfg)
 }
