@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 
+	"github.com/nimble-giant/ailloy/pkg/safepath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -52,7 +53,11 @@ type Mold struct {
 
 // LoadMold reads and parses a mold.yaml file from the given path.
 func LoadMold(path string) (*Mold, error) {
-	data, err := os.ReadFile(path)
+	cleanPath, err := safepath.Clean(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading mold manifest: %w", err)
+	}
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading mold manifest: %w", err)
 	}

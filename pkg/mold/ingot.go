@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 
+	"github.com/nimble-giant/ailloy/pkg/safepath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,7 +22,11 @@ type Ingot struct {
 
 // LoadIngot reads and parses an ingot.yaml file from the given path.
 func LoadIngot(path string) (*Ingot, error) {
-	data, err := os.ReadFile(path)
+	cleanPath, err := safepath.Clean(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading ingot manifest: %w", err)
+	}
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading ingot manifest: %w", err)
 	}
