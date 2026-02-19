@@ -5,10 +5,22 @@ import (
 	"fmt"
 	"io/fs"
 	"strings"
+
+	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
-//go:embed all:claude all:github
+//go:embed all:claude all:github mold.yaml
 var embeddedTemplates embed.FS
+
+// FS returns the embedded filesystem for direct access.
+func FS() fs.FS {
+	return embeddedTemplates
+}
+
+// LoadManifest loads and parses the embedded mold.yaml manifest.
+func LoadManifest() (*mold.Mold, error) {
+	return mold.LoadMoldFromFS(embeddedTemplates, "mold.yaml")
+}
 
 // GetTemplate returns the content of a command template file
 func GetTemplate(name string) ([]byte, error) {

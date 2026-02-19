@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: mold
+name: ailloy-defaults
+version: 1.0.0
+description: "Default Claude Code commands, skills, and workflows for AI-assisted development"
+author:
+  name: Nimble Giant
+  url: https://github.com/nimble-giant/ailloy
+requires:
+  ailloy: ">=0.2.0"
+flux:
+  - name: default_board
+    description: "Default GitHub project board name"
+    type: string
+    required: false
+    default: "Engineering"
+  - name: organization
+    description: "GitHub organization name"
+    type: string
+    required: true
+  - name: project_id
+    description: "GitHub Projects V2 project ID"
+    type: string
+    required: false
+commands:
+  - brainstorm.md
+  - create-issue.md
+  - open-pr.md
+  - pr-comments.md
+  - pr-description.md
+  - pr-review.md
+  - preflight.md
+  - start-issue.md
+  - update-pr.md
+skills:
+  - brainstorm.md
+workflows:
+  - claude-code.yml
+  - claude-code-review.yml
