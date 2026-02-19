@@ -2,12 +2,14 @@ package commands
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/nimble-giant/ailloy/pkg/config"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	embeddedtemplates "github.com/nimble-giant/ailloy/pkg/templates"
 	"github.com/spf13/cobra"
@@ -174,6 +176,19 @@ func copyTemplateFiles() error {
 		}
 	}
 
+	// Apply flux defaults and validate from manifest schema
+	manifest, _ := embeddedtemplates.LoadManifest()
+	if manifest != nil {
+		cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
+		if err := mold.ValidateFlux(manifest.Flux, cfg.Templates.Flux); err != nil {
+			log.Printf("warning: %v", err)
+		}
+	}
+
+	// Build ingot resolver
+	resolver := buildIngotResolver(cfg)
+	opts := []config.TemplateOption{config.WithIngotResolver(resolver)}
+
 	// Define template files to copy
 	templates := []string{
 		"brainstorm.md",
@@ -208,7 +223,7 @@ Add your Claude Code command documentation here.
 		}
 
 		// Process template variables (with ore-aware rendering)
-		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore)
+		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore, opts...)
 		if err != nil {
 			return fmt.Errorf("failed to process template %s: %w", templateName, err)
 		}
@@ -266,6 +281,16 @@ func copySkillFiles() error {
 		}
 	}
 
+	// Apply flux defaults from manifest schema
+	manifest, _ := embeddedtemplates.LoadManifest()
+	if manifest != nil {
+		cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
+	}
+
+	// Build ingot resolver
+	resolver := buildIngotResolver(cfg)
+	opts := []config.TemplateOption{config.WithIngotResolver(resolver)}
+
 	// Define skill files to copy
 	skills := []string{
 		"brainstorm.md",
@@ -292,7 +317,7 @@ Add your Claude Code skill documentation here.
 		}
 
 		// Process template variables (with ore-aware rendering)
-		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore)
+		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore, opts...)
 		if err != nil {
 			return fmt.Errorf("failed to process skill %s: %w", skillName, err)
 		}

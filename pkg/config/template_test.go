@@ -3,6 +3,8 @@ package config
 import (
 	"bytes"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -455,6 +457,60 @@ func TestResolveDataPath_PartiallyMissing(t *testing.T) {
 	}
 	if resolveDataPath(data, "ore.status.nonexistent") {
 		t.Error("expected partial path to not resolve")
+	}
+}
+
+// --- Ingot template function tests ---
+
+func TestProcessTemplate_IngotFunction(t *testing.T) {
+	dir := t.TempDir()
+	ingotDir := filepath.Join(dir, "ingots")
+	if err := os.MkdirAll(ingotDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ingotDir, "footer.md"), []byte("-- end --"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := NewIngotResolver([]string{dir}, nil, nil)
+	content := `Hello {{ingot "footer"}}`
+	result, err := ProcessTemplate(content, nil, nil, WithIngotResolver(r))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "Hello -- end --" {
+		t.Errorf("expected 'Hello -- end --', got %q", result)
+	}
+}
+
+func TestProcessTemplate_IngotWithFlux(t *testing.T) {
+	dir := t.TempDir()
+	ingotDir := filepath.Join(dir, "ingots")
+	if err := os.MkdirAll(ingotDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ingotDir, "banner.md"), []byte("Welcome to {{organization}}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	flux := map[string]string{"organization": "Acme"}
+	r := NewIngotResolver([]string{dir}, flux, nil)
+	content := `{{ingot "banner"}} Corp`
+	result, err := ProcessTemplate(content, flux, nil, WithIngotResolver(r))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "Welcome to Acme Corp" {
+		t.Errorf("expected 'Welcome to Acme Corp', got %q", result)
+	}
+}
+
+func TestProcessTemplate_WithoutIngotResolver(t *testing.T) {
+	// Without a resolver, {{ingot "x"}} should cause a parse error since the function isn't registered
+	content := `{{ingot "test"}}`
+	_, err := ProcessTemplate(content, nil, nil)
+	if err == nil {
+		t.Error("expected error when ingot function is not registered")
 	}
 }
 

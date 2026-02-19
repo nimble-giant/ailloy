@@ -2,11 +2,13 @@ package commands
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/nimble-giant/ailloy/pkg/config"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	embeddedtemplates "github.com/nimble-giant/ailloy/pkg/templates"
 	"github.com/spf13/cobra"
@@ -70,8 +72,8 @@ func loadForgeConfig(setValues []string) (*config.Config, error) {
 }
 
 // renderFile processes a single template and returns the rendered content.
-func renderFile(name string, content []byte, cfg *config.Config) (string, error) {
-	rendered, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore)
+func renderFile(name string, content []byte, cfg *config.Config, opts ...config.TemplateOption) (string, error) {
+	rendered, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore, opts...)
 	if err != nil {
 		return "", fmt.Errorf("template %s: %w", name, err)
 	}
@@ -94,6 +96,21 @@ func runForge(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load mold manifest: %w", err)
 	}
 
+	// Apply flux defaults from manifest schema
+	cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
+
+	// Validate flux against schema (log warnings, don't fail)
+	if err := mold.ValidateFlux(manifest.Flux, cfg.Templates.Flux); err != nil {
+		log.Printf("warning: %v", err)
+	}
+
+	// Build ingot resolver with search paths:
+	// 1. Current directory (mold-local)
+	// 2. Project .ailloy/
+	// 3. Global ~/.ailloy/
+	resolver := buildIngotResolver(cfg)
+	opts := []config.TemplateOption{config.WithIngotResolver(resolver)}
+
 	var files []renderedFile
 
 	// Render command templates
@@ -102,7 +119,7 @@ func runForge(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("reading command template %s: %w", name, err)
 		}
-		rendered, err := renderFile(name, content, cfg)
+		rendered, err := renderFile(name, content, cfg, opts...)
 		if err != nil {
 			return err
 		}
@@ -118,7 +135,7 @@ func runForge(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("reading skill template %s: %w", name, err)
 		}
-		rendered, err := renderFile(name, content, cfg)
+		rendered, err := renderFile(name, content, cfg, opts...)
 		if err != nil {
 			return err
 		}
@@ -144,6 +161,25 @@ func runForge(cmd *cobra.Command, args []string) error {
 		return writeForgeFiles(files, forgeOutputDir)
 	}
 	return printForgeFiles(files)
+}
+
+// buildIngotResolver creates an IngotResolver with the standard search path order:
+// current directory (mold-local), project .ailloy/, global ~/.ailloy/.
+func buildIngotResolver(cfg *config.Config) *config.IngotResolver {
+	searchPaths := []string{"."}
+
+	if _, err := os.Stat(".ailloy"); err == nil {
+		searchPaths = append(searchPaths, ".ailloy")
+	}
+
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		globalDir := filepath.Join(homeDir, ".ailloy")
+		if _, err := os.Stat(globalDir); err == nil {
+			searchPaths = append(searchPaths, globalDir)
+		}
+	}
+
+	return config.NewIngotResolver(searchPaths, cfg.Templates.Flux, &cfg.Ore)
 }
 
 func printForgeFiles(files []renderedFile) error {
