@@ -34,9 +34,9 @@ workflows:
   - ci.yml
 `
 	dirs := []string{
-		filepath.Join(dir, "claude", "commands"),
-		filepath.Join(dir, "claude", "skills"),
-		filepath.Join(dir, "github", "workflows"),
+		filepath.Join(dir, ".claude", "commands"),
+		filepath.Join(dir, ".claude", "skills"),
+		filepath.Join(dir, ".github", "workflows"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0750); err != nil {
@@ -45,10 +45,10 @@ workflows:
 	}
 
 	files := map[string]string{
-		"mold.yaml":                moldYAML,
-		"claude/commands/hello.md": "# Hello\nCommand template.\n",
-		"claude/skills/helper.md":  "# Helper\nSkill template.\n",
-		"github/workflows/ci.yml":  "name: CI\non: push\n",
+		"mold.yaml":                 moldYAML,
+		".claude/commands/hello.md": "# Hello\nCommand template.\n",
+		".claude/skills/helper.md":  "# Helper\nSkill template.\n",
+		".github/workflows/ci.yml":  "name: CI\non: push\n",
 	}
 	for rel, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, rel), []byte(content), 0644); err != nil {
@@ -130,9 +130,9 @@ func TestPackageTarball_ValidMold(t *testing.T) {
 	prefix := "test-mold-1.2.3"
 	expected := []string{
 		prefix + "/mold.yaml",
-		prefix + "/claude/commands/hello.md",
-		prefix + "/claude/skills/helper.md",
-		prefix + "/github/workflows/ci.yml",
+		prefix + "/.claude/commands/hello.md",
+		prefix + "/.claude/skills/helper.md",
+		prefix + "/.github/workflows/ci.yml",
 		prefix + "/flux.yaml",
 	}
 	entrySet := make(map[string]bool)

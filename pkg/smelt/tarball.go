@@ -85,7 +85,7 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 
 	// Collect command templates
 	for _, cmd := range m.Commands {
-		relPath := filepath.Join("claude", "commands", cmd)
+		relPath := filepath.Join(".claude", "commands", cmd)
 		data, err := fs.ReadFile(moldFS, relPath)
 		if err != nil {
 			return nil, fmt.Errorf("reading command %s: %w", cmd, err)
@@ -95,7 +95,7 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 
 	// Collect skill templates
 	for _, skill := range m.Skills {
-		relPath := filepath.Join("claude", "skills", skill)
+		relPath := filepath.Join(".claude", "skills", skill)
 		data, err := fs.ReadFile(moldFS, relPath)
 		if err != nil {
 			return nil, fmt.Errorf("reading skill %s: %w", skill, err)
@@ -105,7 +105,7 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 
 	// Collect workflow templates
 	for _, wf := range m.Workflows {
-		relPath := filepath.Join("github", "workflows", wf)
+		relPath := filepath.Join(".github", "workflows", wf)
 		data, err := fs.ReadFile(moldFS, relPath)
 		if err != nil {
 			return nil, fmt.Errorf("reading workflow %s: %w", wf, err)
