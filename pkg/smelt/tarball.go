@@ -189,13 +189,9 @@ func writeTarGz(outputPath, prefix string, files []archiveFile, fluxData []byte)
 	if err != nil {
 		return 0, fmt.Errorf("creating archive file: %w", err)
 	}
-	defer f.Close()
 
 	gw := gzip.NewWriter(f)
-	defer gw.Close()
-
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
 
 	// Write each file
 	for _, af := range files {
@@ -205,9 +201,11 @@ func writeTarGz(outputPath, prefix string, files []archiveFile, fluxData []byte)
 			Size: int64(len(af.data)),
 		}
 		if err := tw.WriteHeader(header); err != nil {
+			_ = f.Close()
 			return 0, fmt.Errorf("writing tar header for %s: %w", af.path, err)
 		}
 		if _, err := tw.Write(af.data); err != nil {
+			_ = f.Close()
 			return 0, fmt.Errorf("writing tar data for %s: %w", af.path, err)
 		}
 	}
@@ -220,25 +218,34 @@ func writeTarGz(outputPath, prefix string, files []archiveFile, fluxData []byte)
 			Size: int64(len(fluxData)),
 		}
 		if err := tw.WriteHeader(header); err != nil {
+			_ = f.Close()
 			return 0, fmt.Errorf("writing tar header for flux.yaml: %w", err)
 		}
 		if _, err := tw.Write(fluxData); err != nil {
+			_ = f.Close()
 			return 0, fmt.Errorf("writing tar data for flux.yaml: %w", err)
 		}
 	}
 
 	// Flush writers to get accurate size
 	if err := tw.Close(); err != nil {
+		_ = f.Close()
 		return 0, fmt.Errorf("closing tar writer: %w", err)
 	}
 	if err := gw.Close(); err != nil {
+		_ = f.Close()
 		return 0, fmt.Errorf("closing gzip writer: %w", err)
 	}
 
 	info, err := f.Stat()
 	if err != nil {
+		_ = f.Close()
 		return 0, fmt.Errorf("stating output file: %w", err)
 	}
 
-	return info.Size(), nil
+	size := info.Size()
+	if err := f.Close(); err != nil {
+		return 0, fmt.Errorf("closing archive file: %w", err)
+	}
+	return size, nil
 }

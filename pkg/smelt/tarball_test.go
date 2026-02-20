@@ -65,13 +65,21 @@ func listTarEntries(t *testing.T, path string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	t.Cleanup(func() {
+		if err := f.Close(); err != nil {
+			t.Errorf("closing tar file: %v", err)
+		}
+	})
 
 	gr, err := gzip.NewReader(f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer gr.Close()
+	t.Cleanup(func() {
+		if err := gr.Close(); err != nil {
+			t.Errorf("closing gzip reader: %v", err)
+		}
+	})
 
 	tr := tar.NewReader(gr)
 	var entries []string
