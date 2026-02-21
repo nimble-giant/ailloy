@@ -14,9 +14,9 @@ import (
 )
 
 // PackageTarball packages a mold directory into a .tar.gz archive.
-// It validates the mold, collects all referenced files, generates a flux.yaml
-// defaults file, and writes the archive to outputDir (or the current directory
-// if outputDir is empty). Returns the output file path and size.
+// It validates the mold, collects all referenced files, includes or generates a
+// flux.yaml defaults file, and writes the archive to outputDir (or the current
+// directory if outputDir is empty). Returns the output file path and size.
 func PackageTarball(moldDir, outputDir string) (string, int64, error) {
 	cleanDir, err := safepath.Clean(moldDir)
 	if err != nil {
@@ -43,15 +43,18 @@ func PackageTarball(moldDir, outputDir string) (string, int64, error) {
 	outputPath := filepath.Join(outputDir, archiveName)
 
 	// Collect files to include in the archive
-	files, err := collectMoldFiles(m, moldFS, cleanDir)
+	files, hasFluxYAML, err := collectMoldFiles(m, moldFS, cleanDir)
 	if err != nil {
 		return "", 0, fmt.Errorf("collecting files: %w", err)
 	}
 
-	// Generate flux.yaml defaults
-	fluxData, err := generateFluxDefaults(m.Flux)
-	if err != nil {
-		return "", 0, fmt.Errorf("generating flux defaults: %w", err)
+	// Generate flux.yaml defaults only if no source flux.yaml was found
+	var fluxData []byte
+	if !hasFluxYAML {
+		fluxData, err = generateFluxDefaults(m.Flux)
+		if err != nil {
+			return "", 0, fmt.Errorf("generating flux defaults: %w", err)
+		}
 	}
 
 	// Create the archive
@@ -73,22 +76,35 @@ type archiveFile struct {
 }
 
 // collectMoldFiles gathers all files referenced by the mold manifest.
-func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile, error) {
+// Returns the collected files and whether a source flux.yaml was found.
+func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile, bool, error) {
 	var files []archiveFile
 
 	// Include mold.yaml itself
 	moldYAML, err := fs.ReadFile(moldFS, "mold.yaml")
 	if err != nil {
-		return nil, fmt.Errorf("reading mold.yaml: %w", err)
+		return nil, false, fmt.Errorf("reading mold.yaml: %w", err)
 	}
 	files = append(files, archiveFile{path: "mold.yaml", data: moldYAML})
+
+	// Include flux.yaml if present
+	hasFluxYAML := false
+	if fluxData, err := fs.ReadFile(moldFS, "flux.yaml"); err == nil {
+		files = append(files, archiveFile{path: "flux.yaml", data: fluxData})
+		hasFluxYAML = true
+	}
+
+	// Include flux.schema.yaml if present
+	if schemaData, err := fs.ReadFile(moldFS, "flux.schema.yaml"); err == nil {
+		files = append(files, archiveFile{path: "flux.schema.yaml", data: schemaData})
+	}
 
 	// Collect command templates
 	for _, cmd := range m.Commands {
 		relPath := filepath.Join(".claude", "commands", cmd)
 		data, err := fs.ReadFile(moldFS, relPath)
 		if err != nil {
-			return nil, fmt.Errorf("reading command %s: %w", cmd, err)
+			return nil, false, fmt.Errorf("reading command %s: %w", cmd, err)
 		}
 		files = append(files, archiveFile{path: relPath, data: data})
 	}
@@ -98,7 +114,7 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 		relPath := filepath.Join(".claude", "skills", skill)
 		data, err := fs.ReadFile(moldFS, relPath)
 		if err != nil {
-			return nil, fmt.Errorf("reading skill %s: %w", skill, err)
+			return nil, false, fmt.Errorf("reading skill %s: %w", skill, err)
 		}
 		files = append(files, archiveFile{path: relPath, data: data})
 	}
@@ -108,7 +124,7 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 		relPath := filepath.Join(".github", "workflows", wf)
 		data, err := fs.ReadFile(moldFS, relPath)
 		if err != nil {
-			return nil, fmt.Errorf("reading workflow %s: %w", wf, err)
+			return nil, false, fmt.Errorf("reading workflow %s: %w", wf, err)
 		}
 		files = append(files, archiveFile{path: relPath, data: data})
 	}
@@ -116,11 +132,11 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 	// Collect ingots directory if present
 	ingotFiles, err := collectIngots(moldFS, moldDir)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	files = append(files, ingotFiles...)
 
-	return files, nil
+	return files, hasFluxYAML, nil
 }
 
 // collectIngots walks the ingots/ directory (if it exists) and collects all files.

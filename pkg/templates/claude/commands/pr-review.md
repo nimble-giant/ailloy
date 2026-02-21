@@ -81,7 +81,7 @@ If no PR number provided:
 CURRENT_BRANCH=$(git branch --show-current)
 
 # Find PR for current branch
-gh pr list --state open --head "$CURRENT_BRANCH" --json number,title
+{{pr_find_for_branch_cmd}}
 ```
 
 ## Phase 2: PR Information Gathering
@@ -90,17 +90,17 @@ gh pr list --state open --head "$CURRENT_BRANCH" --json number,title
 
 ```bash
 # Get comprehensive PR information
-gh pr view <pr-number> --json title,body,author,state,mergeable,reviewDecision,labels,assignees
+{{pr_view_full_cmd}}
 
 # Get PR diff with context
-gh pr diff <pr-number> --color=never
+{{pr_diff_cmd}}
 
 # Get file list and stats
-gh pr view <pr-number> --json files
+{{pr_view_files_cmd}}
 
 # Get existing reviews and comments
-gh api repos/:owner/:repo/pulls/<pr-number>/reviews --paginate
-gh api repos/:owner/:repo/pulls/<pr-number>/comments --paginate
+{{api_get_pr_reviews_cmd}}
+{{api_get_pr_review_comments_cmd}}
 ```
 
 ### Step 2.2: Analyze Changed Files
@@ -108,9 +108,8 @@ gh api repos/:owner/:repo/pulls/<pr-number>/comments --paginate
 For each changed file:
 
 ```bash
-# Get file content before and after
-gh api repos/:owner/:repo/contents/<file-path>?ref=<base-branch>
-gh api repos/:owner/:repo/contents/<file-path>?ref=<head-branch>
+# Get file content before and after (replace <ref> with base or head branch)
+{{api_get_file_content_cmd}}
 
 # Get file history and blame info if needed
 git log --oneline -n 10 <file-path>
@@ -385,20 +384,10 @@ If user approves, post comments to PR:
 
 ```bash
 # Post line-specific review comments
-gh api repos/:owner/:repo/pulls/<pr-number>/reviews \
-  --method POST \
-  --field body="<summary-comment>" \
-  --field event="<REQUEST_CHANGES|APPROVE|COMMENT>" \
-  --field comments='[
-    {
-      "path": "src/api/users.js",
-      "line": 42,
-      "body": "🚨 **Security Issue**: This code is vulnerable to SQL injection..."
-    }
-  ]'
+{{api_post_review_cmd}}
 
 # Post general PR comment
-gh pr comment <pr-number> --body "<general-feedback>"
+{{pr_comment_cmd}}
 ```
 
 ## Focus Area Specializations
@@ -487,9 +476,9 @@ This follows the pattern well! For even better maintainability, you might consid
 
 ## Error Handling
 
-### GitHub API Issues
+### {{scm_provider}} API Issues
 - Rate limiting: Implement exponential backoff
-- Authentication: Guide user through `gh auth login`
+- Authentication: Guide user through `{{auth_login_cmd}}`
 - Permissions: Verify repository access
 
 ### File Analysis Issues
@@ -505,7 +494,7 @@ This follows the pattern well! For even better maintainability, you might consid
 ## Integration Notes
 
 This template integrates with:
-- GitHub CLI for PR management
+- {{scm_provider}} CLI for PR management
 - Git for code analysis
 - Language-specific linters and analyzers
 - Security scanning tools

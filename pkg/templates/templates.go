@@ -9,7 +9,7 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
-//go:embed all:claude all:github mold.yaml
+//go:embed all:claude all:github mold.yaml flux*
 var embeddedTemplates embed.FS
 
 // FS returns the embedded filesystem for direct access.
@@ -20,6 +20,17 @@ func FS() fs.FS {
 // LoadManifest loads and parses the embedded mold.yaml manifest.
 func LoadManifest() (*mold.Mold, error) {
 	return mold.LoadMoldFromFS(embeddedTemplates, "mold.yaml")
+}
+
+// LoadFluxDefaults loads the embedded flux.yaml default values.
+func LoadFluxDefaults() (map[string]string, error) {
+	return mold.LoadFluxFile(embeddedTemplates, "flux.yaml")
+}
+
+// LoadFluxSchema loads the embedded flux.schema.yaml validation schema.
+// Returns nil if no schema file exists.
+func LoadFluxSchema() ([]mold.FluxVar, error) {
+	return mold.LoadFluxSchema(embeddedTemplates, "flux.schema.yaml")
 }
 
 // GetTemplate returns the content of a command template file

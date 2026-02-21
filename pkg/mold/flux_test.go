@@ -3,6 +3,7 @@ package mold
 import (
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // --- ApplyFluxDefaults tests ---
@@ -227,5 +228,337 @@ func TestValidateFlux_TypeAndRequiredCombined(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "must be an int") {
 		t.Errorf("expected type error, got: %v", err)
+	}
+}
+
+// --- LoadFluxFile tests ---
+
+func TestLoadFluxFile_Valid(t *testing.T) {
+	fsys := fstest.MapFS{
+		"flux.yaml": &fstest.MapFile{Data: []byte("org: acme\nboard: Engineering\n")},
+	}
+	vals, err := LoadFluxFile(fsys, "flux.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if vals["org"] != "acme" {
+		t.Errorf("expected org=acme, got %q", vals["org"])
+	}
+	if vals["board"] != "Engineering" {
+		t.Errorf("expected board=Engineering, got %q", vals["board"])
+	}
+}
+
+func TestLoadFluxFile_Missing(t *testing.T) {
+	fsys := fstest.MapFS{}
+	vals, err := LoadFluxFile(fsys, "flux.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error for missing file: %v", err)
+	}
+	if len(vals) != 0 {
+		t.Errorf("expected empty map, got %v", vals)
+	}
+}
+
+func TestLoadFluxFile_Empty(t *testing.T) {
+	fsys := fstest.MapFS{
+		"flux.yaml": &fstest.MapFile{Data: []byte("")},
+	}
+	vals, err := LoadFluxFile(fsys, "flux.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(vals) != 0 {
+		t.Errorf("expected empty map, got %v", vals)
+	}
+}
+
+func TestLoadFluxFile_InvalidYAML(t *testing.T) {
+	fsys := fstest.MapFS{
+		"flux.yaml": &fstest.MapFile{Data: []byte("{{{bad yaml")},
+	}
+	_, err := LoadFluxFile(fsys, "flux.yaml")
+	if err == nil {
+		t.Fatal("expected error for invalid YAML")
+	}
+}
+
+// --- LoadFluxSchema tests ---
+
+func TestLoadFluxSchema_Valid(t *testing.T) {
+	fsys := fstest.MapFS{
+		"flux.schema.yaml": &fstest.MapFile{Data: []byte(`
+- name: org
+  type: string
+  required: true
+- name: board
+  type: string
+`)},
+	}
+	schema, err := LoadFluxSchema(fsys, "flux.schema.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(schema) != 2 {
+		t.Fatalf("expected 2 schema entries, got %d", len(schema))
+	}
+	if schema[0].Name != "org" || !schema[0].Required {
+		t.Errorf("expected org required, got %+v", schema[0])
+	}
+}
+
+func TestLoadFluxSchema_Missing(t *testing.T) {
+	fsys := fstest.MapFS{}
+	schema, err := LoadFluxSchema(fsys, "flux.schema.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if schema != nil {
+		t.Errorf("expected nil schema, got %v", schema)
+	}
+}
+
+func TestLoadFluxSchema_InvalidYAML(t *testing.T) {
+	fsys := fstest.MapFS{
+		"flux.schema.yaml": &fstest.MapFile{Data: []byte("{{{bad")},
+	}
+	_, err := LoadFluxSchema(fsys, "flux.schema.yaml")
+	if err == nil {
+		t.Fatal("expected error for invalid YAML")
+	}
+}
+
+// --- ApplyFluxFileDefaults tests ---
+
+func TestApplyFluxFileDefaults_FillsGaps(t *testing.T) {
+	defaults := map[string]string{"board": "Engineering", "cli": "gh"}
+	flux := map[string]string{"board": "Product"}
+
+	result := ApplyFluxFileDefaults(defaults, flux)
+
+	if result["board"] != "Product" {
+		t.Errorf("expected board=Product (not overridden), got %q", result["board"])
+	}
+	if result["cli"] != "gh" {
+		t.Errorf("expected cli=gh (filled from defaults), got %q", result["cli"])
+	}
+}
+
+func TestApplyFluxFileDefaults_DoesNotMutateInput(t *testing.T) {
+	defaults := map[string]string{"board": "Engineering"}
+	flux := map[string]string{}
+
+	result := ApplyFluxFileDefaults(defaults, flux)
+
+	if _, exists := flux["board"]; exists {
+		t.Error("input map should not be mutated")
+	}
+	if result["board"] != "Engineering" {
+		t.Errorf("expected board=Engineering in result, got %q", result["board"])
+	}
+}
+
+func TestApplyFluxFileDefaults_EmptyDefaults(t *testing.T) {
+	flux := map[string]string{"key": "val"}
+	result := ApplyFluxFileDefaults(nil, flux)
+	if result["key"] != "val" {
+		t.Errorf("expected key=val, got %q", result["key"])
+	}
+}
+
+// --- LoadFluxFile multiline tests ---
+
+func TestLoadFluxFile_MultilineValues(t *testing.T) {
+	fsys := fstest.MapFS{
+		"flux.yaml": &fstest.MapFile{Data: []byte("simple: hello\nmultiline: |-\n  line one\n  line two\n  line three\n")},
+	}
+	vals, err := LoadFluxFile(fsys, "flux.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if vals["simple"] != "hello" {
+		t.Errorf("expected simple=hello, got %q", vals["simple"])
+	}
+	multi := vals["multiline"]
+	if !strings.Contains(multi, "line one") {
+		t.Errorf("expected multiline to contain 'line one', got %q", multi)
+	}
+	if !strings.Contains(multi, "line three") {
+		t.Errorf("expected multiline to contain 'line three', got %q", multi)
+	}
+}
+
+// --- Full precedence chain tests ---
+
+func TestPrecedenceChain_SchemaDefaultsLessThanFluxFile(t *testing.T) {
+	// Schema provides defaults for "board" and "cli"
+	schema := []FluxVar{
+		{Name: "board", Type: "string", Default: "Schema-Board"},
+		{Name: "cli", Type: "string", Default: "schema-cli"},
+	}
+
+	// flux.yaml provides defaults for "board" and "org"
+	fluxFileDefaults := map[string]string{
+		"board": "FluxFile-Board",
+		"org":   "flux-org",
+	}
+
+	// Start with empty user flux
+	flux := make(map[string]string)
+
+	// Step 1: Apply schema defaults (lowest priority)
+	flux = ApplyFluxDefaults(schema, flux)
+
+	// Step 2: Apply flux.yaml defaults (higher priority, fills remaining gaps)
+	flux = ApplyFluxFileDefaults(fluxFileDefaults, flux)
+
+	// Schema default for "cli" should survive (not in flux.yaml)
+	if flux["cli"] != "schema-cli" {
+		t.Errorf("expected cli=schema-cli (from schema), got %q", flux["cli"])
+	}
+	// Schema set "board" first, flux.yaml should NOT override it
+	// (ApplyFluxFileDefaults only fills gaps)
+	if flux["board"] != "Schema-Board" {
+		t.Errorf("expected board=Schema-Board (schema applied first), got %q", flux["board"])
+	}
+	// flux.yaml adds "org"
+	if flux["org"] != "flux-org" {
+		t.Errorf("expected org=flux-org (from flux.yaml), got %q", flux["org"])
+	}
+}
+
+func TestPrecedenceChain_UserOverridesEverything(t *testing.T) {
+	schema := []FluxVar{
+		{Name: "board", Type: "string", Default: "Schema-Board"},
+		{Name: "cli", Type: "string", Default: "schema-cli"},
+	}
+	fluxFileDefaults := map[string]string{
+		"board": "FluxFile-Board",
+		"cli":   "flux-cli",
+	}
+
+	// User has already set "board" via config
+	userFlux := map[string]string{"board": "User-Board"}
+
+	// Step 1: Apply schema defaults
+	result := ApplyFluxDefaults(schema, userFlux)
+	// Step 2: Apply flux.yaml defaults
+	result = ApplyFluxFileDefaults(fluxFileDefaults, result)
+
+	// User's "board" wins over both schema and flux.yaml
+	if result["board"] != "User-Board" {
+		t.Errorf("expected board=User-Board (user override), got %q", result["board"])
+	}
+	// Schema default for "cli" fills gap, flux.yaml can't override it
+	if result["cli"] != "schema-cli" {
+		t.Errorf("expected cli=schema-cli (schema applied first), got %q", result["cli"])
+	}
+}
+
+// --- Schema validation with file-loaded flux ---
+
+func TestValidateFlux_WithFileLoadedSchema(t *testing.T) {
+	// Simulate loading schema from flux.schema.yaml
+	schemaFS := fstest.MapFS{
+		"flux.schema.yaml": &fstest.MapFile{Data: []byte(`
+- name: org
+  type: string
+  required: true
+- name: count
+  type: int
+`)},
+	}
+	schema, err := LoadFluxSchema(schemaFS, "flux.schema.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error loading schema: %v", err)
+	}
+
+	// Simulate loading flux values from flux.yaml
+	fluxFS := fstest.MapFS{
+		"flux.yaml": &fstest.MapFile{Data: []byte("org: acme\ncount: 42\n")},
+	}
+	flux, err := LoadFluxFile(fluxFS, "flux.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error loading flux: %v", err)
+	}
+
+	// Validate — should pass
+	if err := ValidateFlux(schema, flux); err != nil {
+		t.Errorf("expected valid flux to pass validation, got: %v", err)
+	}
+}
+
+func TestValidateFlux_FileLoadedSchemaRejectsInvalid(t *testing.T) {
+	schemaFS := fstest.MapFS{
+		"flux.schema.yaml": &fstest.MapFile{Data: []byte(`
+- name: org
+  type: string
+  required: true
+- name: count
+  type: int
+`)},
+	}
+	schema, err := LoadFluxSchema(schemaFS, "flux.schema.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Missing required "org" and invalid type for "count"
+	flux := map[string]string{"count": "not-a-number"}
+
+	err = ValidateFlux(schema, flux)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "org") {
+		t.Error("expected error to mention missing 'org'")
+	}
+	if !strings.Contains(errMsg, "must be an int") {
+		t.Error("expected error to mention invalid int for 'count'")
+	}
+}
+
+// --- Backwards compatibility: mold with inline flux: section ---
+
+func TestBackwardsCompat_InlineFluxStillWorks(t *testing.T) {
+	// Old-style mold with flux: section in mold.yaml
+	schema := []FluxVar{
+		{Name: "org", Type: "string", Required: true, Default: "default-org"},
+		{Name: "board", Type: "string", Default: "Engineering"},
+	}
+
+	// No flux.yaml or flux.schema.yaml
+	emptyFS := fstest.MapFS{}
+	fluxFile, err := LoadFluxFile(emptyFS, "flux.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	fluxSchema, err := LoadFluxSchema(emptyFS, "flux.schema.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// flux.yaml returns empty map, schema returns nil
+	if len(fluxFile) != 0 {
+		t.Errorf("expected empty flux file, got %v", fluxFile)
+	}
+	if fluxSchema != nil {
+		t.Error("expected nil schema")
+	}
+
+	// Apply inline schema defaults (backwards compat path)
+	flux := ApplyFluxDefaults(schema, map[string]string{})
+
+	// Validate with inline schema (since flux.schema.yaml is nil)
+	if err := ValidateFlux(schema, flux); err != nil {
+		t.Errorf("expected validation to pass with schema defaults, got: %v", err)
+	}
+
+	if flux["org"] != "default-org" {
+		t.Errorf("expected org=default-org, got %q", flux["org"])
+	}
+	if flux["board"] != "Engineering" {
+		t.Errorf("expected board=Engineering, got %q", flux["board"])
 	}
 }
