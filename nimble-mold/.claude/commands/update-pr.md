@@ -14,14 +14,14 @@ When this command is used, Claude will:
 
 1. **Enter Plan Mode** to outline the PR update process
 
-2. **Verify PR exists** for the current branch using `{{pr_check_cmd}}`
+2. **Verify PR exists** for the current branch using `{{pr.check}}`
 
 3. **Generate updated description** using `/pr-description` command
    - Analyzes current branch changes against main
    - Creates comprehensive PR description
    - Includes issue references if `/gh-issue` was used
 
-4. **Update PR description** using `{{pr_update_body_cmd}}`
+4. **Update PR description** using `{{pr.update_body}}`
 
 5. **Confirm update** and display PR URL
 
@@ -36,7 +36,7 @@ This command integrates with:
 ## Error Handling
 
 - If no PR exists for current branch, suggests using `/open-pr` instead
-- If unable to update PR, provides {{scm_provider}} CLI troubleshooting steps
+- If unable to update PR, provides {{scm.provider}} CLI troubleshooting steps
 
 ## Notes
 

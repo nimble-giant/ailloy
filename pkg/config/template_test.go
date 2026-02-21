@@ -108,7 +108,7 @@ func TestPreProcessTemplate_MultipleVariables(t *testing.T) {
 // --- BuildTemplateData tests ---
 
 func TestBuildTemplateData_FlatVariables(t *testing.T) {
-	flux := map[string]string{
+	flux := map[string]any{
 		"name":  "test",
 		"board": "Engineering",
 	}
@@ -312,7 +312,7 @@ func TestProcessTemplate_OrConditional(t *testing.T) {
 
 func TestProcessTemplate_BareVariables(t *testing.T) {
 	content := "Board: {{default_board}}, Status: {{default_status}}"
-	flux := map[string]string{
+	flux := map[string]any{
 		"default_board":  "Engineering",
 		"default_status": "Ready",
 	}
@@ -331,7 +331,7 @@ func TestProcessTemplate_MixedBareAndConditionals(t *testing.T) {
 	content := `Board: {{default_board}}
 {{if .ore.status.enabled}}Status Field: {{.ore.status.field_id}}{{end}}`
 
-	flux := map[string]string{
+	flux := map[string]any{
 		"default_board": "Engineering",
 	}
 	ore := &Ore{
@@ -408,7 +408,7 @@ func TestWarnUnresolvedVars_NoWarningForResolved(t *testing.T) {
 	}()
 
 	content := "Board: {{default_board}}"
-	flux := map[string]string{"default_board": "Engineering"}
+	flux := map[string]any{"default_board": "Engineering"}
 	_, err := ProcessTemplate(content, flux, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -493,7 +493,7 @@ func TestProcessTemplate_IngotWithFlux(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flux := map[string]string{"organization": "Acme"}
+	flux := map[string]any{"organization": "Acme"}
 	r := NewIngotResolver([]string{dir}, flux, nil)
 	content := `{{ingot "banner"}} Corp`
 	result, err := ProcessTemplate(content, flux, nil, WithIngotResolver(r))

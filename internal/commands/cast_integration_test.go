@@ -117,7 +117,7 @@ func TestIntegration_CopyTemplateFiles_WithVariableSubstitution(t *testing.T) {
 	// Create config with flux variables
 	cfg := &config.Config{
 		Templates: config.TemplateConfig{
-			Flux: map[string]string{
+			Flux: map[string]any{
 				"organization":  "test-org",
 				"default_board": "TestBoard",
 			},
@@ -194,7 +194,7 @@ func TestIntegration_TemplateFilesMatchMold(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
-	flux := mold.ApplyFluxDefaults(manifest.Flux, make(map[string]string))
+	flux := mold.ApplyFluxDefaults(manifest.Flux, make(map[string]any))
 	if fluxDefaults, err := reader.LoadFluxDefaults(); err == nil {
 		flux = mold.ApplyFluxFileDefaults(fluxDefaults, flux)
 	}

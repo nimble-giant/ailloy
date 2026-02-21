@@ -196,7 +196,7 @@ func TestIngotResolver_FluxVariablesRendered(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flux := map[string]string{"organization": "Acme"}
+	flux := map[string]any{"organization": "Acme"}
 	r := NewIngotResolver([]string{dir}, flux, nil)
 	result, err := r.Resolve("greeting")
 	if err != nil {

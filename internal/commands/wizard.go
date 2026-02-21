@@ -43,8 +43,12 @@ func runWizardAnneal(cfg *config.Config) error {
 	)
 
 	// Pre-populate from existing config
-	projectName = cfg.Templates.Flux["default_board"]
-	orgName = cfg.Templates.Flux["organization"]
+	if v, ok := cfg.Templates.Flux["default_board"].(string); ok {
+		projectName = v
+	}
+	if v, ok := cfg.Templates.Flux["organization"].(string); ok {
+		orgName = v
+	}
 
 	// Pre-populate enabled ore models
 	if cfg.Ore.Status.Enabled {
@@ -439,7 +443,9 @@ func buildCustomVarsText(cfg *config.Config) string {
 		if managed[k] {
 			continue
 		}
-		lines = append(lines, k+"="+v)
+		if s, ok := v.(string); ok {
+			lines = append(lines, k+"="+s)
+		}
 	}
 	return strings.Join(lines, "\n")
 }
@@ -448,7 +454,9 @@ func buildCustomVarsText(cfg *config.Config) string {
 func snapshotVars(cfg *config.Config) map[string]string {
 	snap := make(map[string]string, len(cfg.Templates.Flux))
 	for k, v := range cfg.Templates.Flux {
-		snap[k] = v
+		if s, ok := v.(string); ok {
+			snap[k] = s
+		}
 	}
 	return snap
 }

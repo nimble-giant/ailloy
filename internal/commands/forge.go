@@ -44,13 +44,14 @@ func loadForgeConfig(setValues []string) (*config.Config, error) {
 	if err != nil {
 		cfg = &config.Config{
 			Templates: config.TemplateConfig{
-				Flux: make(map[string]string),
+				Flux: make(map[string]any),
 			},
 		}
 	}
 
 	globalCfg, err := config.LoadConfig(true)
 	if err == nil && globalCfg.Templates.Flux != nil {
+		// Deep-merge global flux (fills gaps only, does not override existing)
 		for key, value := range globalCfg.Templates.Flux {
 			if _, exists := cfg.Templates.Flux[key]; !exists {
 				cfg.Templates.Flux[key] = value
@@ -66,7 +67,7 @@ func loadForgeConfig(setValues []string) (*config.Config, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid --set value %q: expected key=value", kv)
 		}
-		cfg.Templates.Flux[key] = value
+		mold.SetNestedValue(cfg.Templates.Flux, key, value)
 	}
 
 	return cfg, nil

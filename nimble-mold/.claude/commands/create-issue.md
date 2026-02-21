@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This command is used to instruct Claude to generate {{scm_provider}} issues with a clean, actionable, well-structured format. It is optimized for creating consistent {{scm_provider}} issues for engineering planning, with consistent formatting across `feat`, `fix`, `chore`, `docs`, and `epic` types.
+This command is used to instruct Claude to generate {{scm.provider}} issues with a clean, actionable, well-structured format. It is optimized for creating consistent {{scm.provider}} issues for engineering planning, with consistent formatting across `feat`, `fix`, `chore`, `docs`, and `epic` types.
 
 ## Command Name
 
@@ -18,7 +18,7 @@ You can invoke this command with optional flags:
 
 ### Flags
 
-- `-b, --board <name>`: Specify project board (default: "{{default_board}}")
+- `-b, --board <name>`: Specify project board (default: "{{project.board}}")
 - `-l, --label <label>`: Add labels to the issue (can be used multiple times)
 - `--prompt`: Enable interactive mode (prompts for board and labels if supported)
 
@@ -45,13 +45,13 @@ Claude must:
 
 1. Immediately enter plan mode when this command is invoked
 2. Parse the user input to extract flags and issue description
-3. Format the {{scm_provider}} issue using the exact markdown structure below
+3. Format the {{scm.provider}} issue using the exact markdown structure below
 4. Use the ExitPlanMode tool to present the formatted issue as the plan
 5. Wait for user approval before proceeding
 6. After approval:
    - If `--prompt` flag is present: Use interactive mode (ask for board and labels if repository supports them)
    - Otherwise: Use parsed flags only (no prompting, no automatic assignments)
-7. Execute the {{scm_provider}} CLI commands to create the issue with configured settings
+7. Execute the {{scm.provider}} CLI commands to create the issue with configured settings
 
 ## Plan Mode Output Format
 
@@ -73,7 +73,7 @@ In plan mode, Claude must present the issue using this exact structure:
 - {Additional clarifications, decisions, references, or design choices}
 ```
 
-**Critical**: The title format must be `{type(scope): description}` in all lowercase for {{scm_provider}} CLI compatibility.
+**Critical**: The title format must be `{type(scope): description}` in all lowercase for {{scm.provider}} CLI compatibility.
 
 ---
 
@@ -94,11 +94,11 @@ In plan mode, Claude must present the issue using this exact structure:
 - Always rewrite user input for clarity, grammar, and consistency
 - Include context and motivation, not just what to build
 
-### {{scm_provider}} CLI Requirements
+### {{scm.provider}} CLI Requirements
 
 - Title must be passed to `--title` parameter
 - Body content (everything after title) goes to `--body` parameter
-- Project assignment uses `{{issue_add_to_project_cmd}}`
+- Project assignment uses `{{issue.add_to_project}}`
 
 ---
 
@@ -153,7 +153,7 @@ We hit our ECR scan limits in sandbox, which blocked scan visibility before a re
    - Extract flags from command (e.g., `-b`, `--board`, `-l`, `--label`)
    - Extract issue description from remaining input
    - Note: No defaults are applied - only use explicitly provided flags
-2. **Format Issue**: Create {{scm_provider}} issue using the exact markdown format above
+2. **Format Issue**: Create {{scm.provider}} issue using the exact markdown format above
 3. **Present Plan**: Use `ExitPlanMode` tool with the formatted issue as the plan, including parsed settings
 4. **Wait for Approval**: Do not proceed until user explicitly approves
 
@@ -165,11 +165,11 @@ We hit our ECR scan limits in sandbox, which blocked scan visibility before a re
    - Title: First line of the plan (the `# title` line)
    - Body: Everything after the title
 2. **Create Issue**:
-   - Basic: `{{issue_create_cmd}}`
-   - With labels: `{{issue_create_with_labels_cmd}}`
+   - Basic: `{{issue.create}}`
+   - With labels: `{{issue.create_with_labels}}`
 3. **Add to Project Board** (if specified):
    - Only if `-b` or `--board` flag was provided
-   - Execute: `{{issue_add_to_project_cmd}}`
+   - Execute: `{{issue.add_to_project}}`
 4. **Confirm Success**: Report the created issue URL to user
 
 #### Mode B: Interactive Mode (--prompt flag)
@@ -181,22 +181,22 @@ If `--prompt` flag is detected:
 3. **Create Issue**: Same as Mode A but with user-provided values
 4. **Add Board/Labels**: Apply user-specified board and labels
 
-## {{scm_provider}} CLI Commands
+## {{scm.provider}} CLI Commands
 
 ### Basic Issue Creation
 
 ```bash
 # Create a basic issue
-{{issue_create_cmd}}
+{{issue.create}}
 
 # Create issue with labels
-{{issue_create_with_labels_cmd}}
+{{issue.create_with_labels}}
 
 # Add to project board after creation (if your team uses boards)
-{{issue_add_to_project_cmd}}
+{{issue.add_to_project}}
 ```
 
-### Available {{scm_provider}} CLI Options
+### Available {{scm.provider}} CLI Options
 
 - `--title`: Issue title (required)
 - `--body`: Issue description (required)
@@ -204,20 +204,20 @@ If `--prompt` flag is detected:
 - `--assignee`: Assign to specific users (optional)
 - `--milestone`: Add to milestone (optional)
 
-**Note**: Project board integration varies by repository configuration. Some teams use {{scm_provider}} Projects, others use different systems, and some don't use boards at all.
+**Note**: Project board integration varies by repository configuration. Some teams use {{scm.provider}} Projects, others use different systems, and some don't use boards at all.
 
 ```bash
 # List available project boards
-{{project_list_cmd}}
+{{project.list}}
 
 # Step 1: Create issue WITHOUT project assignment
-{{issue_create_cmd}}
+{{issue.create}}
 
 # Step 2: Add to project board using project NAME (not number)
-{{issue_add_to_project_cmd}}
+{{issue.add_to_project}}
 
 # Common project names:
-# - "{{default_board}}" (default)
+# - "{{project.board}}" (default)
 # - "Tech Debt"
 # - "Compliance" 
 # - "Webhooks"
@@ -228,9 +228,9 @@ If `--prompt` flag is detected:
 
 ## Project Field Management
 
-### {{.default_board}} Board Field IDs
+### {{.project.board}} Board Field IDs
 
-- Project ID: `{{.project_id}}`
+- Project ID: `{{.project.id}}`
 {{- if .ore.status.enabled}}
 - Status Field ID: `{{.ore.status.field_id}}`
 {{- end}}
@@ -250,11 +250,11 @@ If `--prompt` flag is detected:
 
 ```bash
 # Set Status
-{{api_cmd}} graphql --field query='
+{{api.base}} graphql --field query='
 mutation {
   updateProjectV2ItemFieldValue(
     input: {
-      projectId: "{{.project_id}}"
+      projectId: "{{.project.id}}"
       itemId: "<ITEM_ID>"
       fieldId: "{{.ore.status.field_id}}"
       value: {
@@ -278,11 +278,11 @@ mutation {
 
 ```bash
 # Set Priority
-{{api_cmd}} graphql --field query='
+{{api.base}} graphql --field query='
 mutation {
   updateProjectV2ItemFieldValue(
     input: {
-      projectId: "{{.project_id}}"
+      projectId: "{{.project.id}}"
       itemId: "<ITEM_ID>"
       fieldId: "{{.ore.priority.field_id}}"
       value: {
@@ -309,7 +309,7 @@ mutation {
 
 When no flags are specified, Claude will:
 
-- Create a basic {{scm_provider}} issue with title and description only
+- Create a basic {{scm.provider}} issue with title and description only
 - Not add to any project board
 - Not apply any labels
 - Not prompt for any configuration
@@ -328,14 +328,14 @@ This provides flexibility for users who prefer to configure settings interactive
 
 ## Error Handling
 
-- If `{{scm_cli}}` command fails, report the error and suggest checking {{scm_provider}} CLI authentication
+- If `{{scm.cli}}` command fails, report the error and suggest checking {{scm.provider}} CLI authentication
 - If project board doesn't exist, ask user to verify the board name or skip board assignment
 - If title format is invalid, reformat according to rules automatically
 - If labels don't exist, ask user to verify label names or skip label assignment
 
 ## Recap
 
-Use this command for creating {{scm_provider}} issues efficiently:
+Use this command for creating {{scm.provider}} issues efficiently:
 
 - **Default mode**: Issues are created immediately after plan approval with sensible defaults
 - **Flag overrides**: Use flags when you need specific values (e.g., `-b "Tech Debt" -p P0`)

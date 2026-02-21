@@ -67,7 +67,7 @@ func TestParseCustomVars_ValueWithEquals(t *testing.T) {
 func TestBuildCustomVarsText_ExcludesManagedVars(t *testing.T) {
 	cfg := &config.Config{
 		Templates: config.TemplateConfig{
-			Flux: map[string]string{
+			Flux: map[string]any{
 				"default_board":      "Engineering",
 				"organization":       "acme",
 				"project_id":         "PVT_123",
@@ -253,7 +253,7 @@ func TestParseBoardID(t *testing.T) {
 func TestSnapshotVars(t *testing.T) {
 	cfg := &config.Config{
 		Templates: config.TemplateConfig{
-			Flux: map[string]string{"a": "1", "b": "2"},
+			Flux: map[string]any{"a": "1", "b": "2"},
 		},
 	}
 
@@ -299,7 +299,7 @@ func TestAilloyTheme_NotNil(t *testing.T) {
 func TestApplyWizardResults_BasicVars(t *testing.T) {
 	cfg := &config.Config{
 		Templates: config.TemplateConfig{
-			Flux: make(map[string]string),
+			Flux: make(map[string]any),
 		},
 		Ore: config.DefaultOre(),
 	}
@@ -335,7 +335,7 @@ func TestApplyWizardResults_BasicVars(t *testing.T) {
 func TestApplyWizardResults_ProjectID(t *testing.T) {
 	cfg := &config.Config{
 		Templates: config.TemplateConfig{
-			Flux: make(map[string]string),
+			Flux: make(map[string]any),
 		},
 		Ore: config.DefaultOre(),
 	}

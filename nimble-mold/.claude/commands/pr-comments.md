@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This command helps PR authors respond to review comments efficiently. It fetches PR details and comments using {{scm_provider}} CLI, enters plan mode to strategically address each comment, and executes the response plan with code changes and comment replies.
+This command helps PR authors respond to review comments efficiently. It fetches PR details and comments using {{scm.provider}} CLI, enters plan mode to strategically address each comment, and executes the response plan with code changes and comment replies.
 
 ## Command Name
 
@@ -19,14 +19,14 @@ This command helps PR authors respond to review comments efficiently. It fetches
 Examples:
 
 - `/pr-comments 1234` - Address comments on PR #1234
-- `/pr-comments {{scm_base_url}}/owner/repo/pull/1234` - Address comments using full URL
+- `/pr-comments {{scm.base_url}}/owner/repo/pull/1234` - Address comments using full URL
 - `/pr-comments` - Address comments on current branch's PR (auto-detect)
 
 ## Workflow Overview
 
 Claude must execute this workflow when the command is invoked:
 
-1. **Fetch PR Information**: Get PR details and all comments using {{scm_provider}} CLI
+1. **Fetch PR Information**: Get PR details and all comments using {{scm.provider}} CLI
 2. **Enter Plan Mode**: Present all comments and build response strategy
 3. **Interactive Planning**: For each comment, ask user how to respond
 4. **Consolidate Plan**: Present final response plan for approval
@@ -43,7 +43,7 @@ If no PR number provided:
 CURRENT_BRANCH=$(git branch --show-current)
 
 # Find PR for current branch
-{{pr_find_for_branch_cmd}}
+{{pr.find_for_branch}}
 ```
 
 If URL provided, extract the PR number from the URL.
@@ -52,16 +52,16 @@ If URL provided, extract the PR number from the URL.
 
 ```bash
 # Get PR information
-{{pr_view_cmd}}
+{{pr.view}}
 
 # Get PR comments (review comments on code)
-{{pr_view_reviews_cmd}}
+{{pr.view_reviews}}
 
 # Get detailed review comments
-{{api_get_pr_review_comments_cmd}}
+{{api.pr_review_comments}}
 
 # Get general PR conversation comments
-{{api_get_pr_conversation_comments_cmd}}
+{{api.pr_conversation_comments}}
 ```
 
 ### Step 1.3: Parse and Organize Comments
@@ -242,10 +242,10 @@ For each planned reply:
 
 ```bash
 # Reply to specific review comments
-{{api_reply_to_review_comment_cmd}}
+{{api.reply_to_review_comment}}
 
 # Reply to general comments
-{{api_reply_to_conversation_comment_cmd}}
+{{api.reply_to_conversation_comment}}
 ```
 
 ### Step 4.6: Request Re-review (Optional)
@@ -254,10 +254,10 @@ If significant changes were made:
 
 ```bash
 # Request review from specific reviewers
-{{pr_request_review_cmd}}
+{{pr.request_review}}
 
 # Or post a general comment requesting re-review
-{{pr_comment_cmd}}
+{{pr.comment}}
 ```
 
 ## Comment Reply Templates
@@ -285,9 +285,9 @@ If significant changes were made:
 
 ## Error Handling
 
-### {{scm_provider}} CLI Issues
+### {{scm.provider}} CLI Issues
 
-- If `{{scm_cli}}` command fails, check authentication: `{{auth_check_cmd}}`
+- If `{{scm.cli}}` command fails, check authentication: `{{auth.check}}`
 - If PR not found, verify the number/URL and repository access
 - If API rate limits hit, wait and retry with exponential backoff
 
@@ -313,7 +313,7 @@ If significant changes were made:
 
 This template integrates with:
 
-- {{scm_provider}} CLI for PR and comment management
+- {{scm.provider}} CLI for PR and comment management
 - Git for code changes and commits
 - Project test suites for validation
 - Claude Code plan mode for user interaction

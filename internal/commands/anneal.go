@@ -98,7 +98,7 @@ func listTemplateVariables(cfg *config.Config) error {
 	for key, value := range cfg.Templates.Flux {
 		table.Row(
 			styles.AccentStyle.Render(key),
-			styles.CodeStyle.Render(value),
+			styles.CodeStyle.Render(fmt.Sprintf("%v", value)),
 		)
 	}
 

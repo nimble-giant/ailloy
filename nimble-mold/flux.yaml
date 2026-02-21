@@ -1,67 +1,65 @@
 # Flux values for ailloy-defaults mold.
 # Override any value here or in your project's ailloy.yaml under templates.flux.
 
-# General
-default_board: "Engineering"
-# organization: ""  # required — set in your project config
-# project_id: ""    # optional — set in your project config
+project:
+  board: "Engineering"
+  # organization: ""  # required — set in your project config
+  # id: ""            # optional — set in your project config
+  list: "gh project list --owner <your-org>"
 
-# SCM platform identity
-scm_provider: "GitHub"
-scm_cli: "gh"
-scm_base_url: "https://github.com"
+scm:
+  provider: "GitHub"
+  cli: "gh"
+  base_url: "https://github.com"
 
-# Issue commands (full invocations)
-issue_view_cmd: 'gh issue view <URL or issue-number> --json title,body,author,state,labels,assignees,milestone,number,url,comments'
-issue_create_cmd: 'gh issue create --title "<title>" --body "<body>"'
-issue_create_with_labels_cmd: 'gh issue create --title "<title>" --body "<body>" --label "<labels>"'
-issue_add_to_project_cmd: 'gh issue edit <issue-number> --add-project "<project-name>"'
-issue_list_cmd: "gh issue list"
-issue_search_cmd: "gh issue search"
+issue:
+  view: 'gh issue view <URL or issue-number> --json title,body,author,state,labels,assignees,milestone,number,url,comments'
+  create: 'gh issue create --title "<title>" --body "<body>"'
+  create_with_labels: 'gh issue create --title "<title>" --body "<body>" --label "<labels>"'
+  add_to_project: 'gh issue edit <issue-number> --add-project "<project-name>"'
+  list: "gh issue list"
+  search: "gh issue search"
 
-# PR commands (full invocations)
-pr_check_cmd: "gh pr view --json number,title,url,state"
-pr_find_for_branch_cmd: 'gh pr list --state open --head "$CURRENT_BRANCH" --json number,title'
-pr_create_cmd: "gh pr create"
-pr_view_cmd: "gh pr view <pr-number> --json title,body,author,state,mergeable"
-pr_view_reviews_cmd: "gh pr view <pr-number> --json reviewDecision,latestReviews"
-pr_view_full_cmd: "gh pr view <pr-number> --json title,body,author,state,mergeable,reviewDecision,labels,assignees"
-pr_view_files_cmd: "gh pr view <pr-number> --json files"
-pr_diff_cmd: "gh pr diff <pr-number> --color=never"
-pr_update_body_cmd: "gh pr edit --body-file <description-file>"
-pr_comment_cmd: 'gh pr comment <pr-number> --body "<comment>"'
-pr_request_review_cmd: "gh pr edit <pr-number> --add-reviewer <reviewer-username>"
+pr:
+  check: "gh pr view --json number,title,url,state"
+  find_for_branch: 'gh pr list --state open --head "$CURRENT_BRANCH" --json number,title'
+  create: "gh pr create"
+  view: "gh pr view <pr-number> --json title,body,author,state,mergeable"
+  view_reviews: "gh pr view <pr-number> --json reviewDecision,latestReviews"
+  view_full: "gh pr view <pr-number> --json title,body,author,state,mergeable,reviewDecision,labels,assignees"
+  view_files: "gh pr view <pr-number> --json files"
+  diff: "gh pr diff <pr-number> --color=never"
+  update_body: "gh pr edit --body-file <description-file>"
+  comment: 'gh pr comment <pr-number> --body "<comment>"'
+  request_review: "gh pr edit <pr-number> --add-reviewer <reviewer-username>"
 
-# API commands (full invocations)
-api_cmd: "gh api"
-api_get_pr_review_comments_cmd: "gh api repos/:owner/:repo/pulls/<pr-number>/comments --paginate"
-api_get_pr_conversation_comments_cmd: "gh api repos/:owner/:repo/issues/<pr-number>/comments --paginate"
-api_reply_to_review_comment_cmd: |-
-  gh api repos/:owner/:repo/pulls/<pr-number>/comments/<comment-id>/replies \
-    --method POST \
-    --field body="<reply-message>"
-api_reply_to_conversation_comment_cmd: |-
-  gh api repos/:owner/:repo/issues/<pr-number>/comments \
-    --method POST \
-    --field body="<reply-message>"
-api_get_pr_reviews_cmd: "gh api repos/:owner/:repo/pulls/<pr-number>/reviews --paginate"
-api_get_file_content_cmd: "gh api repos/:owner/:repo/contents/<file-path>?ref=<ref>"
-api_post_review_cmd: |-
-  gh api repos/:owner/:repo/pulls/<pr-number>/reviews \
-    --method POST \
-    --field body="<summary-comment>" \
-    --field event="<REQUEST_CHANGES|APPROVE|COMMENT>" \
-    --field comments='[
-      {
-        "path": "src/api/users.js",
-        "line": 42,
-        "body": "🚨 **Security Issue**: This code is vulnerable to SQL injection..."
-      }
-    ]'
+api:
+  base: "gh api"
+  pr_review_comments: "gh api repos/:owner/:repo/pulls/<pr-number>/comments --paginate"
+  pr_conversation_comments: "gh api repos/:owner/:repo/issues/<pr-number>/comments --paginate"
+  reply_to_review_comment: |-
+    gh api repos/:owner/:repo/pulls/<pr-number>/comments/<comment-id>/replies \
+      --method POST \
+      --field body="<reply-message>"
+  reply_to_conversation_comment: |-
+    gh api repos/:owner/:repo/issues/<pr-number>/comments \
+      --method POST \
+      --field body="<reply-message>"
+  pr_reviews: "gh api repos/:owner/:repo/pulls/<pr-number>/reviews --paginate"
+  file_content: "gh api repos/:owner/:repo/contents/<file-path>?ref=<ref>"
+  post_review: |-
+    gh api repos/:owner/:repo/pulls/<pr-number>/reviews \
+      --method POST \
+      --field body="<summary-comment>" \
+      --field event="<REQUEST_CHANGES|APPROVE|COMMENT>" \
+      --field comments='[
+        {
+          "path": "src/api/users.js",
+          "line": 42,
+          "body": "🚨 **Security Issue**: This code is vulnerable to SQL injection..."
+        }
+      ]'
 
-# Project commands (full invocations)
-project_list_cmd: "gh project list --owner <your-org>"
-
-# Auth commands (full invocations)
-auth_check_cmd: "gh auth status"
-auth_login_cmd: "gh auth login"
+auth:
+  check: "gh auth status"
+  login: "gh auth login"

@@ -210,7 +210,7 @@ func TestSaveConfig(t *testing.T) {
 		},
 		Templates: TemplateConfig{
 			DefaultProvider: "claude",
-			Flux: map[string]string{
+			Flux: map[string]any{
 				"key1": "value1",
 				"key2": "value2",
 			},
@@ -259,7 +259,7 @@ func TestSaveConfig_CreatesDirectory(t *testing.T) {
 
 	cfg := &Config{
 		Templates: TemplateConfig{
-			Flux: map[string]string{},
+			Flux: map[string]any{},
 		},
 	}
 
@@ -285,7 +285,7 @@ func TestSaveConfig_CreatesDirectory(t *testing.T) {
 
 func TestProcessTemplate_BasicSubstitution(t *testing.T) {
 	content := "Hello {{name}}, welcome to {{project}}!"
-	flux := map[string]string{
+	flux := map[string]any{
 		"name":    "Alice",
 		"project": "Ailloy",
 	}
@@ -302,7 +302,7 @@ func TestProcessTemplate_BasicSubstitution(t *testing.T) {
 
 func TestProcessTemplate_NoVariables(t *testing.T) {
 	content := "Hello world, no placeholders here!"
-	flux := map[string]string{}
+	flux := map[string]any{}
 
 	result, err := ProcessTemplate(content, flux, nil)
 	if err != nil {
@@ -314,7 +314,7 @@ func TestProcessTemplate_NoVariables(t *testing.T) {
 }
 
 func TestProcessTemplate_EmptyContent(t *testing.T) {
-	result, err := ProcessTemplate("", map[string]string{"key": "value"}, nil)
+	result, err := ProcessTemplate("", map[string]any{"key": "value"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -325,7 +325,7 @@ func TestProcessTemplate_EmptyContent(t *testing.T) {
 
 func TestProcessTemplate_MultipleOccurrences(t *testing.T) {
 	content := "{{name}} said: Hello {{name}}!"
-	flux := map[string]string{"name": "Bob"}
+	flux := map[string]any{"name": "Bob"}
 
 	result, err := ProcessTemplate(content, flux, nil)
 	if err != nil {
@@ -339,7 +339,7 @@ func TestProcessTemplate_MultipleOccurrences(t *testing.T) {
 
 func TestProcessTemplate_PartialMatch(t *testing.T) {
 	content := "Use {{board}} for issues on {{board_id}}"
-	flux := map[string]string{
+	flux := map[string]any{
 		"board":    "Engineering",
 		"board_id": "12345",
 	}
@@ -367,7 +367,7 @@ func TestProcessTemplate_NilVariables(t *testing.T) {
 
 func TestProcessTemplate_SpecialCharacters(t *testing.T) {
 	content := "URL: {{url}}"
-	flux := map[string]string{
+	flux := map[string]any{
 		"url": "https://example.com/path?query=1&other=2",
 	}
 	result, err := ProcessTemplate(content, flux, nil)
@@ -577,7 +577,7 @@ func TestSaveConfig_WithOre(t *testing.T) {
 	cfg := &Config{
 		Project: ProjectConfig{Name: "ore-project"},
 		Templates: TemplateConfig{
-			Flux: map[string]string{"org": "myorg"},
+			Flux: map[string]any{"org": "myorg"},
 		},
 		Ore: Ore{
 			Status: OreConfig{
@@ -692,7 +692,7 @@ func TestOreToFlux_DisabledOreSkipped(t *testing.T) {
 func TestMergeOreFlux_DoesNotOverwriteExisting(t *testing.T) {
 	cfg := &Config{
 		Templates: TemplateConfig{
-			Flux: map[string]string{
+			Flux: map[string]any{
 				"default_status":   "Custom Status",
 				"default_priority": "Custom Priority",
 			},

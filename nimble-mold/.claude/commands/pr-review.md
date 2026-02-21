@@ -81,7 +81,7 @@ If no PR number provided:
 CURRENT_BRANCH=$(git branch --show-current)
 
 # Find PR for current branch
-{{pr_find_for_branch_cmd}}
+{{pr.find_for_branch}}
 ```
 
 ## Phase 2: PR Information Gathering
@@ -90,17 +90,17 @@ CURRENT_BRANCH=$(git branch --show-current)
 
 ```bash
 # Get comprehensive PR information
-{{pr_view_full_cmd}}
+{{pr.view_full}}
 
 # Get PR diff with context
-{{pr_diff_cmd}}
+{{pr.diff}}
 
 # Get file list and stats
-{{pr_view_files_cmd}}
+{{pr.view_files}}
 
 # Get existing reviews and comments
-{{api_get_pr_reviews_cmd}}
-{{api_get_pr_review_comments_cmd}}
+{{api.pr_reviews}}
+{{api.pr_review_comments}}
 ```
 
 ### Step 2.2: Analyze Changed Files
@@ -109,7 +109,7 @@ For each changed file:
 
 ```bash
 # Get file content before and after (replace <ref> with base or head branch)
-{{api_get_file_content_cmd}}
+{{api.file_content}}
 
 # Get file history and blame info if needed
 git log --oneline -n 10 <file-path>
@@ -384,10 +384,10 @@ If user approves, post comments to PR:
 
 ```bash
 # Post line-specific review comments
-{{api_post_review_cmd}}
+{{api.post_review}}
 
 # Post general PR comment
-{{pr_comment_cmd}}
+{{pr.comment}}
 ```
 
 ## Focus Area Specializations
@@ -476,9 +476,9 @@ This follows the pattern well! For even better maintainability, you might consid
 
 ## Error Handling
 
-### {{scm_provider}} API Issues
+### {{scm.provider}} API Issues
 - Rate limiting: Implement exponential backoff
-- Authentication: Guide user through `{{auth_login_cmd}}`
+- Authentication: Guide user through `{{auth.login}}`
 - Permissions: Verify repository access
 
 ### File Analysis Issues
@@ -494,7 +494,7 @@ This follows the pattern well! For even better maintainability, you might consid
 ## Integration Notes
 
 This template integrates with:
-- {{scm_provider}} CLI for PR management
+- {{scm.provider}} CLI for PR management
 - Git for code analysis
 - Language-specific linters and analyzers
 - Security scanning tools
