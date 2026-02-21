@@ -1,6 +1,11 @@
 # Packaging Molds with `ailloy smelt`
 
-The `smelt` command packages a mold directory into a distributable `.tar.gz` archive. It follows the same pattern as Helm's chart packaging: lean metadata in `mold.yaml`, default values in `flux.yaml`, and optional validation in `flux.schema.yaml`.
+The `smelt` command packages a mold directory into a distributable format. It follows the same pattern as Helm's chart packaging: lean metadata in `mold.yaml`, default values in `flux.yaml`, and optional validation in `flux.schema.yaml`.
+
+Two output formats are available:
+
+- **`tar`** (default): A `.tar.gz` archive that can be extracted and used with `ailloy cast ./extracted-mold`
+- **`binary`**: A self-contained executable with the mold baked in — run `./my-mold cast` directly
 
 ## Directory Structure
 
@@ -75,7 +80,7 @@ api:
       --field body="<summary>"
 ```
 
-If you omit `flux.yaml`, smelt will generate one from any `flux:` declarations in `mold.yaml` (backwards compatibility).
+If you omit `flux.yaml`, smelt will generate one from any `flux:` declarations in `mold.yaml`.
 
 ## Step 3: Write `flux.schema.yaml` (optional)
 
@@ -148,6 +153,57 @@ The archive includes all files referenced by `mold.yaml`:
 
 The tarball is named `{name}-{version}.tar.gz` and entries are prefixed with `{name}-{version}/`.
 
+## Binary Output
+
+The binary format creates a self-contained executable by embedding the mold files into a copy of the ailloy binary using [stuffbin](https://github.com/knadh/stuffbin).
+
+### Creating a binary
+
+```bash
+ailloy smelt -o binary ./my-mold
+```
+
+Output:
+
+```
+Smelting mold...
+Smelted: my-team-mold-1.0.0 (12.3 MB)
+```
+
+To write to a specific directory:
+
+```bash
+ailloy smelt -o binary ./my-mold --output ./dist
+```
+
+### Using a binary
+
+The output binary is a portable ailloy with a baked-in mold. When `cast` or `forge` is run without a mold-dir argument, the embedded mold is used automatically:
+
+```bash
+# Cast the ailloy into a project
+./my-team-mold-1.0.0 cast
+
+# Preview the rendered output
+./my-team-mold-1.0.0 forge
+
+# Override flux values
+./my-team-mold-1.0.0 cast --set project.organization=my-org
+
+# Layer additional flux files
+./my-team-mold-1.0.0 cast -f production.yaml
+```
+
+You can still pass an explicit mold-dir to override the embedded mold:
+
+```bash
+./my-team-mold-1.0.0 cast ./other-mold
+```
+
+### What goes in the binary
+
+The binary includes the same files as the tarball (see above). The output is named `{name}-{version}` (no extension) and is made executable.
+
 ## CLI Reference
 
 ```
@@ -185,7 +241,7 @@ ailloy forge ./my-mold --set project.organization=my-org --set scm.provider=GitL
 
 When a mold is installed with `forge` or `cast`, flux values are resolved in this order (lowest to highest priority):
 
-1. `mold.yaml` `flux:` schema defaults (backwards compatibility)
+1. `mold.yaml` `flux:` schema defaults
 2. `flux.yaml` defaults
 3. Project config (`ailloy.yaml` / `.ailloyrc`)
 4. Global config (`~/.ailloy/`)

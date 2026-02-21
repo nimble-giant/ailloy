@@ -15,7 +15,7 @@ var smeltCmd = &cobra.Command{
 	Long: `Package a mold into a distributable archive (alias: package).
 
 By default, creates a .tar.gz tarball from the current mold directory.
-Use -o binary for self-contained binary output (not yet implemented).`,
+Use -o binary for self-contained binary output (embeds the mold in the ailloy binary).`,
 	RunE: runSmelt,
 }
 

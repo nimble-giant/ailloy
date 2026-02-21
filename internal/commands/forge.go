@@ -9,6 +9,7 @@ import (
 
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/mold"
+	"github.com/nimble-giant/ailloy/pkg/smelt"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
 )
@@ -20,8 +21,10 @@ var forgeCmd = &cobra.Command{
 	Long: `Render all blanks in the given mold with flux values and print the result (alias: blank, template).
 
 This is the "what would cast produce?" preview, analogous to helm template.
+If run from a stuffed binary (created by smelt -o binary), the embedded mold
+is used automatically when no mold-dir is provided.
 By default, rendered output is printed to stdout. Use --output to write files to a directory.`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: runForge,
 }
 
@@ -48,7 +51,7 @@ func loadForgeFlux(reader *blanks.MoldReader) (map[string]any, error) {
 		fluxDefaults = make(map[string]any)
 	}
 
-	// Layer 2: Apply mold.yaml schema defaults (backwards compat)
+	// Layer 2: Apply mold.yaml schema defaults
 	manifest, _ := reader.LoadManifest()
 	if manifest != nil && len(manifest.Flux) > 0 {
 		fluxDefaults = mold.ApplyFluxDefaults(manifest.Flux, fluxDefaults)
@@ -92,10 +95,8 @@ type renderedFile struct {
 	content  string
 }
 
-func runForge(cmd *cobra.Command, args []string) error {
-	moldDir := args[0]
-
-	reader, err := blanks.NewMoldReaderFromPath(moldDir)
+func runForge(_ *cobra.Command, args []string) error {
+	reader, err := resolveForgeReader(args)
 	if err != nil {
 		return err
 	}
@@ -221,4 +222,19 @@ func writeForgeFiles(files []renderedFile, outputDir string) error {
 		fmt.Println(styles.SuccessStyle.Render("wrote ") + styles.CodeStyle.Render(dest))
 	}
 	return nil
+}
+
+// resolveForgeReader creates a MoldReader from args or the embedded mold.
+func resolveForgeReader(args []string) (*blanks.MoldReader, error) {
+	if len(args) >= 1 {
+		return blanks.NewMoldReaderFromPath(args[0])
+	}
+	if smelt.HasEmbeddedMold() {
+		fsys, err := smelt.OpenEmbeddedMold()
+		if err != nil {
+			return nil, fmt.Errorf("opening embedded mold: %w", err)
+		}
+		return blanks.NewMoldReader(fsys), nil
+	}
+	return nil, fmt.Errorf("mold directory is required: ailloy forge <mold-dir>")
 }
