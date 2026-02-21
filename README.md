@@ -85,8 +85,8 @@ ailloy cast ./nimble-mold --set project.organization=mycompany
 ### Configure Flux Variables
 
 ```bash
-# Interactive wizard to configure flux variables
-ailloy anneal -o flux-overrides.yaml
+# Interactive wizard — reads flux.schema.yaml from a mold
+ailloy anneal ./nimble-mold -o flux-overrides.yaml
 
 # Scripted mode
 ailloy anneal --set project.organization=mycompany --set project.board=Engineering -o flux-overrides.yaml
@@ -131,9 +131,9 @@ Manage AI command blanks:
 - `list`: Show all available blanks
 - `show <blank-name>`: Display blank content
 
-### `ailloy anneal`
+### `ailloy anneal [mold-dir]`
 
-Interactive wizard to configure flux variables (alias: `configure`):
+Dynamic, mold-aware wizard to configure flux variables (alias: `configure`). Reads `flux.schema.yaml` from the mold to generate type-driven prompts with optional discovery commands:
 
 - `-s, --set key=value`: Set flux variable in scripted mode (can be repeated)
 - `-o, --output file`: Write flux YAML to file (default: stdout)
@@ -242,8 +242,8 @@ When blanks are rendered with `forge` or `cast`, flux values are resolved in thi
 ### Configuring Flux Values
 
 ```bash
-# Interactive wizard — generates a flux YAML file
-ailloy anneal -o my-overrides.yaml
+# Interactive wizard — reads schema from mold, generates a flux YAML file
+ailloy anneal ./nimble-mold -o my-overrides.yaml
 
 # Scripted mode
 ailloy anneal --set project.organization=mycompany -o my-overrides.yaml

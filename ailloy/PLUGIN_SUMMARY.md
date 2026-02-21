@@ -21,13 +21,7 @@
 - **`/ailloy-customize`** - Configure flux variables
 - **`/ailloy-blanks`** - List and manage blanks
 
-### 3. Configuration Support
-- Reads from `.ailloy/ailloy.yaml` for project config
-- Supports global config at `~/.ailloy/ailloy.yaml`
-- Variable substitution in blanks
-- Hierarchical configuration (project > global > defaults)
-
-### 4. Advanced Features
+### 3. Advanced Features
 - **Hooks System** - Event-based automation
 - **GitHub Workflow Agent** - For complex automation
 - **Installation Script** - Automated setup process

@@ -239,6 +239,9 @@ func validateFluxType(typ, name, val string) string {
 	case "list":
 		// Any non-empty comma-separated value is valid; already checked non-empty above
 		return ""
+	case "select":
+		// Any value is valid (must match one of the declared options at runtime)
+		return ""
 	default:
 		return fmt.Sprintf("flux %q has unknown type %q", name, typ)
 	}
