@@ -57,30 +57,30 @@ make build
 
 The binary will be available at `./bin/ailloy`.
 
-### Initialize a Project
+### Cast a Mold into a Project
 
 ```bash
-# Set up Ailloy structure in your current repository (default)
-ailloy init
+# Install blanks from the official mold
+ailloy cast ./nimble-mold
 
-# Set up global user configuration
-ailloy init --global
+# Include GitHub Actions workflow blanks
+ailloy cast ./nimble-mold --with-workflows
+
+# Override flux values at install time
+ailloy cast ./nimble-mold --set project.organization=mycompany
 ```
 
-### Customize Blanks
+### Configure Flux Variables
 
 ```bash
-# Set team-specific defaults
-ailloy customize --set default_board="Engineering" --set default_priority="P1" --set organization="mycompany"
+# Interactive wizard to configure flux variables
+ailloy anneal -o flux-overrides.yaml
 
-# View current configuration
-ailloy customize --list
+# Scripted mode
+ailloy anneal --set project.organization=mycompany --set project.board=Engineering -o flux-overrides.yaml
 
-# Interactive configuration mode
-ailloy customize
-
-# Configure global defaults (applies to all projects)
-ailloy customize --global --set default_board="My Default Board"
+# Use overrides with cast
+ailloy cast ./nimble-mold -f flux-overrides.yaml
 ```
 
 ### Working with Blanks
@@ -95,22 +95,21 @@ ailloy mold show create-issue
 
 ## Available Commands
 
-### `ailloy init`
+### `ailloy cast [mold-dir]`
 
-Initialize Ailloy configuration:
+Install rendered blanks from a mold into the current project (alias: `install`):
 
-- By default, sets up Ailloy structure in the current repository
-- `-g, --global`: Install user-level configuration instead
+- `--with-workflows`: Include GitHub Actions workflow blanks
+- `--set key=value`: Override flux variables (can be repeated)
+- `-f, --values file`: Layer additional flux value files (can be repeated)
 
-### `ailloy customize`
+### `ailloy forge [mold-dir]`
 
-Configure flux variables for team-specific defaults:
+Dry-run render of mold blanks (aliases: `blank`, `template`):
 
-- `--set key=value`: Set flux variables
-- `--list`: List current flux variables
-- `--delete key`: Delete a flux variable
-- `--global`: Work with global configuration (vs project-specific)
-- Interactive mode (no flags): 5-section guided wizard with automatic GitHub Project field discovery, model configuration, and change review
+- `-o, --output dir`: Write rendered files to a directory instead of stdout
+- `--set key=value`: Set flux values (can be repeated)
+- `-f, --values file`: Layer additional flux value files (can be repeated)
 
 ### `ailloy mold`
 
@@ -118,6 +117,35 @@ Manage AI command blanks:
 
 - `list`: Show all available blanks
 - `show <blank-name>`: Display blank content
+
+### `ailloy anneal`
+
+Interactive wizard to configure flux variables (alias: `configure`):
+
+- `-s, --set key=value`: Set flux variable in scripted mode (can be repeated)
+- `-o, --output file`: Write flux YAML to file (default: stdout)
+
+### `ailloy smelt [mold-dir]`
+
+Package a mold into a distributable format (alias: `package`):
+
+- `-o, --output-format`: Output format: `tar` (default) or `binary`
+- `--output dir`: Output directory (default: current directory)
+
+### `ailloy temper [path]`
+
+Validate and lint a mold or ingot package (alias: `lint`):
+
+- Checks structural integrity, manifest fields, file references, template syntax, and flux schema consistency
+- Reports errors (blocking) and warnings (informational)
+
+### `ailloy plugin`
+
+Generate and manage Claude Code plugins:
+
+- `generate`: Generate Claude Code plugin from blanks (`--mold`, `--output`, `--watch`, `--force`)
+- `update [path]`: Update existing Claude Code plugin (`--mold`, `--force`)
+- `validate [path]`: Validate Claude Code plugin structure
 
 ## Blanks
 
@@ -130,6 +158,9 @@ Ailloy includes pre-built blanks for common SDLC tasks, optimized for Claude Cod
 - **`start-issue`**: Fetch GitHub issue details and begin implementation
 - **`open-pr`**: Create pull requests with structured descriptions
 - **`pr-description`**: Generate comprehensive PR descriptions
+- **`pr-comments`**: Respond to PR review comments efficiently
+- **`pr-review`**: Conduct comprehensive code reviews with silent/interactive modes
+- **`preflight`**: Pre-flight checks and setup
 - **`update-pr`**: Update existing pull requests
 
 ### Available Skills
@@ -137,10 +168,11 @@ Ailloy includes pre-built blanks for common SDLC tasks, optimized for Claude Cod
 Skills are proactive workflows that Claude Code can use automatically based on context, without requiring explicit slash command invocation:
 
 - **`brainstorm`**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
+- **`add-ailloy-blank`**: Guided workflow for creating new Ailloy blanks with proper mold structure
 
 ### Workflow Blanks
 
-Ailloy also includes GitHub Actions workflow blanks:
+Ailloy also includes GitHub Actions workflow blanks in the official mold (`nimble-mold/workflows/`). These are installed into your project's `.github/workflows/` when using `ailloy cast --with-workflows`:
 
 - **`claude-code`**: GitHub Actions workflow for the [Claude Code agent](https://github.com/anthropics/claude-code-action). Responds to `@claude` mentions in issues, PR comments, and PR reviews. Requires an `ANTHROPIC_API_KEY` secret in your repository.
 - **`claude-code-review`**: GitHub Actions workflow for automated PR reviews with the [Claude Code agent](https://github.com/anthropics/claude-code-action). Features brevity-focused formatting, collapsible sections for detailed analysis, and intelligent comment management (updates summary comments, creates reply comments). Requires an `ANTHROPIC_API_KEY` secret in your repository.
@@ -164,83 +196,51 @@ Each blank includes:
 
 ### Blank Customization
 
-Blanks use `{{variable_name}}` syntax, powered by Go's [text/template](https://pkg.go.dev/text/template) engine. Common variables include:
+Blanks use Go's [text/template](https://pkg.go.dev/text/template) engine with dotted flux variable paths. Common variables include:
 
-- `{{default_board}}`: Default GitHub project board name
-- `{{default_priority}}`: Default issue priority (P0, P1, P2)
-- `{{default_status}}`: Default issue status (Ready, In Progress, etc.)
-- `{{organization}}`: GitHub organization name
-- `{{project_id}}`: GitHub project ID for API calls
+- `{{ project.board }}`: Default GitHub project board name
+- `{{ project.organization }}`: GitHub organization name
+- `{{ scm.provider }}`: Source control provider (e.g., GitHub)
+- `{{ scm.cli }}`: CLI tool for SCM operations (e.g., gh)
 
-Blanks also support **conditional rendering** based on your configuration:
+Blanks also support **conditional rendering** based on your flux configuration:
 
 ```markdown
-{{if .models.status.enabled}}
-Status Field: {{.models.status.field_id}}
+{{if .ore.status.enabled}}
+Status Field: {{ .ore.status.field_id }}
 {{end}}
 ```
 
-Variables and conditionals are processed when blanks are copied during `ailloy init`. See the [Configuration Guide](docs/configuration.md) for full details on blank syntax, models, and conditional rendering.
+Variables and conditionals are processed when blanks are rendered during `ailloy cast` or `ailloy forge`. See the [Packaging Molds Guide](docs/smelt.md) for full details on flux values, mold structure, and template syntax.
 
 ## Configuration
 
-Ailloy uses YAML configuration files to store settings and flux variables:
+Ailloy uses **flux** — YAML variable files that configure how blanks are rendered. Each mold ships with a `flux.yaml` containing defaults, and you can override values at multiple layers.
 
-### Configuration Files
+### Flux Value Precedence
 
-- **Project**: `.ailloy/ailloy.yaml` - Project-specific configuration
-- **Global**: `~/.ailloy/ailloy.yaml` - User-wide defaults
+When blanks are rendered with `forge` or `cast`, flux values are resolved in this order (lowest to highest priority):
 
-### Configuration Structure
+1. `mold.yaml` `flux:` schema defaults
+2. `flux.yaml` defaults (shipped with the mold)
+3. `-f` value files (left to right, later files override earlier)
+4. `--set` flags (highest priority)
 
-```yaml
-# Ailloy Configuration
-project:
-  name: "My Project"
-  description: "Project description"
-  ai_providers: ["claude"]
-  template_directories: []
+### Configuring Flux Values
 
-templates:
-  default_provider: "claude"
-  auto_update: true
-  repositories: []
-  variables:
-    default_board: "Engineering"
-    default_priority: "P1"
-    default_status: "Ready"
-    organization: "mycompany"
-    # GitHub Project API integration (optional)
-    project_id: "PVT_kwDOBTfXA84A408H"
-    status_field_id: "PVTSSF_..."
-    priority_field_id: "PVTSSF_..."
-    iteration_field_id: "PVTIF_..."
+```bash
+# Interactive wizard — generates a flux YAML file
+ailloy anneal -o my-overrides.yaml
 
-workflows:
-  issue_creation:
-    template: "create-issue"
-    provider: "claude"
+# Scripted mode
+ailloy anneal --set project.organization=mycompany -o my-overrides.yaml
 
-user:
-  name: "Your Name"
-  email: "your.email@example.com"
+# Use overrides when casting
+ailloy cast ./nimble-mold -f my-overrides.yaml
 
-providers:
-  claude:
-    enabled: true
-    api_key_env: "ANTHROPIC_API_KEY"
-  gpt:
-    enabled: false
-    api_key_env: "OPENAI_API_KEY"
+# Or override inline
+ailloy cast ./nimble-mold --set project.organization=mycompany
 ```
-
-### Variable Precedence
-
-When both global and project configurations exist:
-
-1. Project variables take precedence over global variables
-2. Global variables serve as defaults for undefined project variables
-3. Variables are merged automatically during blank processing
 
 ## Project Structure
 
@@ -253,22 +253,24 @@ When both global and project configurations exist:
   /github            # GitHub ProjectV2 discovery via gh API GraphQL
   /mold              # Template engine, flux loading, ingot resolution
   /plugin            # Plugin generation pipeline
+  /safepath          # Safe path utilities
   /smelt             # Mold packaging (tarball/binary)
   /styles            # Terminal UI styles (lipgloss)
 /nimble-mold         # Official mold (commands, skills, workflows, flux)
 /docs                # Documentation
-/examples            # Example configurations
 ```
 
 ## Current Status
 
 **Alpha Stage**: Ailloy is an early-stage tool focused on Claude Code integration. The CLI provides:
 
-- ✅ Project initialization with command blank setup
+- ✅ Mold casting and forging with flux variable rendering
 - ✅ Blank management and viewing
-- ✅ Blank customization with team-specific variables
-- ✅ Conditional blank rendering with model-aware context
-- ✅ YAML configuration system with global and project scopes
+- ✅ Flux-based configuration with Helm-style value precedence
+- ✅ Conditional blank rendering with ore model-aware context
+- ✅ Mold packaging (tarball and self-contained binary)
+- ✅ Mold/ingot validation and linting
+- ✅ Claude Code plugin generation from blanks
 - ✅ Claude Code-optimized workflow blanks
 - ✅ Automatic GitHub Project field discovery via GraphQL
 - ✅ Interactive wizard with charmbracelet/huh for guided configuration
