@@ -53,7 +53,7 @@ func GetNestedValue(m map[string]any, dottedPath string) (string, bool) {
 // The input map is not mutated.
 func ApplyFluxDefaults(schema []FluxVar, flux map[string]any) map[string]any {
 	result := make(map[string]any, len(flux))
-	mergo.Merge(&result, flux, mergo.WithOverride) //nolint:errcheck // best-effort merge
+	mergo.Merge(&result, flux, mergo.WithOverride) //nolint:errcheck // #nosec G104 -- best-effort merge
 
 	for _, fv := range schema {
 		if fv.Default == "" {
@@ -136,8 +136,8 @@ func LoadFluxSchema(fsys fs.FS, path string) ([]FluxVar, error) {
 // applied for any keys not already set. The input map is not mutated.
 func ApplyFluxFileDefaults(defaults, flux map[string]any) map[string]any {
 	result := make(map[string]any)
-	mergo.Merge(&result, flux, mergo.WithOverride) //nolint:errcheck // best-effort merge
-	mergo.Merge(&result, defaults)                 //nolint:errcheck // fills gaps only
+	mergo.Merge(&result, flux, mergo.WithOverride) //nolint:errcheck // #nosec G104 -- best-effort merge
+	mergo.Merge(&result, defaults)                 //nolint:errcheck // #nosec G104 -- fills gaps only
 
 	return result
 }
