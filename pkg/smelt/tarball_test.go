@@ -96,6 +96,43 @@ func listTarEntries(t *testing.T, path string) []string {
 	return entries
 }
 
+// readTarEntry reads the content of a specific entry from a .tar.gz file.
+func readTarEntry(t *testing.T, tarPath, entryName string) string {
+	t.Helper()
+
+	f, err := os.Open(tarPath) // #nosec G304
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+
+	gr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = gr.Close() }()
+
+	tr := tar.NewReader(gr)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if hdr.Name == entryName {
+			data, err := io.ReadAll(tr)
+			if err != nil {
+				t.Fatalf("reading entry %s: %v", entryName, err)
+			}
+			return string(data)
+		}
+	}
+	t.Fatalf("entry %q not found in tarball", entryName)
+	return ""
+}
+
 func TestPackageTarball_ValidMold(t *testing.T) {
 	moldDir := t.TempDir()
 	writeMoldFixture(t, moldDir)
@@ -283,6 +320,193 @@ version: 0.1.0
 		if strings.HasSuffix(e, "flux.yaml") {
 			t.Errorf("did not expect flux.yaml in tarball with no flux defaults; got entries: %v", entries)
 		}
+	}
+}
+
+func TestPackageTarball_IncludesFluxSchema(t *testing.T) {
+	moldDir := t.TempDir()
+	writeMoldFixture(t, moldDir)
+
+	// Add a flux.schema.yaml
+	schemaContent := "- name: org\n  type: string\n  required: true\n"
+	if err := os.WriteFile(filepath.Join(moldDir, "flux.schema.yaml"), []byte(schemaContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outputDir := t.TempDir()
+	outputPath, _, err := PackageTarball(moldDir, outputDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	entries := listTarEntries(t, outputPath)
+	found := false
+	for _, e := range entries {
+		if strings.HasSuffix(e, "flux.schema.yaml") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected flux.schema.yaml in tarball; got entries: %v", entries)
+	}
+}
+
+func TestPackageTarball_NoFluxSchema(t *testing.T) {
+	moldDir := t.TempDir()
+	writeMoldFixture(t, moldDir)
+
+	outputDir := t.TempDir()
+	outputPath, _, err := PackageTarball(moldDir, outputDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	entries := listTarEntries(t, outputPath)
+	for _, e := range entries {
+		if strings.HasSuffix(e, "flux.schema.yaml") {
+			t.Errorf("did not expect flux.schema.yaml in tarball without schema file; got entries: %v", entries)
+		}
+	}
+}
+
+// writeMoldFixtureHelmStyle creates a Helm-style mold directory (no inline flux: section,
+// with separate flux.yaml and optional flux.schema.yaml).
+func writeMoldFixtureHelmStyle(t *testing.T, dir string, includeSchema bool) {
+	t.Helper()
+
+	moldYAML := `apiVersion: v1
+kind: mold
+name: helm-style
+version: 2.0.0
+description: "Helm-style mold with no inline flux"
+commands:
+  - hello.md
+`
+	fluxYAML := `# Default values
+org: acme-corp
+board: Engineering
+cli: gh
+`
+	dirs := []string{
+		filepath.Join(dir, ".claude", "commands"),
+	}
+	for _, d := range dirs {
+		if err := os.MkdirAll(d, 0750); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	files := map[string]string{
+		"mold.yaml":                 moldYAML,
+		"flux.yaml":                 fluxYAML,
+		".claude/commands/hello.md": "# Hello\nCommand template.\n",
+	}
+	if includeSchema {
+		files["flux.schema.yaml"] = "- name: org\n  type: string\n  required: true\n"
+	}
+	for rel, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, rel), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestPackageTarball_HelmStyleMold(t *testing.T) {
+	moldDir := t.TempDir()
+	writeMoldFixtureHelmStyle(t, moldDir, false)
+
+	outputDir := t.TempDir()
+	outputPath, _, err := PackageTarball(moldDir, outputDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	entries := listTarEntries(t, outputPath)
+	prefix := "helm-style-2.0.0"
+
+	// Should include flux.yaml from source
+	entrySet := make(map[string]bool)
+	for _, e := range entries {
+		entrySet[e] = true
+	}
+
+	if !entrySet[prefix+"/mold.yaml"] {
+		t.Error("expected mold.yaml in tarball")
+	}
+	if !entrySet[prefix+"/flux.yaml"] {
+		t.Error("expected flux.yaml in tarball")
+	}
+	if !entrySet[prefix+"/.claude/commands/hello.md"] {
+		t.Error("expected command template in tarball")
+	}
+}
+
+func TestPackageTarball_HelmStyleMoldWithSchema(t *testing.T) {
+	moldDir := t.TempDir()
+	writeMoldFixtureHelmStyle(t, moldDir, true)
+
+	outputDir := t.TempDir()
+	outputPath, _, err := PackageTarball(moldDir, outputDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	entries := listTarEntries(t, outputPath)
+	prefix := "helm-style-2.0.0"
+
+	entrySet := make(map[string]bool)
+	for _, e := range entries {
+		entrySet[e] = true
+	}
+
+	if !entrySet[prefix+"/flux.yaml"] {
+		t.Error("expected flux.yaml in tarball")
+	}
+	if !entrySet[prefix+"/flux.schema.yaml"] {
+		t.Error("expected flux.schema.yaml in tarball")
+	}
+}
+
+func TestPackageTarball_SourceFluxPreservedVerbatim(t *testing.T) {
+	moldDir := t.TempDir()
+
+	// Mold with no inline flux: section
+	moldYAML := `apiVersion: v1
+kind: mold
+name: verbatim
+version: 1.0.0
+commands:
+  - cmd.md
+`
+	// flux.yaml with comments and specific formatting
+	fluxYAML := "# My custom flux values\norg: my-org\n# Board setting\nboard: Product\n"
+
+	for _, d := range []string{filepath.Join(moldDir, ".claude", "commands")} {
+		if err := os.MkdirAll(d, 0750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(moldDir, "mold.yaml"), []byte(moldYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(moldDir, "flux.yaml"), []byte(fluxYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(moldDir, ".claude", "commands", "cmd.md"), []byte("# Cmd\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outputDir := t.TempDir()
+	outputPath, _, err := PackageTarball(moldDir, outputDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Extract flux.yaml content from tarball and verify it's verbatim
+	content := readTarEntry(t, outputPath, "verbatim-1.0.0/flux.yaml")
+	if content != fluxYAML {
+		t.Errorf("expected flux.yaml to be preserved verbatim.\nExpected:\n%s\nGot:\n%s", fluxYAML, content)
 	}
 }
 

@@ -181,12 +181,16 @@ func TestIntegration_TemplateFilesMatchEmbedded(t *testing.T) {
 		t.Fatalf("failed to list embedded templates: %v", err)
 	}
 
-	// Load manifest to apply the same flux defaults that copyTemplateFiles now applies
+	// Load flux defaults matching the layered flow in copyTemplateFiles:
+	// mold.yaml schema defaults (backwards compat), then flux.yaml file defaults
 	manifest, err := embeddedtemplates.LoadManifest()
 	if err != nil {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 	flux := mold.ApplyFluxDefaults(manifest.Flux, make(map[string]string))
+	if fluxDefaults, err := embeddedtemplates.LoadFluxDefaults(); err == nil {
+		flux = mold.ApplyFluxFileDefaults(fluxDefaults, flux)
+	}
 
 	// Verify each embedded template has a corresponding file
 	// Note: templates are processed through the Go template engine,

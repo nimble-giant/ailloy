@@ -176,13 +176,24 @@ func copyTemplateFiles() error {
 		}
 	}
 
-	// Apply flux defaults and validate from manifest schema
+	// Apply flux defaults: mold.yaml schema defaults (backwards compat), then flux.yaml
 	manifest, _ := embeddedtemplates.LoadManifest()
 	if manifest != nil {
 		cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
-		if err := mold.ValidateFlux(manifest.Flux, cfg.Templates.Flux); err != nil {
-			log.Printf("warning: %v", err)
-		}
+	}
+	if fluxDefaults, err := embeddedtemplates.LoadFluxDefaults(); err == nil {
+		cfg.Templates.Flux = mold.ApplyFluxFileDefaults(fluxDefaults, cfg.Templates.Flux)
+	}
+
+	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
+	var schema []mold.FluxVar
+	if s, err := embeddedtemplates.LoadFluxSchema(); err == nil && s != nil {
+		schema = s
+	} else if manifest != nil && len(manifest.Flux) > 0 {
+		schema = manifest.Flux
+	}
+	if err := mold.ValidateFlux(schema, cfg.Templates.Flux); err != nil {
+		log.Printf("warning: %v", err)
 	}
 
 	// Build ingot resolver
@@ -281,10 +292,13 @@ func copySkillFiles() error {
 		}
 	}
 
-	// Apply flux defaults from manifest schema
+	// Apply flux defaults: mold.yaml schema defaults (backwards compat), then flux.yaml
 	manifest, _ := embeddedtemplates.LoadManifest()
 	if manifest != nil {
 		cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
+	}
+	if fluxDefaults, err := embeddedtemplates.LoadFluxDefaults(); err == nil {
+		cfg.Templates.Flux = mold.ApplyFluxFileDefaults(fluxDefaults, cfg.Templates.Flux)
 	}
 
 	// Build ingot resolver

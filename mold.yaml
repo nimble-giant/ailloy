@@ -8,20 +8,6 @@ author:
   url: https://github.com/nimble-giant/ailloy
 requires:
   ailloy: ">=0.2.0"
-flux:
-  - name: default_board
-    description: "Default GitHub project board name"
-    type: string
-    required: false
-    default: "Engineering"
-  - name: organization
-    description: "GitHub organization name"
-    type: string
-    required: true
-  - name: project_id
-    description: "GitHub Projects V2 project ID"
-    type: string
-    required: false
 commands:
   - brainstorm.md
   - create-issue.md

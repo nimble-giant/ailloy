@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This command is used to instruct Claude to generate GitHub issues with a clean, actionable, well-structured format. It is optimized for creating consistent GitHub issues for engineering planning, with consistent formatting across `feat`, `fix`, `chore`, `docs`, and `epic` types.
+This command is used to instruct Claude to generate {{scm_provider}} issues with a clean, actionable, well-structured format. It is optimized for creating consistent {{scm_provider}} issues for engineering planning, with consistent formatting across `feat`, `fix`, `chore`, `docs`, and `epic` types.
 
 ## Command Name
 
@@ -45,13 +45,13 @@ Claude must:
 
 1. Immediately enter plan mode when this command is invoked
 2. Parse the user input to extract flags and issue description
-3. Format the GitHub issue using the exact markdown structure below
+3. Format the {{scm_provider}} issue using the exact markdown structure below
 4. Use the ExitPlanMode tool to present the formatted issue as the plan
 5. Wait for user approval before proceeding
 6. After approval:
    - If `--prompt` flag is present: Use interactive mode (ask for board and labels if repository supports them)
    - Otherwise: Use parsed flags only (no prompting, no automatic assignments)
-7. Execute the GitHub CLI commands to create the issue with configured settings
+7. Execute the {{scm_provider}} CLI commands to create the issue with configured settings
 
 ## Plan Mode Output Format
 
@@ -73,7 +73,7 @@ In plan mode, Claude must present the issue using this exact structure:
 - {Additional clarifications, decisions, references, or design choices}
 ```
 
-**Critical**: The title format must be `{type(scope): description}` in all lowercase for GitHub CLI compatibility.
+**Critical**: The title format must be `{type(scope): description}` in all lowercase for {{scm_provider}} CLI compatibility.
 
 ---
 
@@ -94,11 +94,11 @@ In plan mode, Claude must present the issue using this exact structure:
 - Always rewrite user input for clarity, grammar, and consistency
 - Include context and motivation, not just what to build
 
-### GitHub CLI Requirements
+### {{scm_provider}} CLI Requirements
 
 - Title must be passed to `--title` parameter
 - Body content (everything after title) goes to `--body` parameter
-- Project assignment uses `gh issue edit --add-project` with exact project name (not number)
+- Project assignment uses `{{issue_add_to_project_cmd}}`
 
 ---
 
@@ -153,7 +153,7 @@ We hit our ECR scan limits in sandbox, which blocked scan visibility before a re
    - Extract flags from command (e.g., `-b`, `--board`, `-l`, `--label`)
    - Extract issue description from remaining input
    - Note: No defaults are applied - only use explicitly provided flags
-2. **Format Issue**: Create GitHub issue using the exact markdown format above
+2. **Format Issue**: Create {{scm_provider}} issue using the exact markdown format above
 3. **Present Plan**: Use `ExitPlanMode` tool with the formatted issue as the plan, including parsed settings
 4. **Wait for Approval**: Do not proceed until user explicitly approves
 
@@ -165,11 +165,11 @@ We hit our ECR scan limits in sandbox, which blocked scan visibility before a re
    - Title: First line of the plan (the `# title` line)
    - Body: Everything after the title
 2. **Create Issue**:
-   - Basic: `gh issue create --title "<title>" --body "<body>"`
-   - With labels: `gh issue create --title "<title>" --body "<body>" --label "label1,label2"`
+   - Basic: `{{issue_create_cmd}}`
+   - With labels: `{{issue_create_with_labels_cmd}}`
 3. **Add to Project Board** (if specified):
    - Only if `-b` or `--board` flag was provided
-   - Execute: `gh issue edit <issue-number> --add-project "<project-name>"`
+   - Execute: `{{issue_add_to_project_cmd}}`
 4. **Confirm Success**: Report the created issue URL to user
 
 #### Mode B: Interactive Mode (--prompt flag)
@@ -181,22 +181,22 @@ If `--prompt` flag is detected:
 3. **Create Issue**: Same as Mode A but with user-provided values
 4. **Add Board/Labels**: Apply user-specified board and labels
 
-## GitHub CLI Commands
+## {{scm_provider}} CLI Commands
 
 ### Basic Issue Creation
 
 ```bash
 # Create a basic issue
-gh issue create --title "feat(web): add new feature" --body "Description..."
+{{issue_create_cmd}}
 
 # Create issue with labels
-gh issue create --title "fix(api): resolve bug" --body "Description..." --label "bug,priority:high"
+{{issue_create_with_labels_cmd}}
 
 # Add to project board after creation (if your team uses boards)
-gh issue edit <issue-number> --add-project "<project-name>"
+{{issue_add_to_project_cmd}}
 ```
 
-### Available GitHub CLI Options
+### Available {{scm_provider}} CLI Options
 
 - `--title`: Issue title (required)
 - `--body`: Issue description (required)
@@ -204,17 +204,17 @@ gh issue edit <issue-number> --add-project "<project-name>"
 - `--assignee`: Assign to specific users (optional)
 - `--milestone`: Add to milestone (optional)
 
-**Note**: Project board integration varies by repository configuration. Some teams use GitHub Projects, others use different systems, and some don't use boards at all.
+**Note**: Project board integration varies by repository configuration. Some teams use {{scm_provider}} Projects, others use different systems, and some don't use boards at all.
 
 ```bash
 # List available project boards
-gh project list --owner <your-org>
+{{project_list_cmd}}
 
 # Step 1: Create issue WITHOUT project assignment
-gh issue create --title "feat(web): add new feature" --body "Description..."
+{{issue_create_cmd}}
 
 # Step 2: Add to project board using project NAME (not number)
-gh issue edit <issue-number> --add-project "Engineering"
+{{issue_add_to_project_cmd}}
 
 # Common project names:
 # - "{{default_board}}" (default)
@@ -250,7 +250,7 @@ gh issue edit <issue-number> --add-project "Engineering"
 
 ```bash
 # Set Status
-gh api graphql --field query='
+{{api_cmd}} graphql --field query='
 mutation {
   updateProjectV2ItemFieldValue(
     input: {
@@ -278,7 +278,7 @@ mutation {
 
 ```bash
 # Set Priority
-gh api graphql --field query='
+{{api_cmd}} graphql --field query='
 mutation {
   updateProjectV2ItemFieldValue(
     input: {
@@ -309,7 +309,7 @@ mutation {
 
 When no flags are specified, Claude will:
 
-- Create a basic GitHub issue with title and description only
+- Create a basic {{scm_provider}} issue with title and description only
 - Not add to any project board
 - Not apply any labels
 - Not prompt for any configuration
@@ -328,14 +328,14 @@ This provides flexibility for users who prefer to configure settings interactive
 
 ## Error Handling
 
-- If `gh` command fails, report the error and suggest checking GitHub CLI authentication
+- If `{{scm_cli}}` command fails, report the error and suggest checking {{scm_provider}} CLI authentication
 - If project board doesn't exist, ask user to verify the board name or skip board assignment
 - If title format is invalid, reformat according to rules automatically
 - If labels don't exist, ask user to verify label names or skip label assignment
 
 ## Recap
 
-Use this command for creating GitHub issues efficiently:
+Use this command for creating {{scm_provider}} issues efficiently:
 
 - **Default mode**: Issues are created immediately after plan approval with sensible defaults
 - **Flag overrides**: Use flags when you need specific values (e.g., `-b "Tech Debt" -p P0`)

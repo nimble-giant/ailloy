@@ -18,7 +18,7 @@ When this command is used, Claude will:
 
 1. **Enter Plan Mode** to outline the PR creation/update process
 
-2. **Check for existing PR** on the current branch using `gh pr view --json number,title,url,state`
+2. **Check for existing PR** on the current branch using `{{pr_check_cmd}}`
 
 3. **If PR already exists**:
    - Use `/update-pr` to update the existing PR description
@@ -26,7 +26,7 @@ When this command is used, Claude will:
 
 4. **If no PR exists**:
    - Generate PR description using `/pr-description` command
-   - Create new PR using `gh pr create`
+   - Create new PR using `{{pr_create_cmd}}`
 
 5. **Set PR status**:
    - Default: Ready for review
@@ -50,7 +50,7 @@ This command integrates with:
 ## Notes
 
 - Automatically detects existing PRs to avoid duplicates
-- Uses GitHub CLI (`gh`) for all PR operations
+- Uses {{scm_provider}} CLI (`{{scm_cli}}`) for all PR operations
 - Puts Claude into Plan Mode for transparency
 - Leverages existing `/pr-description` functionality
 - Does not include Claude Code attribution in PR descriptions

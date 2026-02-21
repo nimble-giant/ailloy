@@ -96,11 +96,18 @@ func runForge(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load mold manifest: %w", err)
 	}
 
-	// Apply flux defaults from manifest schema
+	// Apply flux defaults: mold.yaml schema defaults (backwards compat), then flux.yaml
 	cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
+	if fluxDefaults, err := embeddedtemplates.LoadFluxDefaults(); err == nil {
+		cfg.Templates.Flux = mold.ApplyFluxFileDefaults(fluxDefaults, cfg.Templates.Flux)
+	}
 
-	// Validate flux against schema (log warnings, don't fail)
-	if err := mold.ValidateFlux(manifest.Flux, cfg.Templates.Flux); err != nil {
+	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
+	schema, _ := embeddedtemplates.LoadFluxSchema()
+	if schema == nil && len(manifest.Flux) > 0 {
+		schema = manifest.Flux
+	}
+	if err := mold.ValidateFlux(schema, cfg.Templates.Flux); err != nil {
 		log.Printf("warning: %v", err)
 	}
 

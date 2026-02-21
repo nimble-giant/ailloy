@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This command helps PR authors respond to review comments efficiently. It fetches PR details and comments using GitHub CLI, enters plan mode to strategically address each comment, and executes the response plan with code changes and comment replies.
+This command helps PR authors respond to review comments efficiently. It fetches PR details and comments using {{scm_provider}} CLI, enters plan mode to strategically address each comment, and executes the response plan with code changes and comment replies.
 
 ## Command Name
 
@@ -19,14 +19,14 @@ This command helps PR authors respond to review comments efficiently. It fetches
 Examples:
 
 - `/pr-comments 1234` - Address comments on PR #1234
-- `/pr-comments https://github.com/owner/repo/pull/1234` - Address comments using full URL
+- `/pr-comments {{scm_base_url}}/owner/repo/pull/1234` - Address comments using full URL
 - `/pr-comments` - Address comments on current branch's PR (auto-detect)
 
 ## Workflow Overview
 
 Claude must execute this workflow when the command is invoked:
 
-1. **Fetch PR Information**: Get PR details and all comments using GitHub CLI
+1. **Fetch PR Information**: Get PR details and all comments using {{scm_provider}} CLI
 2. **Enter Plan Mode**: Present all comments and build response strategy
 3. **Interactive Planning**: For each comment, ask user how to respond
 4. **Consolidate Plan**: Present final response plan for approval
@@ -43,7 +43,7 @@ If no PR number provided:
 CURRENT_BRANCH=$(git branch --show-current)
 
 # Find PR for current branch
-gh pr list --state open --head "$CURRENT_BRANCH" --json number,title
+{{pr_find_for_branch_cmd}}
 ```
 
 If URL provided, extract the PR number from the URL.
@@ -52,16 +52,16 @@ If URL provided, extract the PR number from the URL.
 
 ```bash
 # Get PR information
-gh pr view <pr-number> --json title,body,author,state,mergeable
+{{pr_view_cmd}}
 
 # Get PR comments (review comments on code)
-gh pr view <pr-number> --json reviewDecision,latestReviews
+{{pr_view_reviews_cmd}}
 
 # Get detailed review comments
-gh api repos/:owner/:repo/pulls/<pr-number>/comments --paginate
+{{api_get_pr_review_comments_cmd}}
 
 # Get general PR conversation comments
-gh api repos/:owner/:repo/issues/<pr-number>/comments --paginate
+{{api_get_pr_conversation_comments_cmd}}
 ```
 
 ### Step 1.3: Parse and Organize Comments
@@ -242,14 +242,10 @@ For each planned reply:
 
 ```bash
 # Reply to specific review comments
-gh api repos/:owner/:repo/pulls/<pr-number>/comments/<comment-id>/replies \
-  --method POST \
-  --field body="<reply-message>"
+{{api_reply_to_review_comment_cmd}}
 
 # Reply to general comments
-gh api repos/:owner/:repo/issues/<pr-number>/comments \
-  --method POST \
-  --field body="<reply-message>"
+{{api_reply_to_conversation_comment_cmd}}
 ```
 
 ### Step 4.6: Request Re-review (Optional)
@@ -258,10 +254,10 @@ If significant changes were made:
 
 ```bash
 # Request review from specific reviewers
-gh pr edit <pr-number> --add-reviewer <reviewer-username>
+{{pr_request_review_cmd}}
 
 # Or post a general comment requesting re-review
-gh pr comment <pr-number> --body "Thanks for the feedback! I've addressed all the review comments. Please take another look when you have a chance."
+{{pr_comment_cmd}}
 ```
 
 ## Comment Reply Templates
@@ -289,9 +285,9 @@ gh pr comment <pr-number> --body "Thanks for the feedback! I've addressed all th
 
 ## Error Handling
 
-### GitHub CLI Issues
+### {{scm_provider}} CLI Issues
 
-- If `gh` command fails, check authentication: `gh auth status`
+- If `{{scm_cli}}` command fails, check authentication: `{{auth_check_cmd}}`
 - If PR not found, verify the number/URL and repository access
 - If API rate limits hit, wait and retry with exponential backoff
 
@@ -317,7 +313,7 @@ gh pr comment <pr-number> --body "Thanks for the feedback! I've addressed all th
 
 This template integrates with:
 
-- GitHub CLI for PR and comment management
+- {{scm_provider}} CLI for PR and comment management
 - Git for code changes and commits
 - Project test suites for validation
 - Claude Code plan mode for user interaction

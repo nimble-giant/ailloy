@@ -2,9 +2,12 @@ package mold
 
 import (
 	"fmt"
+	"io/fs"
 	"maps"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ApplyFluxDefaults returns a new flux map with default values applied for any
@@ -56,6 +59,54 @@ func ValidateFlux(schema []FluxVar, flux map[string]string) error {
 		return fmt.Errorf("flux validation failed:\n  - %s", strings.Join(errs, "\n  - "))
 	}
 	return nil
+}
+
+// LoadFluxFile loads a flat key-value map from a YAML file in the given filesystem.
+// Returns an empty map (not an error) if the file does not exist.
+func LoadFluxFile(fsys fs.FS, path string) (map[string]string, error) {
+	data, err := fs.ReadFile(fsys, path)
+	if err != nil {
+		return make(map[string]string), nil //nolint:nilerr // missing file is not an error
+	}
+
+	var vals map[string]string
+	if err := yaml.Unmarshal(data, &vals); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	if vals == nil {
+		return make(map[string]string), nil
+	}
+	return vals, nil
+}
+
+// LoadFluxSchema loads a FluxVar schema from a YAML file in the given filesystem.
+// Returns nil (not an error) if the file does not exist.
+func LoadFluxSchema(fsys fs.FS, path string) ([]FluxVar, error) {
+	data, err := fs.ReadFile(fsys, path)
+	if err != nil {
+		return nil, nil //nolint:nilerr // missing file is not an error
+	}
+
+	var schema []FluxVar
+	if err := yaml.Unmarshal(data, &schema); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	return schema, nil
+}
+
+// ApplyFluxFileDefaults returns a new flux map with defaults from the given map
+// applied for any keys not already set. The input map is not mutated.
+func ApplyFluxFileDefaults(defaults, flux map[string]string) map[string]string {
+	result := make(map[string]string, len(flux)+len(defaults))
+	maps.Copy(result, flux)
+
+	for k, v := range defaults {
+		if _, exists := result[k]; !exists {
+			result[k] = v
+		}
+	}
+
+	return result
 }
 
 // validateFluxType checks that a value conforms to the declared type.

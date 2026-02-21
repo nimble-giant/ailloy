@@ -275,3 +275,165 @@ func TestGetWorkflowTemplate_AllWorkflowsReadable(t *testing.T) {
 		}
 	}
 }
+
+// --- LoadFluxDefaults tests ---
+
+func TestLoadFluxDefaults_ReturnsValues(t *testing.T) {
+	vals, err := LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(vals) == 0 {
+		t.Fatal("expected non-empty flux defaults")
+	}
+}
+
+func TestLoadFluxDefaults_ContainsExpectedKeys(t *testing.T) {
+	vals, err := LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedKeys := []string{
+		"default_board",
+		"scm_provider",
+		"scm_cli",
+		"scm_base_url",
+		"issue_view_cmd",
+		"pr_create_cmd",
+		"api_cmd",
+		"auth_check_cmd",
+	}
+	for _, key := range expectedKeys {
+		if _, exists := vals[key]; !exists {
+			t.Errorf("expected flux defaults to contain key %q", key)
+		}
+	}
+}
+
+func TestLoadFluxDefaults_ValuesMatchExpected(t *testing.T) {
+	vals, err := LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	checks := map[string]string{
+		"default_board": "Engineering",
+		"scm_provider":  "GitHub",
+		"scm_cli":       "gh",
+		"scm_base_url":  "https://github.com",
+	}
+	for key, expected := range checks {
+		if vals[key] != expected {
+			t.Errorf("expected %s=%q, got %q", key, expected, vals[key])
+		}
+	}
+}
+
+func TestLoadFluxDefaults_MultilineValues(t *testing.T) {
+	vals, err := LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// api_reply_to_review_comment_cmd has a multiline default
+	val, exists := vals["api_reply_to_review_comment_cmd"]
+	if !exists {
+		t.Fatal("expected api_reply_to_review_comment_cmd to exist")
+	}
+	if !strings.Contains(val, "--method POST") {
+		t.Errorf("expected multiline value to contain '--method POST', got %q", val)
+	}
+	if !strings.Contains(val, "gh api") {
+		t.Errorf("expected multiline value to start with 'gh api', got %q", val)
+	}
+}
+
+// --- LoadFluxSchema tests ---
+
+func TestLoadFluxSchema_ReturnsSchema(t *testing.T) {
+	schema, err := LoadFluxSchema()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if schema == nil {
+		t.Fatal("expected non-nil schema (flux.schema.yaml exists)")
+	}
+}
+
+func TestLoadFluxSchema_ContainsOrganizationRequired(t *testing.T) {
+	schema, err := LoadFluxSchema()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	found := false
+	for _, entry := range schema {
+		if entry.Name == "organization" {
+			found = true
+			if !entry.Required {
+				t.Error("expected 'organization' to be required in schema")
+			}
+			if entry.Type != "string" {
+				t.Errorf("expected 'organization' type=string, got %q", entry.Type)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected schema to contain 'organization' entry")
+	}
+}
+
+func TestLoadFluxSchema_IsMinimal(t *testing.T) {
+	schema, err := LoadFluxSchema()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	defaults, err := LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("unexpected error loading defaults: %v", err)
+	}
+
+	// Schema should be much smaller than flux defaults — only what needs validation
+	if len(schema) >= len(defaults) {
+		t.Errorf("expected schema (%d entries) to be smaller than flux defaults (%d keys)",
+			len(schema), len(defaults))
+	}
+}
+
+// --- Lean mold.yaml tests ---
+
+func TestLoadManifest_NoInlineFluxSection(t *testing.T) {
+	manifest, err := LoadManifest()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(manifest.Flux) > 0 {
+		t.Errorf("expected mold.yaml to have no inline flux declarations (Helm-style), got %d entries", len(manifest.Flux))
+	}
+}
+
+func TestLoadManifest_HasMetadata(t *testing.T) {
+	manifest, err := LoadManifest()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if manifest.Name != "ailloy-defaults" {
+		t.Errorf("expected name=ailloy-defaults, got %q", manifest.Name)
+	}
+	if manifest.Version != "1.0.0" {
+		t.Errorf("expected version=1.0.0, got %q", manifest.Version)
+	}
+	if len(manifest.Commands) == 0 {
+		t.Error("expected mold to have commands")
+	}
+	if len(manifest.Skills) == 0 {
+		t.Error("expected mold to have skills")
+	}
+	if len(manifest.Workflows) == 0 {
+		t.Error("expected mold to have workflows")
+	}
+}
