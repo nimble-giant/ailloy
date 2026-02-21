@@ -1,3 +1,9 @@
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+  workflows:
+    dest: .github/workflows
+    process: false
 api:
   base: gh api
   file_content: gh api repos/:owner/:repo/contents/<file-path>?ref=<ref>

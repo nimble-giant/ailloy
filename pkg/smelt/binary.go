@@ -34,7 +34,7 @@ func PackageBinary(moldDir, outputDir string) (string, int64, error) {
 	moldFS := os.DirFS(cleanDir)
 
 	// Collect files to include in the binary.
-	files, hasFluxYAML, err := collectMoldFiles(m, moldFS, cleanDir)
+	files, hasFluxYAML, err := collectMoldFiles(moldFS, cleanDir)
 	if err != nil {
 		return "", 0, fmt.Errorf("collecting files: %w", err)
 	}

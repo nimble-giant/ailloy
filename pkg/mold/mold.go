@@ -84,7 +84,6 @@ type Mold struct {
 	Author       Author       `yaml:"author,omitempty"`
 	Requires     Requires     `yaml:"requires,omitempty"`
 	Flux         []FluxVar    `yaml:"flux,omitempty"`
-	Output       any          `yaml:"output,omitempty"`
 	Dependencies []Dependency `yaml:"dependencies,omitempty"`
 }
 

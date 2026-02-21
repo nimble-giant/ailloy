@@ -15,14 +15,14 @@ func testReader() *MoldReader {
 kind: mold
 name: test-mold
 version: 1.0.0
-output:
+`)},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
   commands: .claude/commands
   skills: .claude/skills
   workflows:
     dest: .github/workflows
     process: false
-`)},
-		"flux.yaml": &fstest.MapFile{Data: []byte(`board: Engineering
+board: Engineering
 org: test-org
 `)},
 		"flux.schema.yaml": &fstest.MapFile{Data: []byte(`- name: org
@@ -39,12 +39,12 @@ org: test-org
 
 func TestResolveFiles(t *testing.T) {
 	reader := testReader()
-	manifest, err := reader.LoadManifest()
+	flux, err := reader.LoadFluxDefaults()
 	if err != nil {
-		t.Fatalf("unexpected error loading manifest: %v", err)
+		t.Fatalf("unexpected error loading flux: %v", err)
 	}
 
-	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
 	if err != nil {
 		t.Fatalf("unexpected error resolving files: %v", err)
 	}
@@ -68,12 +68,12 @@ func TestResolveFiles(t *testing.T) {
 
 func TestResolveFiles_OutputMapping(t *testing.T) {
 	reader := testReader()
-	manifest, err := reader.LoadManifest()
+	flux, err := reader.LoadFluxDefaults()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -103,12 +103,12 @@ func TestResolveFiles_OutputMapping(t *testing.T) {
 
 func TestResolveFiles_ProcessFlag(t *testing.T) {
 	reader := testReader()
-	manifest, err := reader.LoadManifest()
+	flux, err := reader.LoadFluxDefaults()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,9 +134,6 @@ func TestLoadManifest(t *testing.T) {
 	}
 	if manifest.Name != "test-mold" {
 		t.Errorf("expected name=test-mold, got %q", manifest.Name)
-	}
-	if manifest.Output == nil {
-		t.Error("expected output to be set")
 	}
 }
 

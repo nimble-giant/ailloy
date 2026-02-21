@@ -9,12 +9,12 @@ Two output formats are available:
 
 ## Directory Structure
 
-A mold directory uses clean top-level directories for source files. The `output:` field in `mold.yaml` defines where each directory maps to in the target project:
+A mold directory uses clean top-level directories for source files. The `output:` field in `flux.yaml` defines where each directory maps to in the target project:
 
 ```
 my-mold/
-├── mold.yaml                # Required - metadata + output mappings
-├── flux.yaml                # Optional - default variable values
+├── mold.yaml                # Required - metadata
+├── flux.yaml                # Optional - default values + output mappings
 ├── flux.schema.yaml         # Optional - validation rules
 ├── commands/
 │   └── my-command.md        # Command blanks
@@ -30,7 +30,7 @@ my-mold/
 
 ## Step 1: Write `mold.yaml`
 
-This is lean metadata with output path mappings. The `output:` field maps source directories in your mold to destination paths in the target project:
+This is lean metadata — the mold's identity and version constraints:
 
 ```yaml
 apiVersion: v1
@@ -43,12 +43,28 @@ author:
   url: https://github.com/my-org
 requires:
   ailloy: ">=0.2.0"
+```
+
+## Step 2: Write `flux.yaml` (optional)
+
+Default values for flux variables, like Helm's `values.yaml`. The `output:` key maps source directories in your mold to destination paths in the target project. Use nested YAML to group related values:
+
+```yaml
 output:
   commands: .claude/commands
   skills: .claude/skills
   workflows:
     dest: .github/workflows
     process: false
+
+project:
+  organization: my-org
+  board: Engineering
+
+scm:
+  provider: GitHub
+  cli: gh
+  base_url: https://github.com
 ```
 
 ### Output mapping forms
@@ -70,26 +86,13 @@ output:
     process: false          # skip Go template processing
 ```
 
-**No output field** — files are placed at their source paths (identity mapping):
+**No output key** — files are placed at their source paths (identity mapping):
 
 ```yaml
 # omitting output: means commands/my-cmd.md → commands/my-cmd.md
 ```
 
-## Step 2: Write `flux.yaml` (optional)
-
-Default values for flux variables, like Helm's `values.yaml`. Use nested YAML to group related values:
-
-```yaml
-project:
-  organization: my-org
-  board: Engineering
-
-scm:
-  provider: GitHub
-  cli: gh
-  base_url: https://github.com
-```
+Since output lives in flux, consumers can override destination paths using the standard flux layering (`-f` value files or `--set` flags).
 
 Blanks reference nested values with dotted paths: `{{ scm.provider }}`, `{{ project.board }}`, etc.
 
@@ -170,7 +173,7 @@ Discovery commands run lazily during `ailloy anneal` when the user reaches the r
 
 ## Step 4: Create your blanks
 
-Add command blanks to `commands/`, skill blanks to `skills/`, and workflow files to `workflows/`. The `output:` mapping in `mold.yaml` determines where they end up in the target project. Reference flux variables with Go template syntax:
+Add command blanks to `commands/`, skill blanks to `skills/`, and workflow files to `workflows/`. The `output:` mapping in `flux.yaml` determines where they end up in the target project. Reference flux variables with Go template syntax:
 
 ```markdown
 # My Command
@@ -215,7 +218,7 @@ The archive includes all files discovered from the mold directory:
 - `mold.yaml`
 - `flux.yaml` (source file if present, otherwise generated from `flux:` declarations)
 - `flux.schema.yaml` (if present)
-- All files in directories referenced by `output:` (or all top-level directories if `output:` is omitted)
+- All files in directories referenced by `output:` in `flux.yaml` (or all top-level directories if `output:` is omitted)
 - Everything in the `ingots/` directory (if present)
 
 The tarball is named `{name}-{version}.tar.gz` and entries are prefixed with `{name}-{version}/`.

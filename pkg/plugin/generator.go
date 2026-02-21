@@ -92,12 +92,12 @@ func (g *Generator) Generate() error {
 
 // loadBlanks loads all blanks from the mold reader using convention-based discovery.
 func (g *Generator) loadBlanks() error {
-	manifest, err := g.reader.LoadManifest()
+	flux, err := g.reader.LoadFluxDefaults()
 	if err != nil {
-		return fmt.Errorf("loading manifest: %w", err)
+		flux = make(map[string]any)
 	}
 
-	resolved, err := mold.ResolveFiles(manifest, g.reader.FS())
+	resolved, err := mold.ResolveFiles(flux["output"], g.reader.FS())
 	if err != nil {
 		return fmt.Errorf("resolving files: %w", err)
 	}

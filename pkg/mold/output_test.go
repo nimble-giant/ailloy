@@ -11,9 +11,7 @@ func TestResolveFiles_StringOutput(t *testing.T) {
 		"skills/helper.md":  &fstest.MapFile{Data: []byte("helper")},
 	}
 
-	m := &Mold{Output: ".claude"}
-
-	resolved, err := ResolveFiles(m, moldFS)
+	resolved, err := ResolveFiles(".claude", moldFS)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -48,14 +46,12 @@ func TestResolveFiles_MapOutput(t *testing.T) {
 		"skills/helper.md":  &fstest.MapFile{Data: []byte("helper")},
 	}
 
-	m := &Mold{
-		Output: map[string]any{
-			"commands": ".claude/commands",
-			"skills":   ".claude/skills",
-		},
+	output := map[string]any{
+		"commands": ".claude/commands",
+		"skills":   ".claude/skills",
 	}
 
-	resolved, err := ResolveFiles(m, moldFS)
+	resolved, err := ResolveFiles(output, moldFS)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -87,17 +83,15 @@ func TestResolveFiles_ExpandedOutput(t *testing.T) {
 		"workflows/ci.yml":  &fstest.MapFile{Data: []byte("name: CI")},
 	}
 
-	m := &Mold{
-		Output: map[string]any{
-			"commands": ".claude/commands",
-			"workflows": map[string]any{
-				"dest":    ".github/workflows",
-				"process": false,
-			},
+	output := map[string]any{
+		"commands": ".claude/commands",
+		"workflows": map[string]any{
+			"dest":    ".github/workflows",
+			"process": false,
 		},
 	}
 
-	resolved, err := ResolveFiles(m, moldFS)
+	resolved, err := ResolveFiles(output, moldFS)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,14 +128,12 @@ func TestResolveFiles_FileLevelOverride(t *testing.T) {
 		"commands/special.md": &fstest.MapFile{Data: []byte("special")},
 	}
 
-	m := &Mold{
-		Output: map[string]any{
-			"commands":            ".claude/commands",
-			"commands/special.md": "custom/special.md",
-		},
+	output := map[string]any{
+		"commands":            ".claude/commands",
+		"commands/special.md": "custom/special.md",
 	}
 
-	resolved, err := ResolveFiles(m, moldFS)
+	resolved, err := ResolveFiles(output, moldFS)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -171,13 +163,11 @@ func TestResolveFiles_RecursiveWalk(t *testing.T) {
 		"commands/sub/nested.md": &fstest.MapFile{Data: []byte("nested")},
 	}
 
-	m := &Mold{
-		Output: map[string]any{
-			"commands": "dest",
-		},
+	output := map[string]any{
+		"commands": "dest",
 	}
 
-	resolved, err := ResolveFiles(m, moldFS)
+	resolved, err := ResolveFiles(output, moldFS)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -200,9 +190,7 @@ func TestResolveFiles_NoOutput(t *testing.T) {
 		"ingots/foo.md":     &fstest.MapFile{Data: []byte("ingot")},
 	}
 
-	m := &Mold{Output: nil}
-
-	resolved, err := ResolveFiles(m, moldFS)
+	resolved, err := ResolveFiles(nil, moldFS)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -228,16 +216,14 @@ func TestResolveFiles_MissingSourceDir(t *testing.T) {
 		"commands/hello.md": &fstest.MapFile{Data: []byte("hello")},
 	}
 
-	m := &Mold{
-		Output: map[string]any{
-			"nonexistent": ".claude/nonexistent",
-		},
+	output := map[string]any{
+		"nonexistent": ".claude/nonexistent",
 	}
 
 	// "nonexistent" is not a directory in the FS, so parseMapOutput treats it
 	// as a file mapping. The remaining-files loop tries to stat it and returns
 	// an error since the file doesn't exist.
-	_, err := ResolveFiles(m, moldFS)
+	_, err := ResolveFiles(output, moldFS)
 	if err == nil {
 		t.Fatal("expected error for nonexistent file mapping")
 	}
@@ -250,9 +236,7 @@ func TestResolveFiles_ExcludesReservedDirs(t *testing.T) {
 		".hidden/bar.md":    &fstest.MapFile{Data: []byte("hidden")},
 	}
 
-	m := &Mold{Output: ".claude"}
-
-	resolved, err := ResolveFiles(m, moldFS)
+	resolved, err := ResolveFiles(".claude", moldFS)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

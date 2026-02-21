@@ -12,6 +12,8 @@ apiVersion: v1
 kind: mold
 name: test-mold
 version: 1.0.0
+`)},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`
 output:
   commands: .claude/commands
 `)},
@@ -303,6 +305,8 @@ apiVersion: v1
 kind: mold
 name: test-mold
 version: 1.0.0
+`)},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`
 output:
   nonexistent: .claude/commands
 `)},
