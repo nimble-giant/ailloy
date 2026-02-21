@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/nimble-giant/ailloy/compare/v0.1.8...v0.1.9) (2026-02-21)
+
+
+### Features
+
+* add temper command for mold/ingot validation ([bc2ac37](https://github.com/nimble-giant/ailloy/commit/bc2ac370fe6f0d0f8ac7495bfcc8ad5e2c06804a)), closes [#43](https://github.com/nimble-giant/ailloy/issues/43)
+
 ## [0.1.8](https://github.com/nimble-giant/ailloy/compare/v0.1.7...v0.1.8) (2026-02-21)
 
 
