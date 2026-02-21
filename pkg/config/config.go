@@ -272,7 +272,7 @@ func setNestedValue(m map[string]any, dottedKey string, value string) {
 // Non-zero source values override dest values; flux maps are deep-merged with source taking precedence.
 func mergeConfig(dest, src *Config) {
 	// Deep-merge flux: source values override dest
-	mergo.Merge(&dest.Templates.Flux, src.Templates.Flux, mergo.WithOverride) //nolint:errcheck // #nosec G104 -- best-effort merge
+	_ = mergo.Merge(&dest.Templates.Flux, src.Templates.Flux, mergo.WithOverride)
 
 	// Merge ore: only override if source has enabled models
 	if src.Ore.Status.Enabled {
