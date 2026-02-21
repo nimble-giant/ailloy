@@ -1,54 +1,73 @@
 package templates
 
 import (
-	"embed"
 	"fmt"
 	"io/fs"
+	"os"
 	"strings"
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
-//go:embed all:claude all:github mold.yaml flux*
-var embeddedTemplates embed.FS
-
-// FS returns the embedded filesystem for direct access.
-func FS() fs.FS {
-	return embeddedTemplates
+// MoldReader reads mold content from any fs.FS implementation.
+type MoldReader struct {
+	fsys fs.FS
 }
 
-// LoadManifest loads and parses the embedded mold.yaml manifest.
-func LoadManifest() (*mold.Mold, error) {
-	return mold.LoadMoldFromFS(embeddedTemplates, "mold.yaml")
+// NewMoldReader creates a MoldReader from an fs.FS.
+func NewMoldReader(fsys fs.FS) *MoldReader {
+	return &MoldReader{fsys: fsys}
 }
 
-// LoadFluxDefaults loads the embedded flux.yaml default values.
-func LoadFluxDefaults() (map[string]string, error) {
-	return mold.LoadFluxFile(embeddedTemplates, "flux.yaml")
+// NewMoldReaderFromPath creates a MoldReader rooted at a filesystem directory.
+func NewMoldReaderFromPath(moldDir string) (*MoldReader, error) {
+	info, err := os.Stat(moldDir)
+	if err != nil {
+		return nil, fmt.Errorf("mold directory %q: %w", moldDir, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("mold path %q is not a directory", moldDir)
+	}
+	return &MoldReader{fsys: os.DirFS(moldDir)}, nil
 }
 
-// LoadFluxSchema loads the embedded flux.schema.yaml validation schema.
+// FS returns the underlying filesystem.
+func (r *MoldReader) FS() fs.FS {
+	return r.fsys
+}
+
+// LoadManifest loads and parses the mold.yaml manifest.
+func (r *MoldReader) LoadManifest() (*mold.Mold, error) {
+	return mold.LoadMoldFromFS(r.fsys, "mold.yaml")
+}
+
+// LoadFluxDefaults loads the flux.yaml default values.
+func (r *MoldReader) LoadFluxDefaults() (map[string]string, error) {
+	return mold.LoadFluxFile(r.fsys, "flux.yaml")
+}
+
+// LoadFluxSchema loads the flux.schema.yaml validation schema.
 // Returns nil if no schema file exists.
-func LoadFluxSchema() ([]mold.FluxVar, error) {
-	return mold.LoadFluxSchema(embeddedTemplates, "flux.schema.yaml")
+func (r *MoldReader) LoadFluxSchema() ([]mold.FluxVar, error) {
+	return mold.LoadFluxSchema(r.fsys, "flux.schema.yaml")
 }
 
-// GetTemplate returns the content of a command template file
-func GetTemplate(name string) ([]byte, error) {
-	path := fmt.Sprintf("claude/commands/%s", name)
-	return embeddedTemplates.ReadFile(path)
+// GetTemplate returns the content of a command template file.
+func (r *MoldReader) GetTemplate(name string) ([]byte, error) {
+	path := fmt.Sprintf(".claude/commands/%s", name)
+	return fs.ReadFile(r.fsys, path)
 }
 
-// ListTemplates returns a list of available command template files
-func ListTemplates() ([]string, error) {
-	entries, err := fs.ReadDir(embeddedTemplates, "claude/commands")
+// ListTemplates returns a list of available command template files.
+func (r *MoldReader) ListTemplates() ([]string, error) {
+	entries, err := fs.ReadDir(r.fsys, ".claude/commands")
 	if err != nil {
 		return nil, err
 	}
 
 	var templates []string
 	for _, entry := range entries {
-		if !entry.IsDir() && entry.Name()[len(entry.Name())-3:] == ".md" {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
 			templates = append(templates, entry.Name())
 		}
 	}
@@ -56,22 +75,22 @@ func ListTemplates() ([]string, error) {
 	return templates, nil
 }
 
-// GetSkill returns the content of a skill file
-func GetSkill(name string) ([]byte, error) {
-	path := fmt.Sprintf("claude/skills/%s", name)
-	return embeddedTemplates.ReadFile(path)
+// GetSkill returns the content of a skill file.
+func (r *MoldReader) GetSkill(name string) ([]byte, error) {
+	path := fmt.Sprintf(".claude/skills/%s", name)
+	return fs.ReadFile(r.fsys, path)
 }
 
-// ListSkills returns a list of available skill files
-func ListSkills() ([]string, error) {
-	entries, err := fs.ReadDir(embeddedTemplates, "claude/skills")
+// ListSkills returns a list of available skill files.
+func (r *MoldReader) ListSkills() ([]string, error) {
+	entries, err := fs.ReadDir(r.fsys, ".claude/skills")
 	if err != nil {
 		return nil, err
 	}
 
 	var skills []string
 	for _, entry := range entries {
-		if !entry.IsDir() && entry.Name()[len(entry.Name())-3:] == ".md" {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
 			skills = append(skills, entry.Name())
 		}
 	}
@@ -79,15 +98,15 @@ func ListSkills() ([]string, error) {
 	return skills, nil
 }
 
-// GetWorkflowTemplate returns the content of a GitHub workflow template file
-func GetWorkflowTemplate(name string) ([]byte, error) {
-	path := fmt.Sprintf("github/workflows/%s", name)
-	return embeddedTemplates.ReadFile(path)
+// GetWorkflowTemplate returns the content of a GitHub workflow template file.
+func (r *MoldReader) GetWorkflowTemplate(name string) ([]byte, error) {
+	path := fmt.Sprintf(".github/workflows/%s", name)
+	return fs.ReadFile(r.fsys, path)
 }
 
-// ListWorkflowTemplates returns a list of available GitHub workflow template files
-func ListWorkflowTemplates() ([]string, error) {
-	entries, err := fs.ReadDir(embeddedTemplates, "github/workflows")
+// ListWorkflowTemplates returns a list of available GitHub workflow template files.
+func (r *MoldReader) ListWorkflowTemplates() ([]string, error) {
+	entries, err := fs.ReadDir(r.fsys, ".github/workflows")
 	if err != nil {
 		return nil, err
 	}

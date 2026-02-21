@@ -6,10 +6,23 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
+
+	"github.com/nimble-giant/ailloy/pkg/templates"
 )
 
+func testMoldReader() *templates.MoldReader {
+	fsys := fstest.MapFS{
+		"mold.yaml":                    &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: mold\nname: test\nversion: 1.0.0\ncommands:\n  - test.md\n")},
+		".claude/commands/test.md":     &fstest.MapFile{Data: []byte("# Test\nTest command.")},
+		".claude/skills/brainstorm.md": &fstest.MapFile{Data: []byte("# Brainstorm\nSkill.")},
+		".github/workflows/ci.yml":     &fstest.MapFile{Data: []byte("name: CI\non: push")},
+	}
+	return templates.NewMoldReader(fsys)
+}
+
 func TestNewGenerator(t *testing.T) {
-	g := NewGenerator("/tmp/output")
+	g := NewGenerator("/tmp/output", testMoldReader())
 	if g == nil {
 		t.Fatal("expected non-nil generator")
 	}
@@ -22,7 +35,7 @@ func TestGenerator_Generate_FullPlugin(t *testing.T) {
 	dir := t.TempDir()
 	outputDir := filepath.Join(dir, "plugin-output")
 
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{
 		Name:        "test-plugin",
 		Version:     "1.0.0",
@@ -150,16 +163,16 @@ func TestGenerator_Generate_FullPlugin(t *testing.T) {
 }
 
 func TestGenerator_LoadTemplates(t *testing.T) {
-	g := NewGenerator(t.TempDir())
+	g := NewGenerator(t.TempDir(), testMoldReader())
 	err := g.loadTemplates()
 	if err != nil {
 		t.Fatalf("unexpected error loading templates: %v", err)
 	}
-	if len(g.templates) == 0 {
+	if len(g.commands) == 0 {
 		t.Error("expected at least one template to be loaded")
 	}
 
-	for _, tmpl := range g.templates {
+	for _, tmpl := range g.commands {
 		if tmpl.Name == "" {
 			t.Error("template has empty name")
 		}
@@ -177,7 +190,7 @@ func TestGenerator_CreateStructure(t *testing.T) {
 	dir := t.TempDir()
 	outputDir := filepath.Join(dir, "structure-test")
 
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	err := g.createStructure()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -207,7 +220,7 @@ func TestGenerator_GenerateManifest(t *testing.T) {
 	dir := t.TempDir()
 	outputDir := filepath.Join(dir, "manifest-test")
 
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{
 		Name:        "manifest-test",
 		Version:     "2.0.0",
@@ -259,7 +272,7 @@ func TestGenerator_GenerateCommands(t *testing.T) {
 	dir := t.TempDir()
 	outputDir := filepath.Join(dir, "commands-test")
 
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{
 		Name:    "cmd-test",
 		Version: "1.0.0",
@@ -284,8 +297,8 @@ func TestGenerator_GenerateCommands(t *testing.T) {
 		t.Fatalf("failed to read commands dir: %v", err)
 	}
 
-	if len(entries) != len(g.templates) {
-		t.Errorf("expected %d commands, got %d", len(g.templates), len(entries))
+	if len(entries) != len(g.commands) {
+		t.Errorf("expected %d commands, got %d", len(g.commands), len(entries))
 	}
 
 	for _, entry := range entries {
@@ -339,12 +352,12 @@ func TestExtractDescription(t *testing.T) {
 }
 
 func TestGenerator_BuildREADME(t *testing.T) {
-	g := NewGenerator("test-output")
+	g := NewGenerator("test-output", testMoldReader())
 	g.Config = &Config{
 		Name:    "readme-test",
 		Version: "1.0.0",
 	}
-	g.templates = []TemplateInfo{
+	g.commands = []TemplateInfo{
 		{Name: "cmd-one", Description: "First command"},
 		{Name: "cmd-two", Description: "Second command"},
 	}
@@ -372,7 +385,7 @@ func TestGenerator_GenerateHooks(t *testing.T) {
 	dir := t.TempDir()
 	outputDir := filepath.Join(dir, "hooks-test")
 
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{Name: "hooks-test"}
 
 	if err := g.createStructure(); err != nil {
@@ -408,7 +421,7 @@ func TestGenerator_GenerateInstallScript(t *testing.T) {
 	dir := t.TempDir()
 	outputDir := filepath.Join(dir, "script-test")
 
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{Name: "script-test"}
 
 	if err := g.createStructure(); err != nil {

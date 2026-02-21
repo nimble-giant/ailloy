@@ -14,7 +14,7 @@ func setupPluginForUpdate(t *testing.T) string {
 	dir := t.TempDir()
 	outputDir := filepath.Join(dir, "plugin")
 
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{
 		Name:        "update-test",
 		Version:     "1.0.0",
@@ -32,7 +32,7 @@ func setupPluginForUpdate(t *testing.T) string {
 }
 
 func TestNewUpdater(t *testing.T) {
-	u := NewUpdater("/tmp/plugin")
+	u := NewUpdater("/tmp/plugin", testMoldReader())
 	if u == nil {
 		t.Fatal("expected non-nil updater")
 	}
@@ -46,7 +46,7 @@ func TestNewUpdater(t *testing.T) {
 
 func TestUpdater_Backup(t *testing.T) {
 	pluginDir := setupPluginForUpdate(t)
-	u := NewUpdater(pluginDir)
+	u := NewUpdater(pluginDir, testMoldReader())
 
 	err := u.Backup()
 	if err != nil {
@@ -80,7 +80,7 @@ func TestUpdater_Backup(t *testing.T) {
 
 func TestUpdater_Restore(t *testing.T) {
 	pluginDir := setupPluginForUpdate(t)
-	u := NewUpdater(pluginDir)
+	u := NewUpdater(pluginDir, testMoldReader())
 
 	// Create backup
 	if err := u.Backup(); err != nil {
@@ -117,7 +117,7 @@ func TestUpdater_Restore(t *testing.T) {
 
 func TestUpdater_Update(t *testing.T) {
 	pluginDir := setupPluginForUpdate(t)
-	u := NewUpdater(pluginDir)
+	u := NewUpdater(pluginDir, testMoldReader())
 
 	err := u.Update()
 	if err != nil {
@@ -147,7 +147,7 @@ func TestUpdater_Update_PreservesCustomCommands(t *testing.T) {
 		t.Fatalf("failed to write custom command: %v", err)
 	}
 
-	u := NewUpdater(pluginDir)
+	u := NewUpdater(pluginDir, testMoldReader())
 	err := u.Update()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -231,7 +231,7 @@ func TestUpdater_CopyFile(t *testing.T) {
 
 func TestUpdater_BackupAndUpdate_FullCycle(t *testing.T) {
 	pluginDir := setupPluginForUpdate(t)
-	u := NewUpdater(pluginDir)
+	u := NewUpdater(pluginDir, testMoldReader())
 
 	// Backup
 	if err := u.Backup(); err != nil {

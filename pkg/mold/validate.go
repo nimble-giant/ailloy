@@ -81,19 +81,19 @@ func ValidateMoldFiles(m *Mold, fsys fs.FS, base string) error {
 	var missing []string
 
 	for _, cmd := range m.Commands {
-		path := base + "/claude/commands/" + cmd
+		path := base + "/.claude/commands/" + cmd
 		if _, err := fs.Stat(fsys, path); err != nil {
 			missing = append(missing, path)
 		}
 	}
 	for _, skill := range m.Skills {
-		path := base + "/claude/skills/" + skill
+		path := base + "/.claude/skills/" + skill
 		if _, err := fs.Stat(fsys, path); err != nil {
 			missing = append(missing, path)
 		}
 	}
 	for _, wf := range m.Workflows {
-		path := base + "/github/workflows/" + wf
+		path := base + "/.github/workflows/" + wf
 		if _, err := fs.Stat(fsys, path); err != nil {
 			missing = append(missing, path)
 		}

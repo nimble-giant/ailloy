@@ -9,11 +9,13 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/nimble-giant/ailloy/pkg/plugin"
 	"github.com/nimble-giant/ailloy/pkg/styles"
+	"github.com/nimble-giant/ailloy/pkg/templates"
 	"github.com/spf13/cobra"
 )
 
 var (
 	pluginOutputDir string
+	pluginMoldDir   string
 	pluginWatch     bool
 	pluginForce     bool
 )
@@ -31,10 +33,10 @@ between the CLI and plugin experiences.`,
 var generatePluginCmd = &cobra.Command{
 	Use:   "generate",
 	Short: "Generate Claude Code plugin from templates",
-	Long: `Generate a complete Claude Code plugin from the embedded Ailloy templates.
+	Long: `Generate a complete Claude Code plugin from a mold directory.
 
 The generated plugin will include:
-- All commands from pkg/templates/claude/commands/
+- All commands from the mold
 - Plugin manifest (plugin.json)
 - README documentation
 - Installation scripts
@@ -71,9 +73,11 @@ func init() {
 	generatePluginCmd.Flags().StringVarP(&pluginOutputDir, "output", "o", "ailloy", "Output directory for generated plugin")
 	generatePluginCmd.Flags().BoolVarP(&pluginWatch, "watch", "w", false, "Watch templates and regenerate on changes")
 	generatePluginCmd.Flags().BoolVarP(&pluginForce, "force", "f", false, "Overwrite existing plugin without prompting")
+	generatePluginCmd.Flags().StringVar(&pluginMoldDir, "mold", "", "mold directory to generate plugin from (required)")
 
 	// Update command flags
 	updatePluginCmd.Flags().BoolVarP(&pluginForce, "force", "f", false, "Force update without backup")
+	updatePluginCmd.Flags().StringVar(&pluginMoldDir, "mold", "", "mold directory to update plugin from (required)")
 }
 
 func runGeneratePlugin(cmd *cobra.Command, args []string) error {
@@ -97,8 +101,17 @@ func runGeneratePlugin(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if pluginMoldDir == "" {
+		return fmt.Errorf("--mold flag is required: ailloy plugin generate --mold <mold-dir>")
+	}
+
+	reader, err := templates.NewMoldReaderFromPath(pluginMoldDir)
+	if err != nil {
+		return err
+	}
+
 	// Create generator
-	generator := plugin.NewGenerator(pluginOutputDir)
+	generator := plugin.NewGenerator(pluginOutputDir, reader)
 
 	// Configure generator
 	generator.Config = &plugin.Config{
@@ -157,11 +170,20 @@ func runUpdatePlugin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no valid plugin found at %s", pluginPath)
 	}
 
+	if pluginMoldDir == "" {
+		return fmt.Errorf("--mold flag is required: ailloy plugin update --mold <mold-dir>")
+	}
+
+	reader, err := templates.NewMoldReaderFromPath(pluginMoldDir)
+	if err != nil {
+		return err
+	}
+
 	fmt.Println(styles.WorkingBanner("Updating Claude Code Plugin..."))
 	fmt.Println()
 
 	// Create updater
-	updater := plugin.NewUpdater(pluginPath)
+	updater := plugin.NewUpdater(pluginPath, reader)
 
 	// Backup existing plugin
 	if !pluginForce {

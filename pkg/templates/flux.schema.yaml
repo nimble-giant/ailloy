@@ -1,7 +1,0 @@
-- name: organization
-  type: string
-  required: true
-  description: "Organization name for SCM operations"
-- name: project_id
-  type: string
-  description: "SCM project ID for board management"
