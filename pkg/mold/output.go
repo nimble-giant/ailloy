@@ -28,9 +28,9 @@ type fileMapping struct {
 }
 
 // ResolveFiles walks the mold filesystem and resolves all files according
-// to the output mapping in the manifest.
+// to the output mapping.
 //
-// If output is absent, all top-level directories (excluding reserved names
+// If output is nil, all top-level directories (excluding reserved names
 // like "ingots") are walked with identity mapping (src path = dest path).
 //
 // If output is a string, it's treated as a parent directory — all top-level
@@ -39,12 +39,12 @@ type fileMapping struct {
 // If output is a map, each entry maps a source directory or file to a
 // destination. Values can be strings (simple dest path) or maps with
 // "dest" and optional "process" fields.
-func ResolveFiles(m *Mold, moldFS fs.FS) ([]ResolvedFile, error) {
-	if m.Output == nil {
+func ResolveFiles(output any, moldFS fs.FS) ([]ResolvedFile, error) {
+	if output == nil {
 		return resolveIdentity(moldFS)
 	}
 
-	dirs, files, err := parseOutput(m.Output, moldFS)
+	dirs, files, err := parseOutput(output, moldFS)
 	if err != nil {
 		return nil, fmt.Errorf("parsing output mapping: %w", err)
 	}

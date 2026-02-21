@@ -35,6 +35,16 @@ func testMoldReader(t *testing.T) *blanks.MoldReader {
 	return reader
 }
 
+// testFlux loads flux defaults from the mold reader for use in tests.
+func testFlux(t *testing.T, reader *blanks.MoldReader) map[string]any {
+	t.Helper()
+	flux, err := reader.LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("failed to load flux defaults: %v", err)
+	}
+	return flux
+}
+
 func TestIntegration_CopyResolvedFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
@@ -44,13 +54,14 @@ func TestIntegration_CopyResolvedFiles(t *testing.T) {
 	defer func() { _ = os.Chdir(origDir) }()
 
 	reader := testMoldReader(t)
+	flux := testFlux(t, reader)
 
 	manifest, err := reader.LoadManifest()
 	if err != nil {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
 	if err != nil {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
@@ -59,7 +70,7 @@ func TestIntegration_CopyResolvedFiles(t *testing.T) {
 		t.Fatal("expected resolved files, got none")
 	}
 
-	err = copyResolvedFiles(reader, manifest, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -94,6 +105,7 @@ func TestIntegration_CopyResolvedFiles_WithVariableSubstitution(t *testing.T) {
 	}()
 
 	reader := testMoldReader(t)
+	flux := testFlux(t, reader)
 
 	// Create a flux values file with overrides
 	valuesContent := "project:\n  organization: test-org\n  board: TestBoard\n"
@@ -108,7 +120,7 @@ func TestIntegration_CopyResolvedFiles_WithVariableSubstitution(t *testing.T) {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
 	if err != nil {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
@@ -121,7 +133,7 @@ func TestIntegration_CopyResolvedFiles_WithVariableSubstitution(t *testing.T) {
 		}
 	}
 
-	err = copyResolvedFiles(reader, manifest, processable)
+	err = copyResolvedFiles(reader, manifest, flux, processable)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -148,26 +160,27 @@ func TestIntegration_ResolvedFilesMatchMold(t *testing.T) {
 	defer func() { _ = os.Chdir(origDir) }()
 
 	reader := testMoldReader(t)
+	flux := testFlux(t, reader)
 
 	manifest, err := reader.LoadManifest()
 	if err != nil {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
 	if err != nil {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// Load flux defaults matching the layered flow in copyResolvedFiles
-	flux := mold.ApplyFluxDefaults(manifest.Flux, make(map[string]any))
+	fluxForTemplate := mold.ApplyFluxDefaults(manifest.Flux, make(map[string]any))
 	if fluxDefaults, err := reader.LoadFluxDefaults(); err == nil {
-		flux = mold.ApplyFluxFileDefaults(fluxDefaults, flux)
+		fluxForTemplate = mold.ApplyFluxFileDefaults(fluxDefaults, fluxForTemplate)
 	}
 
 	// Verify each file matches what the reader+template engine would produce
@@ -180,7 +193,7 @@ func TestIntegration_ResolvedFilesMatchMold(t *testing.T) {
 
 		var expectedContent string
 		if rf.Process {
-			expectedContent, err = mold.ProcessTemplate(string(moldContent), flux)
+			expectedContent, err = mold.ProcessTemplate(string(moldContent), fluxForTemplate)
 			if err != nil {
 				t.Errorf("failed to process %s: %v", rf.SrcPath, err)
 				continue
@@ -248,18 +261,19 @@ func TestIntegration_FilePermissions(t *testing.T) {
 	defer func() { _ = os.Chdir(origDir) }()
 
 	reader := testMoldReader(t)
+	flux := testFlux(t, reader)
 
 	manifest, err := reader.LoadManifest()
 	if err != nil {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
 	if err != nil {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -357,6 +371,7 @@ func TestIntegration_WorkflowsNotProcessed(t *testing.T) {
 	}()
 
 	reader := testMoldReader(t)
+	flux := testFlux(t, reader)
 	withWorkflows = true
 
 	manifest, err := reader.LoadManifest()
@@ -364,12 +379,12 @@ func TestIntegration_WorkflowsNotProcessed(t *testing.T) {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
 	if err != nil {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

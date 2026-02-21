@@ -125,8 +125,8 @@ func runForge(_ *cobra.Command, args []string) error {
 	resolver := buildIngotResolver(flux)
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
-	// Resolve all output files from the mold.
-	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	// Resolve all output files from the flux.
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
 	if err != nil {
 		return fmt.Errorf("resolving output files: %w", err)
 	}

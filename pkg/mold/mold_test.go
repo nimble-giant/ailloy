@@ -28,12 +28,6 @@ flux:
     type: string
     required: false
     default: "Engineering"
-output:
-  commands: .claude/commands
-  skills: .claude/skills
-  workflows:
-    dest: .github/workflows
-    process: false
 dependencies:
   - ingot: pr-format
     version: "^1.0.0"
@@ -76,9 +70,6 @@ dependencies:
 	}
 	if m.Flux[1].Default != "Engineering" {
 		t.Errorf("expected flux[1].default Engineering, got %s", m.Flux[1].Default)
-	}
-	if m.Output == nil {
-		t.Error("expected output to be set")
 	}
 	if len(m.Dependencies) != 1 {
 		t.Fatalf("expected 1 dependency, got %d", len(m.Dependencies))
@@ -256,23 +247,20 @@ func TestValidateMold_ValidFluxTypes(t *testing.T) {
 }
 
 func TestValidateOutputSources(t *testing.T) {
-	m := &Mold{
-		Output: map[string]any{
-			"commands": ".claude/commands",
-		},
+	output := map[string]any{
+		"commands": ".claude/commands",
 	}
 	fsys := fstest.MapFS{
 		"commands/create-issue.md": &fstest.MapFile{Data: []byte("# test")},
 	}
-	if err := ValidateOutputSources(m, fsys); err != nil {
+	if err := ValidateOutputSources(output, fsys); err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
 
 func TestValidateOutputSources_NilOutput(t *testing.T) {
-	m := &Mold{Output: nil}
 	fsys := fstest.MapFS{}
-	if err := ValidateOutputSources(m, fsys); err != nil {
+	if err := ValidateOutputSources(nil, fsys); err != nil {
 		t.Errorf("expected no error for nil output, got: %v", err)
 	}
 }

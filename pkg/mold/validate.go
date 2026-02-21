@@ -90,12 +90,12 @@ func ValidateMold(m *Mold) error {
 
 // ValidateOutputSources checks that all source directories/files referenced in
 // the output mapping actually exist in the mold filesystem.
-func ValidateOutputSources(m *Mold, fsys fs.FS) error {
-	if m.Output == nil {
+func ValidateOutputSources(output any, fsys fs.FS) error {
+	if output == nil {
 		return nil // no output mapping, identity mode — discovery handles existence
 	}
 
-	resolved, err := ResolveFiles(m, fsys)
+	resolved, err := ResolveFiles(output, fsys)
 	if err != nil {
 		return fmt.Errorf("resolving output mapping: %w", err)
 	}
@@ -265,12 +265,13 @@ func temperMold(fsys fs.FS, result *TemperResult) {
 		}
 	}
 
-	// Validate output source references
-	if err := ValidateOutputSources(m, fsys); err != nil {
+	// Validate output source references (output lives in flux.yaml)
+	flux, _ := LoadFluxFile(fsys, "flux.yaml")
+	if err := ValidateOutputSources(flux["output"], fsys); err != nil {
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: SeverityError,
 			Message:  err.Error(),
-			File:     "mold.yaml",
+			File:     "flux.yaml",
 		})
 	}
 

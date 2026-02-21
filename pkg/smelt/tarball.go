@@ -43,7 +43,7 @@ func PackageTarball(moldDir, outputDir string) (string, int64, error) {
 	outputPath := filepath.Join(outputDir, archiveName)
 
 	// Collect files to include in the archive
-	files, hasFluxYAML, err := collectMoldFiles(m, moldFS, cleanDir)
+	files, hasFluxYAML, err := collectMoldFiles(moldFS, cleanDir)
 	if err != nil {
 		return "", 0, fmt.Errorf("collecting files: %w", err)
 	}
@@ -77,7 +77,7 @@ type archiveFile struct {
 
 // collectMoldFiles gathers all files referenced by the mold manifest.
 // Returns the collected files and whether a source flux.yaml was found.
-func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile, bool, error) {
+func collectMoldFiles(moldFS fs.FS, moldDir string) ([]archiveFile, bool, error) {
 	var files []archiveFile
 
 	// Include mold.yaml itself
@@ -89,6 +89,7 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 
 	// Include flux.yaml if present
 	hasFluxYAML := false
+	fluxValues, _ := mold.LoadFluxFile(moldFS, "flux.yaml")
 	if fluxData, err := fs.ReadFile(moldFS, "flux.yaml"); err == nil {
 		files = append(files, archiveFile{path: "flux.yaml", data: fluxData})
 		hasFluxYAML = true
@@ -99,8 +100,8 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 		files = append(files, archiveFile{path: "flux.schema.yaml", data: schemaData})
 	}
 
-	// Resolve output mapping and collect all content files.
-	resolved, err := mold.ResolveFiles(m, moldFS)
+	// Resolve output mapping from flux and collect all content files.
+	resolved, err := mold.ResolveFiles(fluxValues["output"], moldFS)
 	if err != nil {
 		return nil, false, fmt.Errorf("resolving output files: %w", err)
 	}

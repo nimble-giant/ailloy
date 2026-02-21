@@ -64,9 +64,9 @@ ailloy cast ./nimble-mold
 Blanks live in mold directories (e.g., `nimble-mold/commands/`). To add new blanks:
 
 1. Create a new `.md` file in `nimble-mold/commands/`
-2. Add the filename to `nimble-mold/mold.yaml` under `commands:`
+2. Ensure the directory is mapped in the `output:` section of `nimble-mold/flux.yaml`
 3. Include clear instructions for Claude Code
 4. Define workflow steps and expected outputs
 5. Test with `ailloy forge ./nimble-mold`
 
-Blanks are automatically discovered by the `MoldReader` from the mold's `mold.yaml` manifest.
+Blanks are automatically discovered by the `MoldReader` from the mold's output mapping in `flux.yaml`.

@@ -147,13 +147,19 @@ func castProject(reader *blanks.MoldReader) error {
 		}
 	}
 
-	// Load manifest and resolve output files.
+	// Load manifest.
 	manifest, err := reader.LoadManifest()
 	if err != nil {
 		return fmt.Errorf("failed to load mold manifest: %w", err)
 	}
 
-	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	// Load flux values and extract output mapping.
+	flux, err := loadCastFlux(reader)
+	if err != nil {
+		flux = make(map[string]any)
+	}
+
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
 	if err != nil {
 		return fmt.Errorf("failed to resolve output files: %w", err)
 	}
@@ -195,7 +201,7 @@ func castProject(reader *blanks.MoldReader) error {
 	fmt.Println()
 
 	// Copy resolved files from mold
-	if err := copyResolvedFiles(reader, manifest, filesToCast); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, filesToCast); err != nil {
 		return fmt.Errorf("failed to copy files: %w", err)
 	}
 
@@ -231,12 +237,7 @@ func castProject(reader *blanks.MoldReader) error {
 
 // copyResolvedFiles copies resolved mold files to the project, applying template
 // processing where indicated by the output mapping.
-func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, resolved []mold.ResolvedFile) error {
-	flux, err := loadCastFlux(reader)
-	if err != nil {
-		flux = make(map[string]any)
-	}
-
+func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[string]any, resolved []mold.ResolvedFile) error {
 	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
 	var schema []mold.FluxVar
 	if s, err := reader.LoadFluxSchema(); err == nil && s != nil {

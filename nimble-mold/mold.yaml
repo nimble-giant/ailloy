@@ -8,9 +8,3 @@ author:
   url: https://github.com/nimble-giant/ailloy
 requires:
   ailloy: ">=0.2.0"
-output:
-  commands: .claude/commands
-  skills: .claude/skills
-  workflows:
-    dest: .github/workflows
-    process: false
