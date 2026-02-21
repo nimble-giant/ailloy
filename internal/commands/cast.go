@@ -26,12 +26,14 @@ var castCmd = &cobra.Command{
 Installs rendered blanks from the given mold into the current repository.
 If run from a stuffed binary (created by smelt -o binary), the embedded mold
 is used automatically when no mold-dir is provided.
-Use -f to layer additional flux value files (Helm-style).`,
+Use -f to layer additional flux value files (Helm-style).
+Use -g/--global to install into the user's home directory (~/) instead.`,
 	RunE: runCast,
 }
 
 var (
 	withWorkflows bool
+	castGlobal    bool
 	castSetFlags  []string
 	castValFiles  []string
 )
@@ -39,6 +41,7 @@ var (
 func init() {
 	rootCmd.AddCommand(castCmd)
 
+	castCmd.Flags().BoolVarP(&castGlobal, "global", "g", false, "install into user home directory (~/) instead of current project")
 	castCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks (e.g. Claude Code agent)")
 	castCmd.Flags().StringArrayVar(&castSetFlags, "set", nil, "override flux variable (format: key=value, can be repeated)")
 	castCmd.Flags().StringArrayVarP(&castValFiles, "values", "f", nil, "flux value files (can be repeated, later files override earlier)")
@@ -106,6 +109,20 @@ func loadCastFlux(reader *blanks.MoldReader) (map[string]any, error) {
 	return flux, nil
 }
 
+// resolveDestPrefix returns the destination directory prefix.
+// When --global is set, files are installed under ~/ instead of the current directory,
+// so mold output paths (e.g. .claude/commands) land in the user's home directory.
+func resolveDestPrefix() (string, error) {
+	if !castGlobal {
+		return "", nil
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	return homeDir, nil
+}
+
 func castProject(reader *blanks.MoldReader) error {
 	// Welcome message
 	fmt.Println(styles.WorkingBanner("Casting Ailloy project structure..."))
@@ -114,13 +131,20 @@ func castProject(reader *blanks.MoldReader) error {
 	// Check runtime dependencies
 	checkDependencies()
 
-	// Check if we're in a git repository
-	if _, err := os.Stat(".git"); os.IsNotExist(err) {
-		warning := styles.WarningStyle.Render("⚠️  Warning: ") +
-			"Not in a Git repository. Consider running " +
-			styles.CodeStyle.Render("git init") + " first."
-		fmt.Println(warning)
-		fmt.Println()
+	destPrefix, err := resolveDestPrefix()
+	if err != nil {
+		return err
+	}
+
+	// Check if we're in a git repository (skip for global installs)
+	if destPrefix == "" {
+		if _, err := os.Stat(".git"); os.IsNotExist(err) {
+			warning := styles.WarningStyle.Render("⚠️  Warning: ") +
+				"Not in a Git repository. Consider running " +
+				styles.CodeStyle.Render("git init") + " first."
+			fmt.Println(warning)
+			fmt.Println()
+		}
 	}
 
 	// Load manifest and resolve output files.
@@ -139,6 +163,10 @@ func castProject(reader *blanks.MoldReader) error {
 	for _, rf := range resolved {
 		if !withWorkflows && strings.HasPrefix(rf.DestPath, ".github/") {
 			continue
+		}
+		// Prefix dest paths for global installs.
+		if destPrefix != "" {
+			rf.DestPath = filepath.Join(destPrefix, rf.DestPath)
 		}
 		filesToCast = append(filesToCast, rf)
 	}
@@ -184,12 +212,14 @@ func castProject(reader *blanks.MoldReader) error {
 	}
 	summaryContent += styles.FoxBullet("Ready for AI-powered development! 🚀")
 
-	// Check if CLAUDE.md exists and suggest creating one if not
-	if _, err := os.Stat("CLAUDE.md"); os.IsNotExist(err) {
-		summaryContent += "\n\n" +
-			styles.InfoStyle.Render("💡 Tip: ") +
-			"No " + styles.CodeStyle.Render("CLAUDE.md") + " detected. " +
-			"Run " + styles.CodeStyle.Render("/init") + " in Claude Code to create one."
+	// Check if CLAUDE.md exists and suggest creating one if not (skip for global)
+	if destPrefix == "" {
+		if _, err := os.Stat("CLAUDE.md"); os.IsNotExist(err) {
+			summaryContent += "\n\n" +
+				styles.InfoStyle.Render("💡 Tip: ") +
+				"No " + styles.CodeStyle.Render("CLAUDE.md") + " detected. " +
+				"Run " + styles.CodeStyle.Render("/init") + " in Claude Code to create one."
+		}
 	}
 
 	summary := styles.SuccessBoxStyle.Render(summaryContent)
