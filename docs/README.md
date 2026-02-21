@@ -114,9 +114,10 @@ This directory contains comprehensive documentation for the Ailloy methodology a
 
 1. [Quick Start Guide](quickstart.md) - Get up and running with Ailloy
 2. [Configuration Guide](configuration.md) - YAML configuration and template customization
-3. [Methodology Overview](methodology/README.md) - Understanding the Ailloy approach
-4. [CLI Reference](cli/README.md) - Complete CLI documentation
-5. [Template Guide](templates/README.md) - Creating and using templates
+3. [Packaging Molds](smelt.md) - Create and package custom molds with `ailloy smelt`
+4. [Methodology Overview](methodology/README.md) - Understanding the Ailloy approach
+5. [CLI Reference](cli/README.md) - Complete CLI documentation
+6. [Template Guide](templates/README.md) - Creating and using templates
 
 ## Phase 2 Development
 

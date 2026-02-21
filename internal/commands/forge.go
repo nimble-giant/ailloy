@@ -10,18 +10,19 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/config"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
-	embeddedtemplates "github.com/nimble-giant/ailloy/pkg/templates"
+	"github.com/nimble-giant/ailloy/pkg/templates"
 	"github.com/spf13/cobra"
 )
 
 var forgeCmd = &cobra.Command{
-	Use:     "forge",
+	Use:     "forge [mold-dir]",
 	Aliases: []string{"template"},
 	Short:   "Dry-run render of mold templates",
-	Long: `Render all templates in the current mold with flux values and print the result (alias: template).
+	Long: `Render all templates in the given mold with flux values and print the result (alias: template).
 
 This is the "what would cast produce?" preview, analogous to helm template.
 By default, rendered output is printed to stdout. Use --output to write files to a directory.`,
+	Args: cobra.ExactArgs(1),
 	RunE: runForge,
 }
 
@@ -86,24 +87,31 @@ type renderedFile struct {
 }
 
 func runForge(cmd *cobra.Command, args []string) error {
+	moldDir := args[0]
+
+	reader, err := templates.NewMoldReaderFromPath(moldDir)
+	if err != nil {
+		return err
+	}
+
 	cfg, err := loadForgeConfig(forgeSetValues)
 	if err != nil {
 		return err
 	}
 
-	manifest, err := embeddedtemplates.LoadManifest()
+	manifest, err := reader.LoadManifest()
 	if err != nil {
 		return fmt.Errorf("failed to load mold manifest: %w", err)
 	}
 
 	// Apply flux defaults: mold.yaml schema defaults (backwards compat), then flux.yaml
 	cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
-	if fluxDefaults, err := embeddedtemplates.LoadFluxDefaults(); err == nil {
+	if fluxDefaults, err := reader.LoadFluxDefaults(); err == nil {
 		cfg.Templates.Flux = mold.ApplyFluxFileDefaults(fluxDefaults, cfg.Templates.Flux)
 	}
 
 	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
-	schema, _ := embeddedtemplates.LoadFluxSchema()
+	schema, _ := reader.LoadFluxSchema()
 	if schema == nil && len(manifest.Flux) > 0 {
 		schema = manifest.Flux
 	}
@@ -122,7 +130,7 @@ func runForge(cmd *cobra.Command, args []string) error {
 
 	// Render command templates
 	for _, name := range manifest.Commands {
-		content, err := embeddedtemplates.GetTemplate(name)
+		content, err := reader.GetTemplate(name)
 		if err != nil {
 			return fmt.Errorf("reading command template %s: %w", name, err)
 		}
@@ -138,7 +146,7 @@ func runForge(cmd *cobra.Command, args []string) error {
 
 	// Render skill templates
 	for _, name := range manifest.Skills {
-		content, err := embeddedtemplates.GetSkill(name)
+		content, err := reader.GetSkill(name)
 		if err != nil {
 			return fmt.Errorf("reading skill template %s: %w", name, err)
 		}
@@ -154,7 +162,7 @@ func runForge(cmd *cobra.Command, args []string) error {
 
 	// Workflow templates are not Go-templated, include as-is
 	for _, name := range manifest.Workflows {
-		content, err := embeddedtemplates.GetWorkflowTemplate(name)
+		content, err := reader.GetWorkflowTemplate(name)
 		if err != nil {
 			return fmt.Errorf("reading workflow template %s: %w", name, err)
 		}

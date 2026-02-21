@@ -11,17 +11,17 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/config"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
-	embeddedtemplates "github.com/nimble-giant/ailloy/pkg/templates"
+	"github.com/nimble-giant/ailloy/pkg/templates"
 	"github.com/spf13/cobra"
 )
 
 var castCmd = &cobra.Command{
-	Use:     "cast",
+	Use:     "cast [mold-dir]",
 	Aliases: []string{"install"},
 	Short:   "Cast Ailloy configuration into a project",
 	Long: `Cast Ailloy configuration into a project or globally (alias: install).
 
-By default, casts Ailloy structure into the current repository.
+By default, casts the given mold into the current repository.
 Use -g or --global to install user-level configuration instead.`,
 	RunE: runCast,
 }
@@ -45,11 +45,20 @@ func runCast(cmd *cobra.Command, args []string) error {
 		return castGlobal()
 	}
 
-	// Default to project casting
-	return castProject()
+	if len(args) < 1 {
+		return fmt.Errorf("mold directory is required: ailloy cast <mold-dir>")
+	}
+
+	moldDir := args[0]
+	reader, err := templates.NewMoldReaderFromPath(moldDir)
+	if err != nil {
+		return err
+	}
+
+	return castProject(reader)
 }
 
-func castProject() error {
+func castProject(reader *templates.MoldReader) error {
 	// Welcome message
 	fmt.Println(styles.WorkingBanner("Casting Ailloy project structure..."))
 	fmt.Println()
@@ -88,19 +97,19 @@ func castProject() error {
 	}
 	fmt.Println()
 
-	// Copy template files from embedded templates
-	if err := copyTemplateFiles(); err != nil {
+	// Copy template files from mold
+	if err := copyTemplateFiles(reader); err != nil {
 		return fmt.Errorf("failed to copy template files: %w", err)
 	}
 
 	// Copy workflow templates (opt-in)
 	if withWorkflows {
-		if err := copyWorkflowTemplates(); err != nil {
+		if err := copyWorkflowTemplates(reader); err != nil {
 			return fmt.Errorf("failed to copy workflow templates: %w", err)
 		}
 	}
-	// Copy skill files from embedded templates
-	if err := copySkillFiles(); err != nil {
+	// Copy skill files from mold
+	if err := copySkillFiles(reader); err != nil {
 		return fmt.Errorf("failed to copy skill files: %w", err)
 	}
 	// Success celebration
@@ -163,8 +172,8 @@ func loadLayeredFluxConfig() (*config.Config, error) {
 	return cfg, nil
 }
 
-// copyTemplateFiles copies markdown template files from embedded sources to the project directory
-func copyTemplateFiles() error {
+// copyTemplateFiles copies markdown template files from the mold to the project directory
+func copyTemplateFiles(reader *templates.MoldReader) error {
 	templateDir := ".claude/commands"
 
 	cfg, err := loadLayeredFluxConfig()
@@ -176,18 +185,18 @@ func copyTemplateFiles() error {
 		}
 	}
 
-	// Apply flux defaults: mold.yaml schema defaults (backwards compat), then flux.yaml
-	manifest, _ := embeddedtemplates.LoadManifest()
+	// Load manifest and apply flux defaults
+	manifest, _ := reader.LoadManifest()
 	if manifest != nil {
 		cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
 	}
-	if fluxDefaults, err := embeddedtemplates.LoadFluxDefaults(); err == nil {
+	if fluxDefaults, err := reader.LoadFluxDefaults(); err == nil {
 		cfg.Templates.Flux = mold.ApplyFluxFileDefaults(fluxDefaults, cfg.Templates.Flux)
 	}
 
 	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
 	var schema []mold.FluxVar
-	if s, err := embeddedtemplates.LoadFluxSchema(); err == nil && s != nil {
+	if s, err := reader.LoadFluxSchema(); err == nil && s != nil {
 		schema = s
 	} else if manifest != nil && len(manifest.Flux) > 0 {
 		schema = manifest.Flux
@@ -200,24 +209,17 @@ func copyTemplateFiles() error {
 	resolver := buildIngotResolver(cfg)
 	opts := []config.TemplateOption{config.WithIngotResolver(resolver)}
 
-	// Define template files to copy
-	templates := []string{
-		"brainstorm.md",
-		"pr-description.md",
-		"create-issue.md",
-		"start-issue.md",
-		"update-pr.md",
-		"open-pr.md",
-		"preflight.md",
-		"pr-comments.md",
-		"pr-review.md",
+	// Use manifest-driven command list
+	var cmdList []string
+	if manifest != nil {
+		cmdList = manifest.Commands
 	}
 
-	for _, templateName := range templates {
-		// Read from embedded filesystem
-		content, err := embeddedtemplates.GetTemplate(templateName)
+	for _, templateName := range cmdList {
+		// Read from mold filesystem
+		content, err := reader.GetTemplate(templateName)
 		if err != nil {
-			// Create a placeholder if embedded file doesn't exist
+			// Create a placeholder if template doesn't exist
 			content = []byte(fmt.Sprintf(`# %s
 
 This is a placeholder for the %s Claude Code command template.
@@ -252,17 +254,18 @@ Add your Claude Code command documentation here.
 	return nil
 }
 
-// copyWorkflowTemplates copies GitHub Actions workflow templates from embedded sources to the project
-func copyWorkflowTemplates() error {
+// copyWorkflowTemplates copies GitHub Actions workflow templates from the mold to the project
+func copyWorkflowTemplates(reader *templates.MoldReader) error {
 	workflowDir := ".github/workflows"
 
-	workflows := []string{
-		"claude-code.yml",
-		"claude-code-review.yml",
+	manifest, _ := reader.LoadManifest()
+	var wfList []string
+	if manifest != nil {
+		wfList = manifest.Workflows
 	}
 
-	for _, workflowName := range workflows {
-		content, err := embeddedtemplates.GetWorkflowTemplate(workflowName)
+	for _, workflowName := range wfList {
+		content, err := reader.GetWorkflowTemplate(workflowName)
 		if err != nil {
 			return fmt.Errorf("failed to read workflow template %s: %w", workflowName, err)
 		}
@@ -279,8 +282,8 @@ func copyWorkflowTemplates() error {
 	return nil
 }
 
-// copySkillFiles copies skill files from embedded sources to the project directory
-func copySkillFiles() error {
+// copySkillFiles copies skill files from the mold to the project directory
+func copySkillFiles(reader *templates.MoldReader) error {
 	skillDir := ".claude/skills"
 
 	cfg, err := loadLayeredFluxConfig()
@@ -292,12 +295,12 @@ func copySkillFiles() error {
 		}
 	}
 
-	// Apply flux defaults: mold.yaml schema defaults (backwards compat), then flux.yaml
-	manifest, _ := embeddedtemplates.LoadManifest()
+	// Load manifest and apply flux defaults
+	manifest, _ := reader.LoadManifest()
 	if manifest != nil {
 		cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
 	}
-	if fluxDefaults, err := embeddedtemplates.LoadFluxDefaults(); err == nil {
+	if fluxDefaults, err := reader.LoadFluxDefaults(); err == nil {
 		cfg.Templates.Flux = mold.ApplyFluxFileDefaults(fluxDefaults, cfg.Templates.Flux)
 	}
 
@@ -305,16 +308,17 @@ func copySkillFiles() error {
 	resolver := buildIngotResolver(cfg)
 	opts := []config.TemplateOption{config.WithIngotResolver(resolver)}
 
-	// Define skill files to copy
-	skills := []string{
-		"brainstorm.md",
+	// Use manifest-driven skill list
+	var skillList []string
+	if manifest != nil {
+		skillList = manifest.Skills
 	}
 
-	for _, skillName := range skills {
-		// Read from embedded filesystem
-		content, err := embeddedtemplates.GetSkill(skillName)
+	for _, skillName := range skillList {
+		// Read from mold filesystem
+		content, err := reader.GetSkill(skillName)
 		if err != nil {
-			// Create a placeholder if embedded file doesn't exist
+			// Create a placeholder if skill doesn't exist
 			content = []byte(fmt.Sprintf(`# Skill: %s
 
 This is a placeholder for the %s Claude Code skill.

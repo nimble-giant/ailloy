@@ -7,29 +7,33 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/nimble-giant/ailloy/pkg/templates"
 )
 
 // Updater handles updating existing Claude Code plugins
 type Updater struct {
 	PluginPath     string
 	BackupPath     string
+	reader         *templates.MoldReader
 	UpdatedFiles   int
 	NewCommands    int
 	PreservedFiles int
 }
 
 // NewUpdater creates a new plugin updater
-func NewUpdater(pluginPath string) *Updater {
+func NewUpdater(pluginPath string, reader *templates.MoldReader) *Updater {
 	return &Updater{
 		PluginPath: pluginPath,
 		BackupPath: pluginPath + ".backup." + time.Now().Format("20060102-150405"),
+		reader:     reader,
 	}
 }
 
 // Update updates an existing plugin with new templates
 func (u *Updater) Update() error {
 	// Create a generator for the new content
-	generator := NewGenerator(u.PluginPath)
+	generator := NewGenerator(u.PluginPath, u.reader)
 	generator.Config = &Config{
 		Name:        "ailloy",
 		Version:     "1.0.0",
@@ -104,7 +108,7 @@ func (u *Updater) updateCommands(generator *Generator) error {
 
 	// Transform and update commands
 	transformer := NewTransformer()
-	for _, tmpl := range generator.templates {
+	for _, tmpl := range generator.commands {
 		// Transform template
 		command, err := transformer.Transform(tmpl)
 		if err != nil {

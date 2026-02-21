@@ -270,9 +270,9 @@ func TestValidateMoldFiles(t *testing.T) {
 	}
 
 	fsys := fstest.MapFS{
-		"root/claude/commands/create-issue.md": &fstest.MapFile{Data: []byte("# test")},
-		"root/claude/skills/brainstorm.md":     &fstest.MapFile{Data: []byte("# test")},
-		"root/github/workflows/ci.yml":         &fstest.MapFile{Data: []byte("name: CI")},
+		"root/.claude/commands/create-issue.md": &fstest.MapFile{Data: []byte("# test")},
+		"root/.claude/skills/brainstorm.md":     &fstest.MapFile{Data: []byte("# test")},
+		"root/.github/workflows/ci.yml":         &fstest.MapFile{Data: []byte("name: CI")},
 	}
 
 	if err := ValidateMoldFiles(m, fsys, "root"); err != nil {

@@ -14,7 +14,8 @@ import (
 type Generator struct {
 	OutputDir string
 	Config    *Config
-	templates []TemplateInfo
+	reader    *templates.MoldReader
+	commands  []TemplateInfo
 }
 
 // Config represents the plugin configuration
@@ -40,9 +41,10 @@ type TemplateInfo struct {
 }
 
 // NewGenerator creates a new plugin generator
-func NewGenerator(outputDir string) *Generator {
+func NewGenerator(outputDir string, reader *templates.MoldReader) *Generator {
 	return &Generator{
 		OutputDir: outputDir,
+		reader:    reader,
 	}
 }
 
@@ -86,15 +88,15 @@ func (g *Generator) Generate() error {
 	return nil
 }
 
-// loadTemplates loads all templates from the embedded filesystem
+// loadTemplates loads all templates from the mold reader
 func (g *Generator) loadTemplates() error {
-	templateList, err := templates.ListTemplates()
+	templateList, err := g.reader.ListTemplates()
 	if err != nil {
 		return err
 	}
 
 	for _, tmplName := range templateList {
-		content, err := templates.GetTemplate(tmplName)
+		content, err := g.reader.GetTemplate(tmplName)
 		if err != nil {
 			return fmt.Errorf("failed to load template %s: %w", tmplName, err)
 		}
@@ -102,7 +104,7 @@ func (g *Generator) loadTemplates() error {
 		// Extract description from content
 		desc := extractDescription(content)
 
-		g.templates = append(g.templates, TemplateInfo{
+		g.commands = append(g.commands, TemplateInfo{
 			Name:        strings.TrimSuffix(tmplName, ".md"),
 			Description: desc,
 			Content:     content,
@@ -157,7 +159,7 @@ func (g *Generator) generateManifest() error {
 func (g *Generator) generateCommands() error {
 	transformer := NewTransformer()
 
-	for _, tmpl := range g.templates {
+	for _, tmpl := range g.commands {
 		// Transform template to command format
 		command, err := transformer.Transform(tmpl)
 		if err != nil {
@@ -287,7 +289,7 @@ func extractDescription(content []byte) string {
 
 func (g *Generator) buildREADME() string {
 	var cmdList strings.Builder
-	for _, tmpl := range g.templates {
+	for _, tmpl := range g.commands {
 		cmdList.WriteString(fmt.Sprintf("| `/%s:%s` | %s |\n", g.Config.Name, tmpl.Name, tmpl.Description))
 	}
 

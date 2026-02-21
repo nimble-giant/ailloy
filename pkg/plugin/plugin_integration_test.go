@@ -15,7 +15,7 @@ func TestIntegration_PluginGenerateValidateLifecycle(t *testing.T) {
 	outputDir := filepath.Join(dir, "lifecycle-plugin")
 
 	// Step 1: Generate a complete plugin
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{
 		Name:        "lifecycle-test",
 		Version:     "1.0.0",
@@ -64,7 +64,7 @@ func TestIntegration_PluginGenerateUpdateValidateLifecycle(t *testing.T) {
 	outputDir := filepath.Join(dir, "update-lifecycle")
 
 	// Step 1: Generate initial plugin
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{
 		Name:        "update-lifecycle",
 		Version:     "1.0.0",
@@ -90,7 +90,7 @@ When this command is invoked, you must do custom things.
 	}
 
 	// Step 3: Update the plugin
-	u := NewUpdater(outputDir)
+	u := NewUpdater(outputDir, testMoldReader())
 
 	// Backup first
 	if err := u.Backup(); err != nil {
@@ -129,7 +129,7 @@ func TestIntegration_PluginBackupRestoreCycle(t *testing.T) {
 	outputDir := filepath.Join(dir, "backup-restore")
 
 	// Generate plugin
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{
 		Name:        "backup-test",
 		Version:     "1.0.0",
@@ -145,7 +145,7 @@ func TestIntegration_PluginBackupRestoreCycle(t *testing.T) {
 	origCount := len(origEntries)
 
 	// Create backup
-	u := NewUpdater(outputDir)
+	u := NewUpdater(outputDir, testMoldReader())
 	if err := u.Backup(); err != nil {
 		t.Fatalf("backup failed: %v", err)
 	}
@@ -187,14 +187,14 @@ func TestIntegration_PluginBackupRestoreCycle(t *testing.T) {
 
 func TestIntegration_TemplateTransformationConsistency(t *testing.T) {
 	// Test that all embedded templates can be loaded and transformed successfully
-	g := NewGenerator(t.TempDir())
+	g := NewGenerator(t.TempDir(), testMoldReader())
 	if err := g.loadTemplates(); err != nil {
 		t.Fatalf("failed to load templates: %v", err)
 	}
 
 	tr := NewTransformer()
 
-	for _, tmpl := range g.templates {
+	for _, tmpl := range g.commands {
 		t.Run(tmpl.Name, func(t *testing.T) {
 			output, err := tr.Transform(tmpl)
 			if err != nil {
@@ -224,7 +224,7 @@ func TestIntegration_ManifestSchemaConsistency(t *testing.T) {
 	dir := t.TempDir()
 	outputDir := filepath.Join(dir, "schema-test")
 
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{
 		Name:        "schema-test",
 		Version:     "2.5.1",
@@ -285,7 +285,7 @@ func TestIntegration_PluginDirectoryPermissions(t *testing.T) {
 	dir := t.TempDir()
 	outputDir := filepath.Join(dir, "perm-test")
 
-	g := NewGenerator(outputDir)
+	g := NewGenerator(outputDir, testMoldReader())
 	g.Config = &Config{
 		Name:        "perm-test",
 		Version:     "1.0.0",
@@ -342,7 +342,7 @@ func TestIntegration_MultipleGenerationsIdempotent(t *testing.T) {
 
 	// Generate twice
 	for i := 0; i < 2; i++ {
-		g := NewGenerator(outputDir)
+		g := NewGenerator(outputDir, testMoldReader())
 		g.Config = cfg
 		if err := g.Generate(); err != nil {
 			t.Fatalf("generation %d failed: %v", i+1, err)

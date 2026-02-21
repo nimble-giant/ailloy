@@ -9,7 +9,7 @@ import (
 )
 
 var smeltCmd = &cobra.Command{
-	Use:     "smelt",
+	Use:     "smelt [mold-dir]",
 	Aliases: []string{"package"},
 	Short:   "Package a mold into a distributable format",
 	Long: `Package a mold into a distributable archive (alias: package).
@@ -31,11 +31,14 @@ func init() {
 	smeltCmd.Flags().StringVar(&smeltOutputPath, "output", "", "output directory (default: current directory)")
 }
 
-func runSmelt(_ *cobra.Command, _ []string) error {
+func runSmelt(_ *cobra.Command, args []string) error {
 	fmt.Println(styles.WorkingBanner("Smelting mold..."))
 	fmt.Println()
 
 	moldDir := "."
+	if len(args) > 0 {
+		moldDir = args[0]
+	}
 
 	var (
 		outputFile string
