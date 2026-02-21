@@ -3,26 +3,64 @@ package mold
 import (
 	"fmt"
 	"io/fs"
-	"maps"
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"dario.cat/mergo"
+	"github.com/goccy/go-yaml"
 )
+
+// SetNestedValue sets a value in a nested map using a dotted path.
+// For example, SetNestedValue(m, "scm.provider", "GitHub") creates
+// m["scm"] = map[string]any{"provider": "GitHub"}.
+func SetNestedValue(m map[string]any, dottedKey string, value string) {
+	segments := strings.Split(dottedKey, ".")
+	current := m
+	for i, seg := range segments {
+		if i == len(segments)-1 {
+			current[seg] = value
+			return
+		}
+		next, ok := current[seg].(map[string]any)
+		if !ok {
+			next = make(map[string]any)
+			current[seg] = next
+		}
+		current = next
+	}
+}
+
+// GetNestedValue retrieves a leaf string value from a nested map using a dotted path.
+func GetNestedValue(m map[string]any, dottedPath string) (string, bool) {
+	segments := strings.Split(dottedPath, ".")
+	var current any = m
+	for _, seg := range segments {
+		cm, ok := current.(map[string]any)
+		if !ok {
+			return "", false
+		}
+		current, ok = cm[seg]
+		if !ok {
+			return "", false
+		}
+	}
+	s, ok := current.(string)
+	return s, ok
+}
 
 // ApplyFluxDefaults returns a new flux map with default values applied for any
 // schema variables that have a default and are not already set in the input map.
 // The input map is not mutated.
-func ApplyFluxDefaults(schema []FluxVar, flux map[string]string) map[string]string {
-	result := make(map[string]string, len(flux))
-	maps.Copy(result, flux)
+func ApplyFluxDefaults(schema []FluxVar, flux map[string]any) map[string]any {
+	result := make(map[string]any, len(flux))
+	mergo.Merge(&result, flux, mergo.WithOverride) //nolint:errcheck // best-effort merge
 
 	for _, fv := range schema {
 		if fv.Default == "" {
 			continue
 		}
-		if _, exists := result[fv.Name]; !exists {
-			result[fv.Name] = fv.Default
+		if _, found := GetNestedValue(result, fv.Name); !found {
+			SetNestedValue(result, fv.Name, fv.Default)
 		}
 	}
 
@@ -32,11 +70,11 @@ func ApplyFluxDefaults(schema []FluxVar, flux map[string]string) map[string]stri
 // ValidateFlux validates provided flux values against the schema declarations.
 // It checks that all required variables are present and that values match their
 // declared types. All errors are collected and returned at once.
-func ValidateFlux(schema []FluxVar, flux map[string]string) error {
+func ValidateFlux(schema []FluxVar, flux map[string]any) error {
 	var errs []string
 
 	for _, fv := range schema {
-		val, exists := flux[fv.Name]
+		val, exists := GetNestedValue(flux, fv.Name)
 
 		// Check required
 		if fv.Required && (!exists || val == "") {
@@ -61,20 +99,20 @@ func ValidateFlux(schema []FluxVar, flux map[string]string) error {
 	return nil
 }
 
-// LoadFluxFile loads a flat key-value map from a YAML file in the given filesystem.
+// LoadFluxFile loads a nested map from a YAML file in the given filesystem.
 // Returns an empty map (not an error) if the file does not exist.
-func LoadFluxFile(fsys fs.FS, path string) (map[string]string, error) {
+func LoadFluxFile(fsys fs.FS, path string) (map[string]any, error) {
 	data, err := fs.ReadFile(fsys, path)
 	if err != nil {
-		return make(map[string]string), nil //nolint:nilerr // missing file is not an error
+		return make(map[string]any), nil //nolint:nilerr // missing file is not an error
 	}
 
-	var vals map[string]string
+	var vals map[string]any
 	if err := yaml.Unmarshal(data, &vals); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	if vals == nil {
-		return make(map[string]string), nil
+		return make(map[string]any), nil
 	}
 	return vals, nil
 }
@@ -96,15 +134,10 @@ func LoadFluxSchema(fsys fs.FS, path string) ([]FluxVar, error) {
 
 // ApplyFluxFileDefaults returns a new flux map with defaults from the given map
 // applied for any keys not already set. The input map is not mutated.
-func ApplyFluxFileDefaults(defaults, flux map[string]string) map[string]string {
-	result := make(map[string]string, len(flux)+len(defaults))
-	maps.Copy(result, flux)
-
-	for k, v := range defaults {
-		if _, exists := result[k]; !exists {
-			result[k] = v
-		}
-	}
+func ApplyFluxFileDefaults(defaults, flux map[string]any) map[string]any {
+	result := make(map[string]any)
+	mergo.Merge(&result, flux, mergo.WithOverride) //nolint:errcheck // best-effort merge
+	mergo.Merge(&result, defaults)                 //nolint:errcheck // fills gaps only
 
 	return result
 }

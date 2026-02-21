@@ -42,7 +42,7 @@ func (r *MoldReader) LoadManifest() (*mold.Mold, error) {
 }
 
 // LoadFluxDefaults loads the flux.yaml default values.
-func (r *MoldReader) LoadFluxDefaults() (map[string]string, error) {
+func (r *MoldReader) LoadFluxDefaults() (map[string]any, error) {
 	return mold.LoadFluxFile(r.fsys, "flux.yaml")
 }
 

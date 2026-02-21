@@ -154,7 +154,7 @@ func loadLayeredFluxConfig() (*config.Config, error) {
 	if err != nil {
 		cfg = &config.Config{
 			Templates: config.TemplateConfig{
-				Flux: make(map[string]string),
+				Flux: make(map[string]any),
 			},
 		}
 	}
@@ -180,7 +180,7 @@ func copyTemplateFiles(reader *templates.MoldReader) error {
 	if err != nil {
 		cfg = &config.Config{
 			Templates: config.TemplateConfig{
-				Flux: make(map[string]string),
+				Flux: make(map[string]any),
 			},
 		}
 	}
@@ -290,7 +290,7 @@ func copySkillFiles(reader *templates.MoldReader) error {
 	if err != nil {
 		cfg = &config.Config{
 			Templates: config.TemplateConfig{
-				Flux: make(map[string]string),
+				Flux: make(map[string]any),
 			},
 		}
 	}

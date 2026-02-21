@@ -22,7 +22,7 @@ func TestIntegration_VariableSubstitutionWorkflow(t *testing.T) {
 			Name: "test-project",
 		},
 		Templates: TemplateConfig{
-			Flux: map[string]string{
+			Flux: map[string]any{
 				"organization":   "myteam",
 				"default_board":  "Engineering",
 				"default_status": "Ready",
@@ -86,7 +86,7 @@ func TestIntegration_ConfigMerging_GlobalAndProject(t *testing.T) {
 			Name: "my-project",
 		},
 		Templates: TemplateConfig{
-			Flux: map[string]string{
+			Flux: map[string]any{
 				"organization":  "project-org",
 				"default_board": "ProjectBoard",
 			},
@@ -105,7 +105,7 @@ func TestIntegration_ConfigMerging_GlobalAndProject(t *testing.T) {
 	}
 
 	// Simulate global config merge (as done in copyTemplateFiles)
-	globalFlux := map[string]string{
+	globalFlux := map[string]any{
 		"organization":    "global-org",
 		"default_board":   "GlobalBoard",
 		"default_status":  "Backlog",
@@ -113,7 +113,7 @@ func TestIntegration_ConfigMerging_GlobalAndProject(t *testing.T) {
 	}
 
 	// Project flux takes precedence
-	mergedFlux := make(map[string]string)
+	mergedFlux := make(map[string]any)
 	for k, v := range globalFlux {
 		mergedFlux[k] = v
 	}
@@ -148,7 +148,7 @@ func TestIntegration_SetAndDeleteVariables(t *testing.T) {
 	// Start with empty config
 	cfg := &Config{
 		Templates: TemplateConfig{
-			Flux: map[string]string{},
+			Flux: map[string]any{},
 		},
 	}
 
@@ -200,7 +200,7 @@ func TestIntegration_SetAndDeleteVariables(t *testing.T) {
 
 func TestIntegration_TemplateVariableSubstitution_AllVariables(t *testing.T) {
 	// Test with all commonly used template variables
-	flux := map[string]string{
+	flux := map[string]any{
 		"default_board":      "Engineering",
 		"default_priority":   "P1",
 		"default_status":     "Ready",
@@ -229,8 +229,9 @@ Iteration Field: {{iteration_field_id}}`
 		if contains(result, "{{"+key+"}}") {
 			t.Errorf("variable {{%s}} was not substituted", key)
 		}
-		if !contains(result, value) {
-			t.Errorf("expected value '%s' for key '%s' in result", value, key)
+		strVal, _ := value.(string)
+		if !contains(result, strVal) {
+			t.Errorf("expected value '%s' for key '%s' in result", strVal, key)
 		}
 	}
 }
@@ -254,7 +255,7 @@ func TestIntegration_ConfigPersistence_FullConfig(t *testing.T) {
 			DefaultProvider: "claude",
 			AutoUpdate:      true,
 			Repositories:    []string{"https://github.com/repo1", "https://github.com/repo2"},
-			Flux: map[string]string{
+			Flux: map[string]any{
 				"var1": "val1",
 				"var2": "val2",
 			},
@@ -326,7 +327,7 @@ func TestIntegration_ConfigFilePermissions(t *testing.T) {
 
 	cfg := &Config{
 		Templates: TemplateConfig{
-			Flux: map[string]string{},
+			Flux: map[string]any{},
 		},
 	}
 

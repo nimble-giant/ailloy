@@ -50,25 +50,29 @@ workflows:
 
 ## Step 2: Write `flux.yaml` (optional)
 
-Default values for template variables, like Helm's `values.yaml`. Flat key-value pairs:
+Default values for template variables, like Helm's `values.yaml`. Use nested YAML to group related values:
 
 ```yaml
-organization: my-org
-default_board: Engineering
-scm_provider: GitHub
-scm_cli: gh
-scm_base_url: https://github.com
+project:
+  organization: my-org
+  board: Engineering
+
+scm:
+  provider: GitHub
+  cli: gh
+  base_url: https://github.com
 ```
 
-Templates reference these as `{{ .organization }}`, `{{ .default_board }}`, etc.
+Templates reference nested values with dotted paths: `{{ scm.provider }}`, `{{ project.board }}`, etc.
 
 Multiline values use YAML block syntax:
 
 ```yaml
-my_command: |-
-  gh api
-    --method POST
-    repos/{owner}/{repo}/issues
+api:
+  post_review: |-
+    gh api repos/:owner/:repo/pulls/<pr-number>/reviews \
+      --method POST \
+      --field body="<summary>"
 ```
 
 If you omit `flux.yaml`, smelt will generate one from any `flux:` declarations in `mold.yaml` (backwards compatibility).
@@ -78,11 +82,11 @@ If you omit `flux.yaml`, smelt will generate one from any `flux:` declarations i
 Only declare variables that need validation. You don't need to list every variable from `flux.yaml`:
 
 ```yaml
-- name: organization
+- name: project.organization
   type: string
   required: true
   description: "GitHub org name"
-- name: default_board
+- name: project.board
   type: string
 ```
 
@@ -97,9 +101,9 @@ Add command templates to `.claude/commands/`, skill templates to `.claude/skills
 ```markdown
 # My Command
 
-Use `{{ .scm_cli }}` to interact with {{ .scm_provider }}.
+Use `{{ scm.cli }}` to interact with {{ scm.provider }}.
 
-Organization: {{ .organization }}
+Organization: {{ project.organization }}
 ```
 
 ## Step 5: Package it
@@ -174,7 +178,7 @@ ailloy forge ./my-mold -o /tmp/preview
 ailloy cast ./my-mold
 
 # Override flux values at install time
-ailloy forge ./my-mold --set organization=my-org --set scm_provider=GitLab
+ailloy forge ./my-mold --set project.organization=my-org --set scm.provider=GitLab
 ```
 
 ## Value Precedence

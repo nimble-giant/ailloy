@@ -3,11 +3,12 @@ module github.com/nimble-giant/ailloy
 go 1.24.1
 
 require (
+	dario.cat/mergo v1.0.2
 	github.com/charmbracelet/huh v0.8.0
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
+	github.com/goccy/go-yaml v1.19.2
 	github.com/muesli/termenv v0.16.0
 	github.com/spf13/cobra v1.9.1
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

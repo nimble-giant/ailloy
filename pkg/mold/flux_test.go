@@ -13,7 +13,7 @@ func TestApplyFluxDefaults_AppliesMissingDefaults(t *testing.T) {
 		{Name: "board", Type: "string", Default: "Engineering"},
 		{Name: "org", Type: "string", Required: true},
 	}
-	flux := map[string]string{"org": "acme"}
+	flux := map[string]any{"org": "acme"}
 
 	result := ApplyFluxDefaults(schema, flux)
 
@@ -29,7 +29,7 @@ func TestApplyFluxDefaults_DoesNotOverrideExisting(t *testing.T) {
 	schema := []FluxVar{
 		{Name: "board", Type: "string", Default: "Engineering"},
 	}
-	flux := map[string]string{"board": "Product"}
+	flux := map[string]any{"board": "Product"}
 
 	result := ApplyFluxDefaults(schema, flux)
 
@@ -42,7 +42,7 @@ func TestApplyFluxDefaults_DoesNotMutateInput(t *testing.T) {
 	schema := []FluxVar{
 		{Name: "board", Type: "string", Default: "Engineering"},
 	}
-	flux := map[string]string{}
+	flux := map[string]any{}
 
 	result := ApplyFluxDefaults(schema, flux)
 
@@ -55,7 +55,7 @@ func TestApplyFluxDefaults_DoesNotMutateInput(t *testing.T) {
 }
 
 func TestApplyFluxDefaults_EmptySchema(t *testing.T) {
-	flux := map[string]string{"key": "val"}
+	flux := map[string]any{"key": "val"}
 	result := ApplyFluxDefaults(nil, flux)
 
 	if result["key"] != "val" {
@@ -67,7 +67,7 @@ func TestApplyFluxDefaults_SkipsEmptyDefault(t *testing.T) {
 	schema := []FluxVar{
 		{Name: "org", Type: "string", Required: true},
 	}
-	flux := map[string]string{}
+	flux := map[string]any{}
 
 	result := ApplyFluxDefaults(schema, flux)
 
@@ -82,7 +82,7 @@ func TestValidateFlux_RequiredMissing(t *testing.T) {
 	schema := []FluxVar{
 		{Name: "org", Type: "string", Required: true},
 	}
-	err := ValidateFlux(schema, map[string]string{})
+	err := ValidateFlux(schema, map[string]any{})
 	if err == nil {
 		t.Fatal("expected error for missing required var")
 	}
@@ -95,7 +95,7 @@ func TestValidateFlux_RequiredEmpty(t *testing.T) {
 	schema := []FluxVar{
 		{Name: "org", Type: "string", Required: true},
 	}
-	err := ValidateFlux(schema, map[string]string{"org": ""})
+	err := ValidateFlux(schema, map[string]any{"org": ""})
 	if err == nil {
 		t.Fatal("expected error for empty required var")
 	}
@@ -105,7 +105,7 @@ func TestValidateFlux_RequiredPresent(t *testing.T) {
 	schema := []FluxVar{
 		{Name: "org", Type: "string", Required: true},
 	}
-	if err := ValidateFlux(schema, map[string]string{"org": "acme"}); err != nil {
+	if err := ValidateFlux(schema, map[string]any{"org": "acme"}); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -114,7 +114,7 @@ func TestValidateFlux_OptionalMissing(t *testing.T) {
 	schema := []FluxVar{
 		{Name: "board", Type: "string", Required: false},
 	}
-	if err := ValidateFlux(schema, map[string]string{}); err != nil {
+	if err := ValidateFlux(schema, map[string]any{}); err != nil {
 		t.Errorf("unexpected error for missing optional var: %v", err)
 	}
 }
@@ -124,7 +124,7 @@ func TestValidateFlux_BoolValid(t *testing.T) {
 		{Name: "enabled", Type: "bool", Required: true},
 	}
 	for _, val := range []string{"true", "false", "True", "FALSE"} {
-		if err := ValidateFlux(schema, map[string]string{"enabled": val}); err != nil {
+		if err := ValidateFlux(schema, map[string]any{"enabled": val}); err != nil {
 			t.Errorf("expected %q to be valid bool, got: %v", val, err)
 		}
 	}
@@ -134,7 +134,7 @@ func TestValidateFlux_BoolInvalid(t *testing.T) {
 	schema := []FluxVar{
 		{Name: "enabled", Type: "bool", Required: true},
 	}
-	err := ValidateFlux(schema, map[string]string{"enabled": "yes"})
+	err := ValidateFlux(schema, map[string]any{"enabled": "yes"})
 	if err == nil {
 		t.Fatal("expected error for invalid bool")
 	}
@@ -148,7 +148,7 @@ func TestValidateFlux_IntValid(t *testing.T) {
 		{Name: "count", Type: "int", Required: true},
 	}
 	for _, val := range []string{"0", "42", "-1", "100"} {
-		if err := ValidateFlux(schema, map[string]string{"count": val}); err != nil {
+		if err := ValidateFlux(schema, map[string]any{"count": val}); err != nil {
 			t.Errorf("expected %q to be valid int, got: %v", val, err)
 		}
 	}
@@ -158,7 +158,7 @@ func TestValidateFlux_IntInvalid(t *testing.T) {
 	schema := []FluxVar{
 		{Name: "count", Type: "int", Required: true},
 	}
-	err := ValidateFlux(schema, map[string]string{"count": "abc"})
+	err := ValidateFlux(schema, map[string]any{"count": "abc"})
 	if err == nil {
 		t.Fatal("expected error for invalid int")
 	}
@@ -172,7 +172,7 @@ func TestValidateFlux_ListValid(t *testing.T) {
 		{Name: "tags", Type: "list", Required: true},
 	}
 	for _, val := range []string{"a,b,c", "single", "one,two"} {
-		if err := ValidateFlux(schema, map[string]string{"tags": val}); err != nil {
+		if err := ValidateFlux(schema, map[string]any{"tags": val}); err != nil {
 			t.Errorf("expected %q to be valid list, got: %v", val, err)
 		}
 	}
@@ -183,7 +183,7 @@ func TestValidateFlux_StringAlwaysValid(t *testing.T) {
 		{Name: "name", Type: "string", Required: true},
 	}
 	for _, val := range []string{"hello", "123", "true", "a,b,c", "anything goes"} {
-		if err := ValidateFlux(schema, map[string]string{"name": val}); err != nil {
+		if err := ValidateFlux(schema, map[string]any{"name": val}); err != nil {
 			t.Errorf("expected %q to be valid string, got: %v", val, err)
 		}
 	}
@@ -195,7 +195,7 @@ func TestValidateFlux_MultipleErrors(t *testing.T) {
 		{Name: "enabled", Type: "bool", Required: true},
 		{Name: "count", Type: "int", Required: true},
 	}
-	err := ValidateFlux(schema, map[string]string{})
+	err := ValidateFlux(schema, map[string]any{})
 	if err == nil {
 		t.Fatal("expected multiple errors")
 	}
@@ -212,7 +212,7 @@ func TestValidateFlux_MultipleErrors(t *testing.T) {
 }
 
 func TestValidateFlux_EmptySchema(t *testing.T) {
-	if err := ValidateFlux(nil, map[string]string{"extra": "val"}); err != nil {
+	if err := ValidateFlux(nil, map[string]any{"extra": "val"}); err != nil {
 		t.Errorf("expected no error for empty schema, got: %v", err)
 	}
 }
@@ -222,7 +222,7 @@ func TestValidateFlux_TypeAndRequiredCombined(t *testing.T) {
 		{Name: "count", Type: "int", Required: true},
 	}
 	// Provided but wrong type
-	err := ValidateFlux(schema, map[string]string{"count": "not-a-number"})
+	err := ValidateFlux(schema, map[string]any{"count": "not-a-number"})
 	if err == nil {
 		t.Fatal("expected error for wrong type")
 	}
@@ -331,8 +331,8 @@ func TestLoadFluxSchema_InvalidYAML(t *testing.T) {
 // --- ApplyFluxFileDefaults tests ---
 
 func TestApplyFluxFileDefaults_FillsGaps(t *testing.T) {
-	defaults := map[string]string{"board": "Engineering", "cli": "gh"}
-	flux := map[string]string{"board": "Product"}
+	defaults := map[string]any{"board": "Engineering", "cli": "gh"}
+	flux := map[string]any{"board": "Product"}
 
 	result := ApplyFluxFileDefaults(defaults, flux)
 
@@ -345,8 +345,8 @@ func TestApplyFluxFileDefaults_FillsGaps(t *testing.T) {
 }
 
 func TestApplyFluxFileDefaults_DoesNotMutateInput(t *testing.T) {
-	defaults := map[string]string{"board": "Engineering"}
-	flux := map[string]string{}
+	defaults := map[string]any{"board": "Engineering"}
+	flux := map[string]any{}
 
 	result := ApplyFluxFileDefaults(defaults, flux)
 
@@ -359,7 +359,7 @@ func TestApplyFluxFileDefaults_DoesNotMutateInput(t *testing.T) {
 }
 
 func TestApplyFluxFileDefaults_EmptyDefaults(t *testing.T) {
-	flux := map[string]string{"key": "val"}
+	flux := map[string]any{"key": "val"}
 	result := ApplyFluxFileDefaults(nil, flux)
 	if result["key"] != "val" {
 		t.Errorf("expected key=val, got %q", result["key"])
@@ -379,7 +379,7 @@ func TestLoadFluxFile_MultilineValues(t *testing.T) {
 	if vals["simple"] != "hello" {
 		t.Errorf("expected simple=hello, got %q", vals["simple"])
 	}
-	multi := vals["multiline"]
+	multi, _ := vals["multiline"].(string)
 	if !strings.Contains(multi, "line one") {
 		t.Errorf("expected multiline to contain 'line one', got %q", multi)
 	}
@@ -398,13 +398,13 @@ func TestPrecedenceChain_SchemaDefaultsLessThanFluxFile(t *testing.T) {
 	}
 
 	// flux.yaml provides defaults for "board" and "org"
-	fluxFileDefaults := map[string]string{
+	fluxFileDefaults := map[string]any{
 		"board": "FluxFile-Board",
 		"org":   "flux-org",
 	}
 
 	// Start with empty user flux
-	flux := make(map[string]string)
+	flux := make(map[string]any)
 
 	// Step 1: Apply schema defaults (lowest priority)
 	flux = ApplyFluxDefaults(schema, flux)
@@ -432,13 +432,13 @@ func TestPrecedenceChain_UserOverridesEverything(t *testing.T) {
 		{Name: "board", Type: "string", Default: "Schema-Board"},
 		{Name: "cli", Type: "string", Default: "schema-cli"},
 	}
-	fluxFileDefaults := map[string]string{
+	fluxFileDefaults := map[string]any{
 		"board": "FluxFile-Board",
 		"cli":   "flux-cli",
 	}
 
 	// User has already set "board" via config
-	userFlux := map[string]string{"board": "User-Board"}
+	userFlux := map[string]any{"board": "User-Board"}
 
 	// Step 1: Apply schema defaults
 	result := ApplyFluxDefaults(schema, userFlux)
@@ -504,7 +504,7 @@ func TestValidateFlux_FileLoadedSchemaRejectsInvalid(t *testing.T) {
 	}
 
 	// Missing required "org" and invalid type for "count"
-	flux := map[string]string{"count": "not-a-number"}
+	flux := map[string]any{"count": "not-a-number"}
 
 	err = ValidateFlux(schema, flux)
 	if err == nil {
@@ -548,7 +548,7 @@ func TestBackwardsCompat_InlineFluxStillWorks(t *testing.T) {
 	}
 
 	// Apply inline schema defaults (backwards compat path)
-	flux := ApplyFluxDefaults(schema, map[string]string{})
+	flux := ApplyFluxDefaults(schema, map[string]any{})
 
 	// Validate with inline schema (since flux.schema.yaml is nil)
 	if err := ValidateFlux(schema, flux); err != nil {

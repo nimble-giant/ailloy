@@ -5,8 +5,8 @@ import (
 	"io/fs"
 	"os"
 
+	"github.com/goccy/go-yaml"
 	"github.com/nimble-giant/ailloy/pkg/safepath"
-	"gopkg.in/yaml.v3"
 )
 
 // Ingot represents an ingot.yaml manifest.

@@ -15,13 +15,13 @@ import (
 // ingots (directory with ingot.yaml) and bare file ingots (name.md).
 type IngotResolver struct {
 	SearchPaths []string
-	Flux        map[string]string
+	Flux        map[string]any
 	Ore         *Ore
 	resolving   map[string]bool
 }
 
 // NewIngotResolver creates a resolver that searches the given paths in order.
-func NewIngotResolver(searchPaths []string, flux map[string]string, ore *Ore) *IngotResolver {
+func NewIngotResolver(searchPaths []string, flux map[string]any, ore *Ore) *IngotResolver {
 	return &IngotResolver{
 		SearchPaths: searchPaths,
 		Flux:        flux,

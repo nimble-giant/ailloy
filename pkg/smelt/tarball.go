@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/goccy/go-yaml"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/safepath"
-	"gopkg.in/yaml.v3"
 )
 
 // PackageTarball packages a mold directory into a .tar.gz archive.
@@ -176,10 +176,10 @@ func generateFluxDefaults(fluxVars []mold.FluxVar) ([]byte, error) {
 		return nil, nil
 	}
 
-	defaults := make(map[string]string)
+	defaults := make(map[string]any)
 	for _, fv := range fluxVars {
 		if fv.Default != "" {
-			defaults[fv.Name] = fv.Default
+			mold.SetNestedValue(defaults, fv.Name, fv.Default)
 		}
 	}
 

@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"dario.cat/mergo"
+	"github.com/goccy/go-yaml"
 )
 
 // OreOption represents a single option within an ore config (e.g., "P0" in Priority)
@@ -50,11 +51,11 @@ type ProjectConfig struct {
 
 // TemplateConfig holds template-related settings
 type TemplateConfig struct {
-	DefaultProvider string            `yaml:"default_provider"`
-	AutoUpdate      bool              `yaml:"auto_update"`
-	Repositories    []string          `yaml:"repositories"`
-	Flux            map[string]string `yaml:"flux"`
-	Ignore          []string          `yaml:"ignore"` // Patterns to exclude from template list
+	DefaultProvider string         `yaml:"default_provider"`
+	AutoUpdate      bool           `yaml:"auto_update"`
+	Repositories    []string       `yaml:"repositories"`
+	Flux            map[string]any `yaml:"flux"`
+	Ignore          []string       `yaml:"ignore"` // Patterns to exclude from template list
 }
 
 // WorkflowConfig holds workflow definitions
@@ -178,7 +179,7 @@ func LoadConfig(global bool) (*Config, error) {
 		defaults := DefaultOre()
 		return &Config{
 			Templates: TemplateConfig{
-				Flux: make(map[string]string),
+				Flux: make(map[string]any),
 			},
 			Ore: defaults,
 		}, nil
@@ -196,7 +197,7 @@ func LoadConfig(global bool) (*Config, error) {
 
 	// Initialize Flux map if nil
 	if config.Templates.Flux == nil {
-		config.Templates.Flux = make(map[string]string)
+		config.Templates.Flux = make(map[string]any)
 	}
 
 	// Initialize ore with defaults for any missing options
@@ -211,7 +212,7 @@ func LoadLayeredConfig(setFlags []string) (*Config, error) {
 	// Layer 1: Start with defaults (includes mold flux defaults)
 	cfg := &Config{
 		Templates: TemplateConfig{
-			Flux: make(map[string]string),
+			Flux: make(map[string]any),
 		},
 		Ore: DefaultOre(),
 	}
@@ -241,19 +242,37 @@ func LoadLayeredConfig(setFlags []string) (*Config, error) {
 		if key == "" {
 			return nil, fmt.Errorf("--set key cannot be empty")
 		}
-		cfg.Templates.Flux[key] = value
+		setNestedValue(cfg.Templates.Flux, key, value)
 	}
 
 	return cfg, nil
 }
 
-// mergeConfig merges source config values into dest.
-// Non-zero source values override dest values; flux maps are merged with source taking precedence.
-func mergeConfig(dest, src *Config) {
-	// Merge flux: source values override dest
-	for k, v := range src.Templates.Flux {
-		dest.Templates.Flux[k] = v
+// setNestedValue sets a value in a nested map using a dotted path.
+// For example, setNestedValue(m, "scm.provider", "GitHub") creates
+// m["scm"] = map[string]any{"provider": "GitHub"}.
+func setNestedValue(m map[string]any, dottedKey string, value string) {
+	segments := strings.Split(dottedKey, ".")
+	current := m
+	for i, seg := range segments {
+		if i == len(segments)-1 {
+			current[seg] = value
+			return
+		}
+		next, ok := current[seg].(map[string]any)
+		if !ok {
+			next = make(map[string]any)
+			current[seg] = next
+		}
+		current = next
 	}
+}
+
+// mergeConfig merges source config values into dest.
+// Non-zero source values override dest values; flux maps are deep-merged with source taking precedence.
+func mergeConfig(dest, src *Config) {
+	// Deep-merge flux: source values override dest
+	mergo.Merge(&dest.Templates.Flux, src.Templates.Flux, mergo.WithOverride) //nolint:errcheck // best-effort merge
 
 	// Merge ore: only override if source has enabled models
 	if src.Ore.Status.Enabled {
@@ -363,8 +382,8 @@ func initOreConfig(ore *OreConfig, defaults *OreConfig) {
 }
 
 // OreToFlux converts ore state into the flat flux variable format that existing templates expect
-func OreToFlux(ore Ore) map[string]string {
-	vars := make(map[string]string)
+func OreToFlux(ore Ore) map[string]any {
+	vars := make(map[string]any)
 
 	if ore.Status.Enabled {
 		if opt, ok := ore.Status.Options["ready"]; ok {
@@ -398,7 +417,7 @@ func OreToFlux(ore Ore) map[string]string {
 func MergeOreFlux(cfg *Config) {
 	oreVars := OreToFlux(cfg.Ore)
 	if cfg.Templates.Flux == nil {
-		cfg.Templates.Flux = make(map[string]string)
+		cfg.Templates.Flux = make(map[string]any)
 	}
 	for key, value := range oreVars {
 		if _, exists := cfg.Templates.Flux[key]; !exists {

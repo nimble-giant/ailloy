@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+
+	"dario.cat/mergo"
 )
 
 // templateVarRefPatterns extract data-path references from templates.
@@ -86,7 +88,7 @@ func preProcessTemplate(content string) string {
 // Simple {{variable}} references are automatically normalised to {{.variable}}
 // before parsing. Unresolved variables produce logged warnings and resolve to
 // empty strings. Returns an error only for template parse/execution failures.
-func ProcessTemplate(content string, flux map[string]string, ore *Ore, opts ...TemplateOption) (string, error) {
+func ProcessTemplate(content string, flux map[string]any, ore *Ore, opts ...TemplateOption) (string, error) {
 	if content == "" {
 		return "", nil
 	}
@@ -127,13 +129,13 @@ func ProcessTemplate(content string, flux map[string]string, ore *Ore, opts ...T
 }
 
 // BuildTemplateData creates the data map passed to Go's text/template.Execute.
-// Flat flux variables are placed at the top level; ore data is nested under "ore".
-func BuildTemplateData(flux map[string]string, ore *Ore) map[string]any {
+// Nested flux variables are deep-merged into the data map; ore data is nested under "ore".
+func BuildTemplateData(flux map[string]any, ore *Ore) map[string]any {
 	data := make(map[string]any)
 
-	// Add flat flux variables at top level
-	for k, v := range flux {
-		data[k] = v
+	// Deep-merge nested flux variables into data
+	if flux != nil {
+		mergo.Merge(&data, flux, mergo.WithOverride) //nolint:errcheck // best-effort merge
 	}
 
 	// Add ore as nested structure (always present so conditionals work)
