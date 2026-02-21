@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nimble-giant/ailloy/pkg/config"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/nimble-giant/ailloy/pkg/templates"
@@ -19,32 +18,28 @@ var castCmd = &cobra.Command{
 	Use:     "cast [mold-dir]",
 	Aliases: []string{"install"},
 	Short:   "Cast Ailloy configuration into a project",
-	Long: `Cast Ailloy configuration into a project or globally (alias: install).
+	Long: `Cast Ailloy configuration into a project (alias: install).
 
-By default, casts the given mold into the current repository.
-Use -g or --global to install user-level configuration instead.`,
+Installs rendered templates from the given mold into the current repository.
+Use -f to layer additional flux value files (Helm-style).`,
 	RunE: runCast,
 }
 
 var (
-	globalInit    bool
 	withWorkflows bool
-	setFlags      []string
+	castSetFlags  []string
+	castValFiles  []string
 )
 
 func init() {
 	rootCmd.AddCommand(castCmd)
 
-	castCmd.Flags().BoolVarP(&globalInit, "global", "g", false, "install user-level configuration instead of project-level")
 	castCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow templates (e.g. Claude Code agent)")
-	castCmd.Flags().StringArrayVar(&setFlags, "set", nil, "override flux variable (format: key=value, can be repeated)")
+	castCmd.Flags().StringArrayVar(&castSetFlags, "set", nil, "override flux variable (format: key=value, can be repeated)")
+	castCmd.Flags().StringArrayVarP(&castValFiles, "values", "f", nil, "flux value files (can be repeated, later files override earlier)")
 }
 
 func runCast(cmd *cobra.Command, args []string) error {
-	if globalInit {
-		return castGlobal()
-	}
-
 	if len(args) < 1 {
 		return fmt.Errorf("mold directory is required: ailloy cast <mold-dir>")
 	}
@@ -56,6 +51,45 @@ func runCast(cmd *cobra.Command, args []string) error {
 	}
 
 	return castProject(reader)
+}
+
+// loadCastFlux loads layered flux values using Helm-style precedence:
+// mold flux.yaml < mold.yaml schema defaults < -f files (left to right) < --set flags
+func loadCastFlux(reader *templates.MoldReader) (map[string]any, error) {
+	// Layer 1: Load mold flux.yaml as base
+	fluxDefaults, err := reader.LoadFluxDefaults()
+	if err != nil {
+		fluxDefaults = make(map[string]any)
+	}
+
+	// Layer 2: Apply mold.yaml schema defaults (backwards compat)
+	manifest, _ := reader.LoadManifest()
+	if manifest != nil && len(manifest.Flux) > 0 {
+		fluxDefaults = mold.ApplyFluxDefaults(manifest.Flux, fluxDefaults)
+	}
+
+	flux := make(map[string]any)
+	for k, v := range fluxDefaults {
+		flux[k] = v
+	}
+
+	// Layer 3: Layer -f files left-to-right (each overrides previous)
+	if len(castValFiles) > 0 {
+		overlay, err := mold.LayerFluxFiles(castValFiles)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range overlay {
+			flux[k] = v
+		}
+	}
+
+	// Layer 4: Apply --set overrides (highest precedence)
+	if err := mold.ApplySetOverrides(flux, castSetFlags); err != nil {
+		return nil, err
+	}
+
+	return flux, nil
 }
 
 func castProject(reader *templates.MoldReader) error {
@@ -142,72 +176,30 @@ func castProject(reader *templates.MoldReader) error {
 	return nil
 }
 
-// loadLayeredFluxConfig loads flux variables and ore config using full layering,
-// including --set flag overrides.
-func loadLayeredFluxConfig() (*config.Config, error) {
-	if len(setFlags) > 0 {
-		return config.LoadLayeredConfig(setFlags)
-	}
-
-	// Standard two-layer merge: project + global
-	cfg, err := config.LoadConfig(false)
-	if err != nil {
-		cfg = &config.Config{
-			Templates: config.TemplateConfig{
-				Flux: make(map[string]any),
-			},
-		}
-	}
-
-	globalCfg, err := config.LoadConfig(true)
-	if err == nil && globalCfg.Templates.Flux != nil {
-		for key, value := range globalCfg.Templates.Flux {
-			if _, exists := cfg.Templates.Flux[key]; !exists {
-				cfg.Templates.Flux[key] = value
-			}
-		}
-	}
-
-	config.MergeOreFlux(cfg)
-	return cfg, nil
-}
-
 // copyTemplateFiles copies markdown template files from the mold to the project directory
 func copyTemplateFiles(reader *templates.MoldReader) error {
 	templateDir := ".claude/commands"
 
-	cfg, err := loadLayeredFluxConfig()
+	flux, err := loadCastFlux(reader)
 	if err != nil {
-		cfg = &config.Config{
-			Templates: config.TemplateConfig{
-				Flux: make(map[string]any),
-			},
-		}
-	}
-
-	// Load manifest and apply flux defaults
-	manifest, _ := reader.LoadManifest()
-	if manifest != nil {
-		cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
-	}
-	if fluxDefaults, err := reader.LoadFluxDefaults(); err == nil {
-		cfg.Templates.Flux = mold.ApplyFluxFileDefaults(fluxDefaults, cfg.Templates.Flux)
+		flux = make(map[string]any)
 	}
 
 	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
+	manifest, _ := reader.LoadManifest()
 	var schema []mold.FluxVar
 	if s, err := reader.LoadFluxSchema(); err == nil && s != nil {
 		schema = s
 	} else if manifest != nil && len(manifest.Flux) > 0 {
 		schema = manifest.Flux
 	}
-	if err := mold.ValidateFlux(schema, cfg.Templates.Flux); err != nil {
+	if err := mold.ValidateFlux(schema, flux); err != nil {
 		log.Printf("warning: %v", err)
 	}
 
 	// Build ingot resolver
-	resolver := buildIngotResolver(cfg)
-	opts := []config.TemplateOption{config.WithIngotResolver(resolver)}
+	resolver := buildIngotResolver(flux)
+	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
 	// Use manifest-driven command list
 	var cmdList []string
@@ -235,8 +227,8 @@ Add your Claude Code command documentation here.
 `, strings.TrimSuffix(templateName, ".md"), strings.TrimSuffix(templateName, ".md")))
 		}
 
-		// Process template variables (with ore-aware rendering)
-		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore, opts...)
+		// Process template variables
+		processedContent, err := mold.ProcessTemplate(string(content), flux, opts...)
 		if err != nil {
 			return fmt.Errorf("failed to process template %s: %w", templateName, err)
 		}
@@ -286,29 +278,17 @@ func copyWorkflowTemplates(reader *templates.MoldReader) error {
 func copySkillFiles(reader *templates.MoldReader) error {
 	skillDir := ".claude/skills"
 
-	cfg, err := loadLayeredFluxConfig()
+	flux, err := loadCastFlux(reader)
 	if err != nil {
-		cfg = &config.Config{
-			Templates: config.TemplateConfig{
-				Flux: make(map[string]any),
-			},
-		}
-	}
-
-	// Load manifest and apply flux defaults
-	manifest, _ := reader.LoadManifest()
-	if manifest != nil {
-		cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
-	}
-	if fluxDefaults, err := reader.LoadFluxDefaults(); err == nil {
-		cfg.Templates.Flux = mold.ApplyFluxFileDefaults(fluxDefaults, cfg.Templates.Flux)
+		flux = make(map[string]any)
 	}
 
 	// Build ingot resolver
-	resolver := buildIngotResolver(cfg)
-	opts := []config.TemplateOption{config.WithIngotResolver(resolver)}
+	resolver := buildIngotResolver(flux)
+	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
 	// Use manifest-driven skill list
+	manifest, _ := reader.LoadManifest()
 	var skillList []string
 	if manifest != nil {
 		skillList = manifest.Skills
@@ -334,8 +314,8 @@ Add your Claude Code skill documentation here.
 `, strings.TrimSuffix(skillName, ".md"), strings.TrimSuffix(skillName, ".md")))
 		}
 
-		// Process template variables (with ore-aware rendering)
-		processedContent, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore, opts...)
+		// Process template variables
+		processedContent, err := mold.ProcessTemplate(string(content), flux, opts...)
 		if err != nil {
 			return fmt.Errorf("failed to process skill %s: %w", skillName, err)
 		}
@@ -349,67 +329,6 @@ Add your Claude Code skill documentation here.
 
 		fmt.Println(styles.SuccessStyle.Render("✅ Created skill: ") + styles.CodeStyle.Render(destPath))
 	}
-
-	return nil
-}
-func castGlobal() error {
-	fmt.Println("Casting global Ailloy configuration...")
-
-	// Get user home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	// Create global .ailloy directory structure
-	globalDir := filepath.Join(homeDir, ".ailloy")
-	dirs := []string{
-		globalDir,
-		filepath.Join(globalDir, "templates"),
-		filepath.Join(globalDir, "providers"),
-	}
-
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0750); err != nil { // #nosec G301 -- User config directories need group read access
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
-		}
-		fmt.Printf("Created directory: %s\n", dir)
-	}
-
-	// Create global configuration
-	configPath := filepath.Join(globalDir, "ailloy.yaml")
-	configContent := `# Ailloy Global Configuration
-user:
-  name: ""
-  email: ""
-
-providers:
-  claude:
-    enabled: true
-    api_key_env: "ANTHROPIC_API_KEY"
-
-  gpt:
-    enabled: false
-    api_key_env: "OPENAI_API_KEY"
-
-templates:
-  auto_update: true
-  repositories:
-    - "https://github.com/nimble-giant/ailloy-templates"
-
-preferences:
-  default_provider: "claude"
-  verbose_output: false
-`
-
-	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil { // User config - restricted permissions
-		return fmt.Errorf("failed to create global config file: %w", err)
-	}
-	fmt.Printf("Created global configuration: %s\n", configPath)
-
-	fmt.Println("\n✅ Global casting complete!")
-	fmt.Printf("Configuration stored in: %s\n", globalDir)
-	fmt.Println("Edit the configuration files to set up your AI providers and preferences.")
 
 	return nil
 }

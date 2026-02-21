@@ -1,6 +1,8 @@
 package mold
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -560,5 +562,300 @@ func TestBackwardsCompat_InlineFluxStillWorks(t *testing.T) {
 	}
 	if flux["board"] != "Engineering" {
 		t.Errorf("expected board=Engineering, got %q", flux["board"])
+	}
+}
+
+// --- LayerFluxFiles tests ---
+
+func TestLayerFluxFiles_SingleFile(t *testing.T) {
+	dir := t.TempDir()
+	f1 := filepath.Join(dir, "values.yaml")
+	if err := os.WriteFile(f1, []byte("org: acme\nboard: Engineering\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := LayerFluxFiles([]string{f1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result["org"] != "acme" {
+		t.Errorf("expected org=acme, got %v", result["org"])
+	}
+	if result["board"] != "Engineering" {
+		t.Errorf("expected board=Engineering, got %v", result["board"])
+	}
+}
+
+func TestLayerFluxFiles_OverrideLaterFile(t *testing.T) {
+	dir := t.TempDir()
+	f1 := filepath.Join(dir, "base.yaml")
+	f2 := filepath.Join(dir, "override.yaml")
+	if err := os.WriteFile(f1, []byte("org: acme\nboard: Engineering\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f2, []byte("board: Product\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := LayerFluxFiles([]string{f1, f2})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result["org"] != "acme" {
+		t.Errorf("expected org=acme, got %v", result["org"])
+	}
+	if result["board"] != "Product" {
+		t.Errorf("expected board=Product (override), got %v", result["board"])
+	}
+}
+
+func TestLayerFluxFiles_NestedOverride(t *testing.T) {
+	dir := t.TempDir()
+	f1 := filepath.Join(dir, "base.yaml")
+	f2 := filepath.Join(dir, "ore.yaml")
+	if err := os.WriteFile(f1, []byte("ore:\n  status:\n    enabled: false\n    field_id: \"\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f2, []byte("ore:\n  status:\n    enabled: true\n    field_id: \"PVTSSF_abc\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := LayerFluxFiles([]string{f1, f2})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ore, ok := result["ore"].(map[string]any)
+	if !ok {
+		t.Fatal("expected ore to be a map")
+	}
+	status, ok := ore["status"].(map[string]any)
+	if !ok {
+		t.Fatal("expected status to be a map")
+	}
+	if status["enabled"] != true {
+		t.Errorf("expected enabled=true, got %v", status["enabled"])
+	}
+	if status["field_id"] != "PVTSSF_abc" {
+		t.Errorf("expected field_id=PVTSSF_abc, got %v", status["field_id"])
+	}
+}
+
+func TestLayerFluxFiles_EmptyPaths(t *testing.T) {
+	result, err := LayerFluxFiles(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected empty map, got %v", result)
+	}
+}
+
+func TestLayerFluxFiles_MissingFileError(t *testing.T) {
+	_, err := LayerFluxFiles([]string{"/nonexistent/file.yaml"})
+	if err == nil {
+		t.Fatal("expected error for missing file")
+	}
+}
+
+// --- ApplySetOverrides tests ---
+
+func TestApplySetOverrides_Simple(t *testing.T) {
+	flux := map[string]any{"board": "Engineering"}
+	err := ApplySetOverrides(flux, []string{"board=Product"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if flux["board"] != "Product" {
+		t.Errorf("expected board=Product, got %v", flux["board"])
+	}
+}
+
+func TestApplySetOverrides_DottedPath(t *testing.T) {
+	flux := map[string]any{}
+	err := ApplySetOverrides(flux, []string{"scm.provider=GitLab"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	scm, ok := flux["scm"].(map[string]any)
+	if !ok {
+		t.Fatal("expected scm to be a map")
+	}
+	if scm["provider"] != "GitLab" {
+		t.Errorf("expected provider=GitLab, got %v", scm["provider"])
+	}
+}
+
+func TestApplySetOverrides_MultipleFlags(t *testing.T) {
+	flux := map[string]any{}
+	err := ApplySetOverrides(flux, []string{"org=acme", "board=Product", "scm.provider=GitLab"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if flux["org"] != "acme" {
+		t.Errorf("expected org=acme, got %v", flux["org"])
+	}
+	if flux["board"] != "Product" {
+		t.Errorf("expected board=Product, got %v", flux["board"])
+	}
+}
+
+func TestApplySetOverrides_InvalidFormat(t *testing.T) {
+	flux := map[string]any{}
+	err := ApplySetOverrides(flux, []string{"no-equals-sign"})
+	if err == nil {
+		t.Fatal("expected error for invalid format")
+	}
+	if !strings.Contains(err.Error(), "invalid --set format") {
+		t.Errorf("expected format error, got: %v", err)
+	}
+}
+
+func TestApplySetOverrides_EmptyKey(t *testing.T) {
+	flux := map[string]any{}
+	err := ApplySetOverrides(flux, []string{"=value"})
+	if err == nil {
+		t.Fatal("expected error for empty key")
+	}
+	if !strings.Contains(err.Error(), "key cannot be empty") {
+		t.Errorf("expected empty key error, got: %v", err)
+	}
+}
+
+func TestApplySetOverrides_ValueWithEquals(t *testing.T) {
+	flux := map[string]any{}
+	err := ApplySetOverrides(flux, []string{"key=a=b=c"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if flux["key"] != "a=b=c" {
+		t.Errorf("expected key=a=b=c, got %v", flux["key"])
+	}
+}
+
+// --- GetNestedAny tests ---
+
+func TestGetNestedAny_String(t *testing.T) {
+	m := map[string]any{"org": "acme"}
+	val, ok := GetNestedAny(m, "org")
+	if !ok {
+		t.Fatal("expected key to be found")
+	}
+	if val != "acme" {
+		t.Errorf("expected acme, got %v", val)
+	}
+}
+
+func TestGetNestedAny_Bool(t *testing.T) {
+	m := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{"enabled": true},
+		},
+	}
+	val, ok := GetNestedAny(m, "ore.status.enabled")
+	if !ok {
+		t.Fatal("expected key to be found")
+	}
+	if val != true {
+		t.Errorf("expected true, got %v", val)
+	}
+}
+
+func TestGetNestedAny_Map(t *testing.T) {
+	m := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{
+				"options": map[string]any{
+					"ready": map[string]any{"label": "Ready"},
+				},
+			},
+		},
+	}
+	val, ok := GetNestedAny(m, "ore.status.options")
+	if !ok {
+		t.Fatal("expected key to be found")
+	}
+	opts, ok := val.(map[string]any)
+	if !ok {
+		t.Fatal("expected map")
+	}
+	ready, ok := opts["ready"].(map[string]any)
+	if !ok {
+		t.Fatal("expected ready map")
+	}
+	if ready["label"] != "Ready" {
+		t.Errorf("expected Ready, got %v", ready["label"])
+	}
+}
+
+func TestGetNestedAny_Missing(t *testing.T) {
+	m := map[string]any{"org": "acme"}
+	_, ok := GetNestedAny(m, "missing")
+	if ok {
+		t.Error("expected key to not be found")
+	}
+}
+
+func TestGetNestedAny_PartialPath(t *testing.T) {
+	m := map[string]any{
+		"ore": map[string]any{},
+	}
+	_, ok := GetNestedAny(m, "ore.status.enabled")
+	if ok {
+		t.Error("expected partial path to not be found")
+	}
+}
+
+// --- SetNestedAny tests ---
+
+func TestSetNestedAny_TopLevel(t *testing.T) {
+	m := map[string]any{}
+	SetNestedAny(m, "org", "acme")
+	if m["org"] != "acme" {
+		t.Errorf("expected org=acme, got %v", m["org"])
+	}
+}
+
+func TestSetNestedAny_Nested(t *testing.T) {
+	m := map[string]any{}
+	SetNestedAny(m, "ore.status.enabled", true)
+	ore, ok := m["ore"].(map[string]any)
+	if !ok {
+		t.Fatal("expected ore to be a map")
+	}
+	status, ok := ore["status"].(map[string]any)
+	if !ok {
+		t.Fatal("expected status to be a map")
+	}
+	if status["enabled"] != true {
+		t.Errorf("expected enabled=true, got %v", status["enabled"])
+	}
+}
+
+func TestSetNestedAny_OverwriteExisting(t *testing.T) {
+	m := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{"enabled": false},
+		},
+	}
+	SetNestedAny(m, "ore.status.enabled", true)
+	ore := m["ore"].(map[string]any)
+	status := ore["status"].(map[string]any)
+	if status["enabled"] != true {
+		t.Errorf("expected enabled=true after overwrite, got %v", status["enabled"])
+	}
+}
+
+func TestSetNestedAny_MapValue(t *testing.T) {
+	m := map[string]any{}
+	opts := map[string]any{
+		"ready": map[string]any{"label": "Ready", "id": "opt_1"},
+	}
+	SetNestedAny(m, "ore.status.options", opts)
+	ore := m["ore"].(map[string]any)
+	status := ore["status"].(map[string]any)
+	statusOpts := status["options"].(map[string]any)
+	ready := statusOpts["ready"].(map[string]any)
+	if ready["label"] != "Ready" {
+		t.Errorf("expected Ready, got %v", ready["label"])
 	}
 }

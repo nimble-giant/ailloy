@@ -63,3 +63,43 @@ api:
 auth:
   check: "gh auth status"
   login: "gh auth login"
+
+ore:
+  status:
+    enabled: false
+    field_mapping: ""
+    field_id: ""
+    options:
+      ready:
+        label: "Ready"
+        id: ""
+      in_progress:
+        label: "In Progress"
+        id: ""
+      in_review:
+        label: "In Review"
+        id: ""
+      done:
+        label: "Done"
+        id: ""
+  priority:
+    enabled: false
+    field_mapping: ""
+    field_id: ""
+    options:
+      p0:
+        label: "P0"
+        id: ""
+      p1:
+        label: "P1"
+        id: ""
+      p2:
+        label: "P2"
+        id: ""
+      p3:
+        label: "P3"
+        id: ""
+  iteration:
+    enabled: false
+    field_mapping: ""
+    field_id: ""

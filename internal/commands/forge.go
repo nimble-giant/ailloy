@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nimble-giant/ailloy/pkg/config"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/nimble-giant/ailloy/pkg/templates"
@@ -29,6 +28,7 @@ By default, rendered output is printed to stdout. Use --output to write files to
 var (
 	forgeOutputDir string
 	forgeSetValues []string
+	forgeValFiles  []string
 )
 
 func init() {
@@ -36,46 +36,51 @@ func init() {
 
 	forgeCmd.Flags().StringVarP(&forgeOutputDir, "output", "o", "", "write rendered files to this directory instead of stdout")
 	forgeCmd.Flags().StringArrayVar(&forgeSetValues, "set", nil, "set flux values (key=value)")
+	forgeCmd.Flags().StringArrayVarP(&forgeValFiles, "values", "f", nil, "flux value files (can be repeated, later files override earlier)")
 }
 
-// loadForgeConfig loads the layered config identical to cast, then applies --set overrides.
-func loadForgeConfig(setValues []string) (*config.Config, error) {
-	cfg, err := config.LoadConfig(false)
+// loadForgeFlux loads layered flux values using Helm-style precedence:
+// mold flux.yaml < mold.yaml schema defaults < -f files (left to right) < --set flags
+func loadForgeFlux(reader *templates.MoldReader) (map[string]any, error) {
+	// Layer 1: Load mold flux.yaml as base
+	fluxDefaults, err := reader.LoadFluxDefaults()
 	if err != nil {
-		cfg = &config.Config{
-			Templates: config.TemplateConfig{
-				Flux: make(map[string]any),
-			},
+		fluxDefaults = make(map[string]any)
+	}
+
+	// Layer 2: Apply mold.yaml schema defaults (backwards compat)
+	manifest, _ := reader.LoadManifest()
+	if manifest != nil && len(manifest.Flux) > 0 {
+		fluxDefaults = mold.ApplyFluxDefaults(manifest.Flux, fluxDefaults)
+	}
+
+	flux := make(map[string]any)
+	for k, v := range fluxDefaults {
+		flux[k] = v
+	}
+
+	// Layer 3: Layer -f files left-to-right (each overrides previous)
+	if len(forgeValFiles) > 0 {
+		overlay, err := mold.LayerFluxFiles(forgeValFiles)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range overlay {
+			flux[k] = v
 		}
 	}
 
-	globalCfg, err := config.LoadConfig(true)
-	if err == nil && globalCfg.Templates.Flux != nil {
-		// Deep-merge global flux (fills gaps only, does not override existing)
-		for key, value := range globalCfg.Templates.Flux {
-			if _, exists := cfg.Templates.Flux[key]; !exists {
-				cfg.Templates.Flux[key] = value
-			}
-		}
+	// Layer 4: Apply --set overrides (highest precedence)
+	if err := mold.ApplySetOverrides(flux, forgeSetValues); err != nil {
+		return nil, err
 	}
 
-	config.MergeOreFlux(cfg)
-
-	// Apply --set overrides (highest precedence)
-	for _, kv := range setValues {
-		key, value, ok := strings.Cut(kv, "=")
-		if !ok {
-			return nil, fmt.Errorf("invalid --set value %q: expected key=value", kv)
-		}
-		mold.SetNestedValue(cfg.Templates.Flux, key, value)
-	}
-
-	return cfg, nil
+	return flux, nil
 }
 
 // renderFile processes a single template and returns the rendered content.
-func renderFile(name string, content []byte, cfg *config.Config, opts ...config.TemplateOption) (string, error) {
-	rendered, err := config.ProcessTemplate(string(content), cfg.Templates.Flux, &cfg.Ore, opts...)
+func renderFile(name string, content []byte, flux map[string]any, opts ...mold.TemplateOption) (string, error) {
+	rendered, err := mold.ProcessTemplate(string(content), flux, opts...)
 	if err != nil {
 		return "", fmt.Errorf("template %s: %w", name, err)
 	}
@@ -95,7 +100,7 @@ func runForge(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cfg, err := loadForgeConfig(forgeSetValues)
+	flux, err := loadForgeFlux(reader)
 	if err != nil {
 		return err
 	}
@@ -105,27 +110,18 @@ func runForge(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load mold manifest: %w", err)
 	}
 
-	// Apply flux defaults: mold.yaml schema defaults (backwards compat), then flux.yaml
-	cfg.Templates.Flux = mold.ApplyFluxDefaults(manifest.Flux, cfg.Templates.Flux)
-	if fluxDefaults, err := reader.LoadFluxDefaults(); err == nil {
-		cfg.Templates.Flux = mold.ApplyFluxFileDefaults(fluxDefaults, cfg.Templates.Flux)
-	}
-
 	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
 	schema, _ := reader.LoadFluxSchema()
 	if schema == nil && len(manifest.Flux) > 0 {
 		schema = manifest.Flux
 	}
-	if err := mold.ValidateFlux(schema, cfg.Templates.Flux); err != nil {
+	if err := mold.ValidateFlux(schema, flux); err != nil {
 		log.Printf("warning: %v", err)
 	}
 
-	// Build ingot resolver with search paths:
-	// 1. Current directory (mold-local)
-	// 2. Project .ailloy/
-	// 3. Global ~/.ailloy/
-	resolver := buildIngotResolver(cfg)
-	opts := []config.TemplateOption{config.WithIngotResolver(resolver)}
+	// Build ingot resolver
+	resolver := buildIngotResolver(flux)
+	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
 	var files []renderedFile
 
@@ -135,7 +131,7 @@ func runForge(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("reading command template %s: %w", name, err)
 		}
-		rendered, err := renderFile(name, content, cfg, opts...)
+		rendered, err := renderFile(name, content, flux, opts...)
 		if err != nil {
 			return err
 		}
@@ -151,7 +147,7 @@ func runForge(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("reading skill template %s: %w", name, err)
 		}
-		rendered, err := renderFile(name, content, cfg, opts...)
+		rendered, err := renderFile(name, content, flux, opts...)
 		if err != nil {
 			return err
 		}
@@ -181,7 +177,7 @@ func runForge(cmd *cobra.Command, args []string) error {
 
 // buildIngotResolver creates an IngotResolver with the standard search path order:
 // current directory (mold-local), project .ailloy/, global ~/.ailloy/.
-func buildIngotResolver(cfg *config.Config) *config.IngotResolver {
+func buildIngotResolver(flux map[string]any) *mold.IngotResolver {
 	searchPaths := []string{"."}
 
 	if _, err := os.Stat(".ailloy"); err == nil {
@@ -195,7 +191,7 @@ func buildIngotResolver(cfg *config.Config) *config.IngotResolver {
 		}
 	}
 
-	return config.NewIngotResolver(searchPaths, cfg.Templates.Flux, &cfg.Ore)
+	return mold.NewIngotResolver(searchPaths, flux)
 }
 
 func printForgeFiles(files []renderedFile) error {

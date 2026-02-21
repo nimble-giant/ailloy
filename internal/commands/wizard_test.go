@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nimble-giant/ailloy/pkg/config"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
 func TestParseCustomVars_ValidInput(t *testing.T) {
@@ -64,119 +64,53 @@ func TestParseCustomVars_ValueWithEquals(t *testing.T) {
 	}
 }
 
-func TestBuildCustomVarsText_ExcludesManagedVars(t *testing.T) {
-	cfg := &config.Config{
-		Templates: config.TemplateConfig{
-			Flux: map[string]any{
-				"default_board":      "Engineering",
-				"organization":       "acme",
-				"project_id":         "PVT_123",
-				"custom_var":         "custom_value",
-				"another_custom_var": "another_value",
-			},
-		},
-	}
-
-	got := buildCustomVarsText(cfg)
-	if strings.Contains(got, "default_board") {
-		t.Error("should exclude managed var default_board")
-	}
-	if strings.Contains(got, "organization") {
-		t.Error("should exclude managed var organization")
-	}
-	if strings.Contains(got, "project_id") {
-		t.Error("should exclude managed var project_id")
-	}
-	if !strings.Contains(got, "custom_var=custom_value") {
-		t.Error("should include custom_var")
-	}
-	if !strings.Contains(got, "another_custom_var=another_value") {
-		t.Error("should include another_custom_var")
-	}
-}
-
-func TestBuildSummaryDiff_NewValues(t *testing.T) {
-	origVars := map[string]string{}
-	origOre := oreSnapshot{}
-
-	got := buildSummaryDiff(
-		origVars, origOre,
+func TestBuildSummaryPreview_WithValues(t *testing.T) {
+	got := buildSummaryPreview(
 		"Engineering", "acme",
 		[]string{"status", "priority"},
 		"PVTSSF_1", "", "",
 		"",
 	)
 
-	if !strings.Contains(got, "+ default_board: Engineering") {
-		t.Error("expected new default_board in diff")
+	if !strings.Contains(got, "project.board: Engineering") {
+		t.Error("expected project.board in preview")
 	}
-	if !strings.Contains(got, "+ organization: acme") {
-		t.Error("expected new organization in diff")
+	if !strings.Contains(got, "project.organization: acme") {
+		t.Error("expected project.organization in preview")
 	}
-	if !strings.Contains(got, "+ Status ore: enabled") {
+	if !strings.Contains(got, "ore.status.enabled: enabled") {
 		t.Error("expected status ore enabled")
 	}
-	if !strings.Contains(got, "+ Priority ore: enabled") {
+	if !strings.Contains(got, "ore.priority.enabled: enabled") {
 		t.Error("expected priority ore enabled")
 	}
-	if !strings.Contains(got, "Iteration ore: disabled (unchanged)") {
-		t.Error("expected iteration ore unchanged")
+	if !strings.Contains(got, "ore.iteration.enabled: disabled") {
+		t.Error("expected iteration ore disabled")
+	}
+	if !strings.Contains(got, "ore.status.field_id: PVTSSF_1") {
+		t.Error("expected status field ID")
 	}
 }
 
-func TestBuildSummaryDiff_ChangedValues(t *testing.T) {
-	origVars := map[string]string{
-		"default_board": "OldBoard",
-		"organization":  "oldorg",
-	}
-	origOre := oreSnapshot{
-		StatusEnabled: true,
-	}
-
-	got := buildSummaryDiff(
-		origVars, origOre,
-		"NewBoard", "neworg",
-		[]string{"status"},
+func TestBuildSummaryPreview_Empty(t *testing.T) {
+	got := buildSummaryPreview(
+		"", "",
+		nil,
 		"", "", "",
 		"",
 	)
 
-	if !strings.Contains(got, "~ default_board: OldBoard -> NewBoard") {
-		t.Error("expected changed default_board in diff")
+	if !strings.Contains(got, "Flux values to write") {
+		t.Error("expected header")
 	}
-	if !strings.Contains(got, "~ organization: oldorg -> neworg") {
-		t.Error("expected changed organization in diff")
-	}
-	if !strings.Contains(got, "Status ore: enabled (unchanged)") {
-		t.Error("expected status unchanged")
+	// All ore should be disabled
+	if !strings.Contains(got, "ore.status.enabled: disabled") {
+		t.Error("expected status disabled")
 	}
 }
 
-func TestBuildSummaryDiff_UnchangedValues(t *testing.T) {
-	origVars := map[string]string{
-		"default_board": "Board",
-		"organization":  "org",
-	}
-	origOre := oreSnapshot{
-		StatusEnabled: true,
-	}
-
-	got := buildSummaryDiff(
-		origVars, origOre,
-		"Board", "org",
-		[]string{"status"},
-		"", "", "",
-		"",
-	)
-
-	if !strings.Contains(got, "default_board: Board (unchanged)") {
-		t.Error("expected unchanged default_board")
-	}
-}
-
-func TestBuildSummaryDiff_CustomVars(t *testing.T) {
-	got := buildSummaryDiff(
-		map[string]string{}, oreSnapshot{},
+func TestBuildSummaryPreview_CustomVars(t *testing.T) {
+	got := buildSummaryPreview(
 		"", "",
 		nil,
 		"", "", "",
@@ -186,7 +120,7 @@ func TestBuildSummaryDiff_CustomVars(t *testing.T) {
 	if !strings.Contains(got, "Custom variables:") {
 		t.Error("expected custom variables section")
 	}
-	if !strings.Contains(got, "reviewer = alice") {
+	if !strings.Contains(got, "reviewer: alice") {
 		t.Error("expected reviewer custom var")
 	}
 }
@@ -250,45 +184,6 @@ func TestParseBoardID(t *testing.T) {
 	}
 }
 
-func TestSnapshotVars(t *testing.T) {
-	cfg := &config.Config{
-		Templates: config.TemplateConfig{
-			Flux: map[string]any{"a": "1", "b": "2"},
-		},
-	}
-
-	snap := snapshotVars(cfg)
-
-	// Modify original
-	cfg.Templates.Flux["a"] = "changed"
-
-	// Snapshot should be unaffected
-	if snap["a"] != "1" {
-		t.Error("snapshot should be independent of original")
-	}
-}
-
-func TestSnapshotOre(t *testing.T) {
-	cfg := &config.Config{
-		Ore: config.Ore{
-			Status:   config.OreConfig{Enabled: true, FieldID: "f1"},
-			Priority: config.OreConfig{Enabled: false},
-		},
-	}
-
-	snap := snapshotOre(cfg)
-
-	if !snap.StatusEnabled {
-		t.Error("expected status enabled")
-	}
-	if snap.PriorityEnabled {
-		t.Error("expected priority disabled")
-	}
-	if snap.StatusFieldID != "f1" {
-		t.Errorf("expected f1, got %s", snap.StatusFieldID)
-	}
-}
-
 func TestAilloyTheme_NotNil(t *testing.T) {
 	theme := ailloyTheme()
 	if theme == nil {
@@ -297,14 +192,9 @@ func TestAilloyTheme_NotNil(t *testing.T) {
 }
 
 func TestApplyWizardResults_BasicVars(t *testing.T) {
-	cfg := &config.Config{
-		Templates: config.TemplateConfig{
-			Flux: make(map[string]any),
-		},
-		Ore: config.DefaultOre(),
-	}
+	flux := make(map[string]any)
 
-	applyWizardResults(cfg,
+	applyWizardResults(flux,
 		"Engineering", "acme",
 		[]string{"status", "priority"},
 		"", "", "",
@@ -312,35 +202,36 @@ func TestApplyWizardResults_BasicVars(t *testing.T) {
 		false, "", nil,
 	)
 
-	if cfg.Templates.Flux["default_board"] != "Engineering" {
-		t.Error("expected default_board to be set")
+	boardVal, ok := mold.GetNestedAny(flux, "project.board")
+	if !ok || boardVal != "Engineering" {
+		t.Error("expected project.board to be set")
 	}
-	if cfg.Templates.Flux["organization"] != "acme" {
-		t.Error("expected organization to be set")
+	orgVal, ok := mold.GetNestedAny(flux, "project.organization")
+	if !ok || orgVal != "acme" {
+		t.Error("expected project.organization to be set")
 	}
-	if !cfg.Ore.Status.Enabled {
+	statusEnabled, ok := mold.GetNestedAny(flux, "ore.status.enabled")
+	if !ok || statusEnabled != true {
 		t.Error("expected status ore enabled")
 	}
-	if !cfg.Ore.Priority.Enabled {
+	priorityEnabled, ok := mold.GetNestedAny(flux, "ore.priority.enabled")
+	if !ok || priorityEnabled != true {
 		t.Error("expected priority ore enabled")
 	}
-	if cfg.Ore.Iteration.Enabled {
+	iterEnabled, ok := mold.GetNestedAny(flux, "ore.iteration.enabled")
+	if !ok || iterEnabled != false {
 		t.Error("expected iteration ore disabled")
 	}
-	if cfg.Templates.Flux["custom_key"] != "custom_val" {
+	customVal, ok := mold.GetNestedAny(flux, "custom_key")
+	if !ok || customVal != "custom_val" {
 		t.Error("expected custom_key to be set")
 	}
 }
 
 func TestApplyWizardResults_ProjectID(t *testing.T) {
-	cfg := &config.Config{
-		Templates: config.TemplateConfig{
-			Flux: make(map[string]any),
-		},
-		Ore: config.DefaultOre(),
-	}
+	flux := make(map[string]any)
 
-	applyWizardResults(cfg,
+	applyWizardResults(flux,
 		"", "",
 		nil,
 		"", "", "",
@@ -348,7 +239,46 @@ func TestApplyWizardResults_ProjectID(t *testing.T) {
 		true, "5:PVT_abc123", nil,
 	)
 
-	if cfg.Templates.Flux["project_id"] != "PVT_abc123" {
-		t.Errorf("expected project_id PVT_abc123, got %q", cfg.Templates.Flux["project_id"])
+	projectID, ok := mold.GetNestedAny(flux, "project.id")
+	if !ok || projectID != "PVT_abc123" {
+		t.Errorf("expected project.id PVT_abc123, got %v", projectID)
+	}
+}
+
+func TestGetFluxString(t *testing.T) {
+	flux := map[string]any{
+		"project": map[string]any{
+			"board": "Engineering",
+		},
+	}
+
+	val, ok := getFluxString(flux, "project.board")
+	if !ok || val != "Engineering" {
+		t.Errorf("expected Engineering, got %q", val)
+	}
+
+	_, ok = getFluxString(flux, "missing.path")
+	if ok {
+		t.Error("expected missing path to return false")
+	}
+}
+
+func TestGetFluxBool(t *testing.T) {
+	flux := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{
+				"enabled": true,
+			},
+		},
+	}
+
+	val, ok := getFluxBool(flux, "ore.status.enabled")
+	if !ok || !val {
+		t.Error("expected true")
+	}
+
+	_, ok = getFluxBool(flux, "missing.path")
+	if ok {
+		t.Error("expected missing path to return false")
 	}
 }

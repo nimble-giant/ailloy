@@ -1,4 +1,4 @@
-package config
+package mold
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/safepath"
 )
 
@@ -16,16 +15,14 @@ import (
 type IngotResolver struct {
 	SearchPaths []string
 	Flux        map[string]any
-	Ore         *Ore
 	resolving   map[string]bool
 }
 
 // NewIngotResolver creates a resolver that searches the given paths in order.
-func NewIngotResolver(searchPaths []string, flux map[string]any, ore *Ore) *IngotResolver {
+func NewIngotResolver(searchPaths []string, flux map[string]any) *IngotResolver {
 	return &IngotResolver{
 		SearchPaths: searchPaths,
 		Flux:        flux,
-		Ore:         ore,
 		resolving:   make(map[string]bool),
 	}
 }
@@ -33,7 +30,7 @@ func NewIngotResolver(searchPaths []string, flux map[string]any, ore *Ore) *Ingo
 // Resolve finds and renders an ingot by name. It searches each path for a
 // directory with an ingot.yaml manifest first, then falls back to a bare .md file.
 // The ingot content is rendered through the same template engine with the same
-// flux and ore context. Circular references are detected and reported as errors.
+// flux context. Circular references are detected and reported as errors.
 func (r *IngotResolver) Resolve(name string) (string, error) {
 	if r.resolving[name] {
 		return "", fmt.Errorf("circular ingot reference detected: %s", name)
@@ -74,7 +71,7 @@ func (r *IngotResolver) resolveManifest(manifestPath, name string) (string, erro
 		return "", err
 	}
 
-	ingot, err := mold.ParseIngot(data)
+	ingot, err := ParseIngot(data)
 	if err != nil {
 		return "", fmt.Errorf("parsing ingot %q manifest: %w", name, err)
 	}
@@ -107,5 +104,5 @@ func (r *IngotResolver) readFile(path string) ([]byte, error) {
 
 // render processes ingot content through the template engine with the same context.
 func (r *IngotResolver) render(content string) (string, error) {
-	return ProcessTemplate(content, r.Flux, r.Ore, WithIngotResolver(r))
+	return ProcessTemplate(content, r.Flux, WithIngotResolver(r))
 }

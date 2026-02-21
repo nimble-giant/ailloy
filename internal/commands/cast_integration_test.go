@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nimble-giant/ailloy/pkg/config"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/templates"
 )
@@ -110,22 +109,20 @@ func TestIntegration_CopyTemplateFiles_WithVariableSubstitution(t *testing.T) {
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("failed to chdir: %v", err)
 	}
-	defer func() { _ = os.Chdir(origDir) }()
+	defer func() {
+		castValFiles = nil
+		_ = os.Chdir(origDir)
+	}()
 
 	reader := testMoldReader(t)
 
-	// Create config with flux variables
-	cfg := &config.Config{
-		Templates: config.TemplateConfig{
-			Flux: map[string]any{
-				"organization":  "test-org",
-				"default_board": "TestBoard",
-			},
-		},
+	// Create a flux values file with overrides
+	valuesContent := "project:\n  organization: test-org\n  board: TestBoard\n"
+	valuesPath := filepath.Join(tmpDir, "values.yaml")
+	if err := os.WriteFile(valuesPath, []byte(valuesContent), 0644); err != nil {
+		t.Fatalf("failed to write values file: %v", err)
 	}
-	if err := config.SaveConfig(cfg, false); err != nil {
-		t.Fatalf("failed to save config: %v", err)
-	}
+	castValFiles = []string{valuesPath}
 
 	// Create directory structure
 	if err := os.MkdirAll(".claude/commands", 0750); err != nil {
@@ -207,12 +204,7 @@ func TestIntegration_TemplateFilesMatchMold(t *testing.T) {
 			continue
 		}
 
-		defaultOre := config.DefaultOre()
-		expectedContent, err := config.ProcessTemplate(
-			string(moldContent),
-			flux,
-			&defaultOre,
-		)
+		expectedContent, err := mold.ProcessTemplate(string(moldContent), flux)
 		if err != nil {
 			t.Errorf("failed to process template %s: %v", tmplName, err)
 			continue
@@ -237,12 +229,7 @@ func TestIntegration_TemplateFilesMatchMold(t *testing.T) {
 			continue
 		}
 
-		defaultOre := config.DefaultOre()
-		expectedContent, err := config.ProcessTemplate(
-			string(moldContent),
-			flux,
-			&defaultOre,
-		)
+		expectedContent, err := mold.ProcessTemplate(string(moldContent), flux)
 		if err != nil {
 			t.Errorf("failed to process skill %s: %v", skillName, err)
 			continue
