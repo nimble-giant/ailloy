@@ -7,15 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nimble-giant/ailloy/pkg/templates"
+	"github.com/nimble-giant/ailloy/pkg/blanks"
 )
 
-// Generator handles the generation of Claude Code plugins from Ailloy templates
+// Generator handles the generation of Claude Code plugins from Ailloy blanks
 type Generator struct {
 	OutputDir string
 	Config    *Config
-	reader    *templates.MoldReader
-	commands  []TemplateInfo
+	reader    *blanks.MoldReader
+	commands  []BlankInfo
 }
 
 // Config represents the plugin configuration
@@ -33,15 +33,15 @@ type Author struct {
 	URL   string `json:"url"`
 }
 
-// TemplateInfo holds information about a template
-type TemplateInfo struct {
+// BlankInfo holds information about a blank
+type BlankInfo struct {
 	Name        string
 	Description string
 	Content     []byte
 }
 
 // NewGenerator creates a new plugin generator
-func NewGenerator(outputDir string, reader *templates.MoldReader) *Generator {
+func NewGenerator(outputDir string, reader *blanks.MoldReader) *Generator {
 	return &Generator{
 		OutputDir: outputDir,
 		reader:    reader,
@@ -50,9 +50,9 @@ func NewGenerator(outputDir string, reader *templates.MoldReader) *Generator {
 
 // Generate creates the complete plugin structure
 func (g *Generator) Generate() error {
-	// Load all templates
-	if err := g.loadTemplates(); err != nil {
-		return fmt.Errorf("failed to load templates: %w", err)
+	// Load all blanks
+	if err := g.loadBlanks(); err != nil {
+		return fmt.Errorf("failed to load blanks: %w", err)
 	}
 
 	// Create directory structure
@@ -88,24 +88,24 @@ func (g *Generator) Generate() error {
 	return nil
 }
 
-// loadTemplates loads all templates from the mold reader
-func (g *Generator) loadTemplates() error {
-	templateList, err := g.reader.ListTemplates()
+// loadBlanks loads all blanks from the mold reader
+func (g *Generator) loadBlanks() error {
+	blankList, err := g.reader.ListBlanks()
 	if err != nil {
 		return err
 	}
 
-	for _, tmplName := range templateList {
-		content, err := g.reader.GetTemplate(tmplName)
+	for _, blankName := range blankList {
+		content, err := g.reader.GetBlank(blankName)
 		if err != nil {
-			return fmt.Errorf("failed to load template %s: %w", tmplName, err)
+			return fmt.Errorf("failed to load blank %s: %w", blankName, err)
 		}
 
 		// Extract description from content
 		desc := extractDescription(content)
 
-		g.commands = append(g.commands, TemplateInfo{
-			Name:        strings.TrimSuffix(tmplName, ".md"),
+		g.commands = append(g.commands, BlankInfo{
+			Name:        strings.TrimSuffix(blankName, ".md"),
 			Description: desc,
 			Content:     content,
 		})
@@ -155,15 +155,15 @@ func (g *Generator) generateManifest() error {
 	return os.WriteFile(manifestPath, data, 0644) // #nosec G306 -- Plugin manifest needs to be readable
 }
 
-// generateCommands transforms templates into Claude Code commands
+// generateCommands transforms blanks into Claude Code commands
 func (g *Generator) generateCommands() error {
 	transformer := NewTransformer()
 
 	for _, tmpl := range g.commands {
-		// Transform template to command format
+		// Transform blank to command format
 		command, err := transformer.Transform(tmpl)
 		if err != nil {
-			return fmt.Errorf("failed to transform template %s: %w", tmpl.Name, err)
+			return fmt.Errorf("failed to transform blank %s: %w", tmpl.Name, err)
 		}
 
 		// Write command file
@@ -295,7 +295,7 @@ func (g *Generator) buildREADME() string {
 
 	readme := `# 🧠 Ailloy Plugin for Claude Code
 
-*Auto-generated from Ailloy CLI templates*
+*Auto-generated from Ailloy CLI blanks*
 
 ## 🚀 Quick Start
 

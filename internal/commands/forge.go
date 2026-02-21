@@ -7,17 +7,17 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
-	"github.com/nimble-giant/ailloy/pkg/templates"
 	"github.com/spf13/cobra"
 )
 
 var forgeCmd = &cobra.Command{
 	Use:     "forge [mold-dir]",
-	Aliases: []string{"template"},
-	Short:   "Dry-run render of mold templates",
-	Long: `Render all templates in the given mold with flux values and print the result (alias: template).
+	Aliases: []string{"blank", "template"},
+	Short:   "Dry-run render of mold blanks",
+	Long: `Render all blanks in the given mold with flux values and print the result (alias: blank, template).
 
 This is the "what would cast produce?" preview, analogous to helm template.
 By default, rendered output is printed to stdout. Use --output to write files to a directory.`,
@@ -41,7 +41,7 @@ func init() {
 
 // loadForgeFlux loads layered flux values using Helm-style precedence:
 // mold flux.yaml < mold.yaml schema defaults < -f files (left to right) < --set flags
-func loadForgeFlux(reader *templates.MoldReader) (map[string]any, error) {
+func loadForgeFlux(reader *blanks.MoldReader) (map[string]any, error) {
 	// Layer 1: Load mold flux.yaml as base
 	fluxDefaults, err := reader.LoadFluxDefaults()
 	if err != nil {
@@ -78,7 +78,7 @@ func loadForgeFlux(reader *templates.MoldReader) (map[string]any, error) {
 	return flux, nil
 }
 
-// renderFile processes a single template and returns the rendered content.
+// renderFile processes a single blank and returns the rendered content.
 func renderFile(name string, content []byte, flux map[string]any, opts ...mold.TemplateOption) (string, error) {
 	rendered, err := mold.ProcessTemplate(string(content), flux, opts...)
 	if err != nil {
@@ -95,7 +95,7 @@ type renderedFile struct {
 func runForge(cmd *cobra.Command, args []string) error {
 	moldDir := args[0]
 
-	reader, err := templates.NewMoldReaderFromPath(moldDir)
+	reader, err := blanks.NewMoldReaderFromPath(moldDir)
 	if err != nil {
 		return err
 	}
@@ -125,11 +125,11 @@ func runForge(cmd *cobra.Command, args []string) error {
 
 	var files []renderedFile
 
-	// Render command templates
+	// Render command blanks
 	for _, name := range manifest.Commands {
-		content, err := reader.GetTemplate(name)
+		content, err := reader.GetBlank(name)
 		if err != nil {
-			return fmt.Errorf("reading command template %s: %w", name, err)
+			return fmt.Errorf("reading command blank %s: %w", name, err)
 		}
 		rendered, err := renderFile(name, content, flux, opts...)
 		if err != nil {
@@ -141,11 +141,11 @@ func runForge(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Render skill templates
+	// Render skill blanks
 	for _, name := range manifest.Skills {
 		content, err := reader.GetSkill(name)
 		if err != nil {
-			return fmt.Errorf("reading skill template %s: %w", name, err)
+			return fmt.Errorf("reading skill blank %s: %w", name, err)
 		}
 		rendered, err := renderFile(name, content, flux, opts...)
 		if err != nil {
@@ -157,11 +157,11 @@ func runForge(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Workflow templates are not Go-templated, include as-is
+	// Workflow blanks are not Go-templated, include as-is
 	for _, name := range manifest.Workflows {
-		content, err := reader.GetWorkflowTemplate(name)
+		content, err := reader.GetWorkflowBlank(name)
 		if err != nil {
-			return fmt.Errorf("reading workflow template %s: %w", name, err)
+			return fmt.Errorf("reading workflow blank %s: %w", name, err)
 		}
 		files = append(files, renderedFile{
 			destPath: filepath.Join(".github", "workflows", name),
@@ -214,7 +214,7 @@ func writeForgeFiles(files []renderedFile, outputDir string) error {
 		if err := os.MkdirAll(filepath.Dir(dest), 0750); err != nil { // #nosec G301 -- Output directories need group read access
 			return fmt.Errorf("creating directory for %s: %w", f.destPath, err)
 		}
-		//#nosec G306 -- Rendered templates need to be readable
+		//#nosec G306 -- Rendered blanks need to be readable
 		if err := os.WriteFile(dest, []byte(f.content), 0644); err != nil {
 			return fmt.Errorf("writing %s: %w", f.destPath, err)
 		}

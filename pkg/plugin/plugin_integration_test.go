@@ -185,11 +185,11 @@ func TestIntegration_PluginBackupRestoreCycle(t *testing.T) {
 	}
 }
 
-func TestIntegration_TemplateTransformationConsistency(t *testing.T) {
-	// Test that all embedded templates can be loaded and transformed successfully
+func TestIntegration_BlankTransformationConsistency(t *testing.T) {
+	// Test that all embedded blanks can be loaded and transformed successfully
 	g := NewGenerator(t.TempDir(), testMoldReader())
-	if err := g.loadTemplates(); err != nil {
-		t.Fatalf("failed to load templates: %v", err)
+	if err := g.loadBlanks(); err != nil {
+		t.Fatalf("failed to load blanks: %v", err)
 	}
 
 	tr := NewTransformer()

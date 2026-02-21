@@ -10,8 +10,8 @@ type Provider interface {
 	// Name returns the provider name (e.g., "claude", "gpt")
 	Name() string
 
-	// ExecuteTemplate runs a template against the provider
-	ExecuteTemplate(ctx context.Context, template Template, context map[string]interface{}) (*Response, error)
+	// ExecuteBlank runs a blank against the provider
+	ExecuteBlank(ctx context.Context, blank Blank, context map[string]interface{}) (*Response, error)
 
 	// ValidateConfig checks if the provider configuration is valid
 	ValidateConfig() error
@@ -20,8 +20,8 @@ type Provider interface {
 	IsEnabled() bool
 }
 
-// Template represents an AI command template
-type Template struct {
+// Blank represents an AI command blank
+type Blank struct {
 	Name       string            `yaml:"name"`
 	Provider   string            `yaml:"provider"`
 	Stage      string            `yaml:"stage"`
@@ -37,7 +37,7 @@ type Response struct {
 	Content  string            `json:"content"`
 	Metadata map[string]string `json:"metadata"`
 	Provider string            `json:"provider"`
-	Template string            `json:"template"`
+	Blank    string            `json:"blank"`
 	Success  bool              `json:"success"`
 	Error    string            `json:"error,omitempty"`
 }

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/mold"
-	"github.com/nimble-giant/ailloy/pkg/templates"
 )
 
 // nimbleMoldDir returns the absolute path to the nimble-mold/ directory.
@@ -25,16 +25,16 @@ func nimbleMoldDir(t *testing.T) string {
 }
 
 // testMoldReader creates a MoldReader from the nimble-mold/ directory.
-func testMoldReader(t *testing.T) *templates.MoldReader {
+func testMoldReader(t *testing.T) *blanks.MoldReader {
 	t.Helper()
-	reader, err := templates.NewMoldReaderFromPath(nimbleMoldDir(t))
+	reader, err := blanks.NewMoldReaderFromPath(nimbleMoldDir(t))
 	if err != nil {
 		t.Fatalf("failed to create mold reader: %v", err)
 	}
 	return reader
 }
 
-func TestIntegration_CopyTemplateFiles(t *testing.T) {
+func TestIntegration_CopyBlankFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -52,7 +52,7 @@ func TestIntegration_CopyTemplateFiles(t *testing.T) {
 		t.Fatalf("failed to create skills dir: %v", err)
 	}
 
-	err := copyTemplateFiles(reader)
+	err := copyBlankFiles(reader)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestIntegration_CopyTemplateFiles(t *testing.T) {
 		t.Fatalf("unexpected error copying skills: %v", err)
 	}
 
-	// Verify all expected templates were created (from manifest)
+	// Verify all expected blanks were created (from manifest)
 	manifest, err := reader.LoadManifest()
 	if err != nil {
 		t.Fatalf("failed to load manifest: %v", err)
@@ -71,7 +71,7 @@ func TestIntegration_CopyTemplateFiles(t *testing.T) {
 	for _, tmpl := range manifest.Commands {
 		path := filepath.Join(".claude", "commands", tmpl)
 		if _, err := os.Stat(path); err != nil {
-			t.Errorf("expected template %s to be created: %v", tmpl, err)
+			t.Errorf("expected blank %s to be created: %v", tmpl, err)
 			continue
 		}
 
@@ -81,7 +81,7 @@ func TestIntegration_CopyTemplateFiles(t *testing.T) {
 			continue
 		}
 		if len(content) == 0 {
-			t.Errorf("template %s is empty", tmpl)
+			t.Errorf("blank %s is empty", tmpl)
 		}
 	}
 
@@ -103,7 +103,7 @@ func TestIntegration_CopyTemplateFiles(t *testing.T) {
 	}
 }
 
-func TestIntegration_CopyTemplateFiles_WithVariableSubstitution(t *testing.T) {
+func TestIntegration_CopyBlankFiles_WithVariableSubstitution(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -129,18 +129,18 @@ func TestIntegration_CopyTemplateFiles_WithVariableSubstitution(t *testing.T) {
 		t.Fatalf("failed to create dirs: %v", err)
 	}
 
-	err := copyTemplateFiles(reader)
+	err := copyBlankFiles(reader)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Check that templates exist and are non-empty
+	// Check that blanks exist and are non-empty
 	entries, err := os.ReadDir(".claude/commands")
 	if err != nil {
 		t.Fatalf("failed to read commands dir: %v", err)
 	}
 	if len(entries) == 0 {
-		t.Error("expected templates to be copied")
+		t.Error("expected blanks to be copied")
 	}
 
 	for _, entry := range entries {
@@ -158,7 +158,7 @@ func TestIntegration_CopyTemplateFiles_WithVariableSubstitution(t *testing.T) {
 	}
 }
 
-func TestIntegration_TemplateFilesMatchMold(t *testing.T) {
+func TestIntegration_BlankFilesMatchMold(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -176,7 +176,7 @@ func TestIntegration_TemplateFilesMatchMold(t *testing.T) {
 		t.Fatalf("failed to create skills dir: %v", err)
 	}
 
-	err := copyTemplateFiles(reader)
+	err := copyBlankFiles(reader)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestIntegration_TemplateFilesMatchMold(t *testing.T) {
 		t.Fatalf("unexpected error copying skills: %v", err)
 	}
 
-	// Load flux defaults matching the layered flow in copyTemplateFiles
+	// Load flux defaults matching the layered flow in copyBlankFiles
 	manifest, err := reader.LoadManifest()
 	if err != nil {
 		t.Fatalf("failed to load manifest: %v", err)
@@ -196,29 +196,29 @@ func TestIntegration_TemplateFilesMatchMold(t *testing.T) {
 		flux = mold.ApplyFluxFileDefaults(fluxDefaults, flux)
 	}
 
-	// Verify each template matches what the reader+template engine would produce
+	// Verify each blank matches what the reader+template engine would produce
 	for _, tmplName := range manifest.Commands {
-		moldContent, err := reader.GetTemplate(tmplName)
+		moldContent, err := reader.GetBlank(tmplName)
 		if err != nil {
-			t.Errorf("failed to get mold template %s: %v", tmplName, err)
+			t.Errorf("failed to get mold blank %s: %v", tmplName, err)
 			continue
 		}
 
 		expectedContent, err := mold.ProcessTemplate(string(moldContent), flux)
 		if err != nil {
-			t.Errorf("failed to process template %s: %v", tmplName, err)
+			t.Errorf("failed to process blank %s: %v", tmplName, err)
 			continue
 		}
 
 		filePath := filepath.Join(".claude", "commands", tmplName)
 		fileContent, err := os.ReadFile(filePath)
 		if err != nil {
-			t.Errorf("failed to read copied template %s: %v", tmplName, err)
+			t.Errorf("failed to read copied blank %s: %v", tmplName, err)
 			continue
 		}
 
 		if expectedContent != string(fileContent) {
-			t.Errorf("template %s content mismatch between processed mold and copied version", tmplName)
+			t.Errorf("blank %s content mismatch between processed mold and copied version", tmplName)
 		}
 	}
 
@@ -286,7 +286,7 @@ func TestIntegration_CastGlobal_DirectoryCreation(t *testing.T) {
 	globalDir := filepath.Join(tmpHome, ".ailloy")
 	dirs := []string{
 		globalDir,
-		filepath.Join(globalDir, "templates"),
+		filepath.Join(globalDir, "blanks"),
 		filepath.Join(globalDir, "providers"),
 	}
 
@@ -337,7 +337,7 @@ providers:
 	}
 }
 
-func TestIntegration_TemplateFilePermissions(t *testing.T) {
+func TestIntegration_BlankFilePermissions(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -354,7 +354,7 @@ func TestIntegration_TemplateFilePermissions(t *testing.T) {
 		t.Fatalf("failed to create skills dir: %v", err)
 	}
 
-	err := copyTemplateFiles(reader)
+	err := copyBlankFiles(reader)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -458,7 +458,7 @@ func TestIntegration_CastProject_WithWorkflowsFlag(t *testing.T) {
 	}
 }
 
-func TestIntegration_CopyWorkflowTemplates(t *testing.T) {
+func TestIntegration_CopyWorkflowBlanks(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -472,7 +472,7 @@ func TestIntegration_CopyWorkflowTemplates(t *testing.T) {
 		t.Fatalf("failed to create dirs: %v", err)
 	}
 
-	err := copyWorkflowTemplates(reader)
+	err := copyWorkflowBlanks(reader)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -508,14 +508,14 @@ func TestIntegration_WorkflowFilesMatchMold(t *testing.T) {
 		t.Fatalf("failed to create dirs: %v", err)
 	}
 
-	err := copyWorkflowTemplates(reader)
+	err := copyWorkflowBlanks(reader)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	manifest, _ := reader.LoadManifest()
 	for _, wfName := range manifest.Workflows {
-		moldContent, err := reader.GetWorkflowTemplate(wfName)
+		moldContent, err := reader.GetWorkflowBlank(wfName)
 		if err != nil {
 			t.Errorf("failed to get mold workflow %s: %v", wfName, err)
 			continue

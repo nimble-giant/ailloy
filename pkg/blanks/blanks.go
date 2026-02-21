@@ -1,4 +1,4 @@
-package templates
+package blanks
 
 import (
 	"fmt"
@@ -52,27 +52,27 @@ func (r *MoldReader) LoadFluxSchema() ([]mold.FluxVar, error) {
 	return mold.LoadFluxSchema(r.fsys, "flux.schema.yaml")
 }
 
-// GetTemplate returns the content of a command template file.
-func (r *MoldReader) GetTemplate(name string) ([]byte, error) {
+// GetBlank returns the content of a command blank file.
+func (r *MoldReader) GetBlank(name string) ([]byte, error) {
 	path := fmt.Sprintf(".claude/commands/%s", name)
 	return fs.ReadFile(r.fsys, path)
 }
 
-// ListTemplates returns a list of available command template files.
-func (r *MoldReader) ListTemplates() ([]string, error) {
+// ListBlanks returns a list of available command blank files.
+func (r *MoldReader) ListBlanks() ([]string, error) {
 	entries, err := fs.ReadDir(r.fsys, ".claude/commands")
 	if err != nil {
 		return nil, err
 	}
 
-	var templates []string
+	var blanks []string
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
-			templates = append(templates, entry.Name())
+			blanks = append(blanks, entry.Name())
 		}
 	}
 
-	return templates, nil
+	return blanks, nil
 }
 
 // GetSkill returns the content of a skill file.
@@ -98,25 +98,25 @@ func (r *MoldReader) ListSkills() ([]string, error) {
 	return skills, nil
 }
 
-// GetWorkflowTemplate returns the content of a GitHub workflow template file.
-func (r *MoldReader) GetWorkflowTemplate(name string) ([]byte, error) {
+// GetWorkflowBlank returns the content of a GitHub workflow blank file.
+func (r *MoldReader) GetWorkflowBlank(name string) ([]byte, error) {
 	path := fmt.Sprintf(".github/workflows/%s", name)
 	return fs.ReadFile(r.fsys, path)
 }
 
-// ListWorkflowTemplates returns a list of available GitHub workflow template files.
-func (r *MoldReader) ListWorkflowTemplates() ([]string, error) {
+// ListWorkflowBlanks returns a list of available GitHub workflow blank files.
+func (r *MoldReader) ListWorkflowBlanks() ([]string, error) {
 	entries, err := fs.ReadDir(r.fsys, ".github/workflows")
 	if err != nil {
 		return nil, err
 	}
 
-	var templates []string
+	var blanks []string
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".yml") {
-			templates = append(templates, entry.Name())
+			blanks = append(blanks, entry.Name())
 		}
 	}
 
-	return templates, nil
+	return blanks, nil
 }

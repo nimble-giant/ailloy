@@ -8,21 +8,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nimble-giant/ailloy/pkg/templates"
+	"github.com/nimble-giant/ailloy/pkg/blanks"
 )
 
 // Updater handles updating existing Claude Code plugins
 type Updater struct {
 	PluginPath     string
 	BackupPath     string
-	reader         *templates.MoldReader
+	reader         *blanks.MoldReader
 	UpdatedFiles   int
 	NewCommands    int
 	PreservedFiles int
 }
 
 // NewUpdater creates a new plugin updater
-func NewUpdater(pluginPath string, reader *templates.MoldReader) *Updater {
+func NewUpdater(pluginPath string, reader *blanks.MoldReader) *Updater {
 	return &Updater{
 		PluginPath: pluginPath,
 		BackupPath: pluginPath + ".backup." + time.Now().Format("20060102-150405"),
@@ -30,14 +30,14 @@ func NewUpdater(pluginPath string, reader *templates.MoldReader) *Updater {
 	}
 }
 
-// Update updates an existing plugin with new templates
+// Update updates an existing plugin with new blanks
 func (u *Updater) Update() error {
 	// Create a generator for the new content
 	generator := NewGenerator(u.PluginPath, u.reader)
 	generator.Config = &Config{
 		Name:        "ailloy",
 		Version:     "1.0.0",
-		Description: "AI-assisted development workflows and structured templates for Claude Code",
+		Description: "AI-assisted development workflows and structured blanks for Claude Code",
 		Author: Author{
 			Name:  "Ailloy Team",
 			Email: "support@ailloy.dev",
@@ -45,9 +45,9 @@ func (u *Updater) Update() error {
 		},
 	}
 
-	// Load templates
-	if err := generator.loadTemplates(); err != nil {
-		return fmt.Errorf("failed to load templates: %w", err)
+	// Load blanks
+	if err := generator.loadBlanks(); err != nil {
+		return fmt.Errorf("failed to load blanks: %w", err)
 	}
 
 	// Update commands
@@ -109,10 +109,10 @@ func (u *Updater) updateCommands(generator *Generator) error {
 	// Transform and update commands
 	transformer := NewTransformer()
 	for _, tmpl := range generator.commands {
-		// Transform template
+		// Transform blank
 		command, err := transformer.Transform(tmpl)
 		if err != nil {
-			return fmt.Errorf("failed to transform template %s: %w", tmpl.Name, err)
+			return fmt.Errorf("failed to transform blank %s: %w", tmpl.Name, err)
 		}
 
 		// Write command file

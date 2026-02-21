@@ -72,16 +72,16 @@ func TestClaudeProvider_ValidateConfig_WithoutKey(t *testing.T) {
 	}
 }
 
-func TestClaudeProvider_ExecuteTemplate_Enabled(t *testing.T) {
+func TestClaudeProvider_ExecuteBlank_Enabled(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 	p := NewClaudeProvider()
 
-	tmpl := Template{
+	blank := Blank{
 		Name:    "test-template",
 		Content: "test content",
 	}
 
-	resp, err := p.ExecuteTemplate(context.Background(), tmpl, nil)
+	resp, err := p.ExecuteBlank(context.Background(), blank, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -94,12 +94,12 @@ func TestClaudeProvider_ExecuteTemplate_Enabled(t *testing.T) {
 	if resp.Provider != "claude" {
 		t.Errorf("expected provider 'claude', got '%s'", resp.Provider)
 	}
-	if resp.Template != "test-template" {
-		t.Errorf("expected template 'test-template', got '%s'", resp.Template)
+	if resp.Blank != "test-template" {
+		t.Errorf("expected template 'test-template', got '%s'", resp.Blank)
 	}
 }
 
-func TestClaudeProvider_ExecuteTemplate_Disabled(t *testing.T) {
+func TestClaudeProvider_ExecuteBlank_Disabled(t *testing.T) {
 	origKey := os.Getenv("ANTHROPIC_API_KEY")
 	t.Setenv("ANTHROPIC_API_KEY", "")
 	defer func() {
@@ -110,12 +110,12 @@ func TestClaudeProvider_ExecuteTemplate_Disabled(t *testing.T) {
 
 	p := NewClaudeProvider()
 
-	tmpl := Template{
+	blank := Blank{
 		Name:    "test-template",
 		Content: "test content",
 	}
 
-	_, err := p.ExecuteTemplate(context.Background(), tmpl, nil)
+	_, err := p.ExecuteBlank(context.Background(), blank, nil)
 	if err == nil {
 		t.Error("expected error when provider is disabled")
 	}

@@ -13,14 +13,14 @@ var (
 	stepPrefixPattern   = regexp.MustCompile(`^\d+\.\s*`)
 )
 
-// Transformer converts Ailloy templates to Claude Code command format
+// Transformer converts Ailloy blanks to Claude Code command format
 type Transformer struct {
 	// Configuration for transformation
 	PreserveVariables bool
 	SimplifyFormat    bool
 }
 
-// NewTransformer creates a new template transformer
+// NewTransformer creates a new blank transformer
 func NewTransformer() *Transformer {
 	return &Transformer{
 		PreserveVariables: true,
@@ -28,12 +28,12 @@ func NewTransformer() *Transformer {
 	}
 }
 
-// Transform converts an Ailloy template to Claude Code command format
-func (t *Transformer) Transform(tmpl TemplateInfo) ([]byte, error) {
+// Transform converts an Ailloy blank to Claude Code command format
+func (t *Transformer) Transform(tmpl BlankInfo) ([]byte, error) {
 	content := string(tmpl.Content)
 
-	// Parse the template sections
-	sections := t.parseTemplate(content)
+	// Parse the blank sections
+	sections := t.parseBlank(content)
 
 	// Build Claude command
 	var output bytes.Buffer
@@ -88,8 +88,8 @@ func (t *Transformer) Transform(tmpl TemplateInfo) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
-// parseTemplate parses the template into sections
-func (t *Transformer) parseTemplate(content string) map[string]string {
+// parseBlank parses the blank into sections
+func (t *Transformer) parseBlank(content string) map[string]string {
 	sections := make(map[string]string)
 	lines := strings.Split(content, "\n")
 
@@ -151,7 +151,7 @@ func (t *Transformer) normalizeSection(header string) string {
 	}
 }
 
-// extractShortDescription extracts a concise description from the template
+// extractShortDescription extracts a concise description from the blank
 func (t *Transformer) extractShortDescription(sections map[string]string) string {
 	// Try purpose section first
 	if purpose := sections["purpose"]; purpose != "" {
@@ -305,8 +305,8 @@ func (t *Transformer) extractInstructions(content string) string {
 		}
 	} else {
 		// Fallback to generic instruction
-		output.WriteString("Process this command according to the Ailloy workflow template.\n")
-		output.WriteString("Refer to the full template documentation for detailed instructions.\n")
+		output.WriteString("Process this command according to the Ailloy workflow blank.\n")
+		output.WriteString("Refer to the full blank documentation for detailed instructions.\n")
 	}
 
 	return output.String()

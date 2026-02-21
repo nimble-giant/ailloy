@@ -13,7 +13,7 @@ type mockProvider struct {
 }
 
 func (m *mockProvider) Name() string { return m.name }
-func (m *mockProvider) ExecuteTemplate(_ context.Context, _ Template, _ map[string]interface{}) (*Response, error) {
+func (m *mockProvider) ExecuteBlank(_ context.Context, _ Blank, _ map[string]interface{}) (*Response, error) {
 	return &Response{
 		Content:  "mock response",
 		Provider: m.name,
@@ -135,8 +135,8 @@ func TestRegistry_Register_Overwrite(t *testing.T) {
 	}
 }
 
-func TestTemplate_Struct(t *testing.T) {
-	tmpl := Template{
+func TestBlank_Struct(t *testing.T) {
+	blank := Blank{
 		Name:       "test-template",
 		Provider:   "claude",
 		Stage:      "plan",
@@ -147,14 +147,14 @@ func TestTemplate_Struct(t *testing.T) {
 		Validation: []string{"check1", "check2"},
 	}
 
-	if tmpl.Name != "test-template" {
-		t.Errorf("expected name 'test-template', got '%s'", tmpl.Name)
+	if blank.Name != "test-template" {
+		t.Errorf("expected name 'test-template', got '%s'", blank.Name)
 	}
-	if tmpl.Provider != "claude" {
-		t.Errorf("expected provider 'claude', got '%s'", tmpl.Provider)
+	if blank.Provider != "claude" {
+		t.Errorf("expected provider 'claude', got '%s'", blank.Provider)
 	}
-	if len(tmpl.Validation) != 2 {
-		t.Errorf("expected 2 validation rules, got %d", len(tmpl.Validation))
+	if len(blank.Validation) != 2 {
+		t.Errorf("expected 2 validation rules, got %d", len(blank.Validation))
 	}
 }
 
@@ -163,7 +163,7 @@ func TestResponse_Struct(t *testing.T) {
 		Content:  "response content",
 		Metadata: map[string]string{"model": "claude-3"},
 		Provider: "claude",
-		Template: "create-issue",
+		Blank:    "create-issue",
 		Success:  true,
 	}
 

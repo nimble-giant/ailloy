@@ -18,9 +18,9 @@ func TestNewTransformer(t *testing.T) {
 	}
 }
 
-func TestTransformer_Transform_BasicTemplate(t *testing.T) {
+func TestTransformer_Transform_BasicBlank(t *testing.T) {
 	tr := NewTransformer()
-	tmpl := TemplateInfo{
+	tmpl := BlankInfo{
 		Name:        "test-command",
 		Description: "A test command",
 		Content: []byte(`# Test Command
@@ -63,7 +63,7 @@ This is a test command for testing.
 	}
 }
 
-func TestTransformer_ParseTemplate(t *testing.T) {
+func TestTransformer_ParseBlank(t *testing.T) {
 	tr := NewTransformer()
 	content := `# Command
 ## Purpose
@@ -84,7 +84,7 @@ This is the purpose.
 2. Do that
 `
 
-	sections := tr.parseTemplate(content)
+	sections := tr.parseBlank(content)
 
 	if sections["purpose"] == "" {
 		t.Error("expected purpose section to be parsed")
@@ -382,14 +382,14 @@ func TestTransformer_ExtractInstructions_FallbackGeneric(t *testing.T) {
 
 	content := "# Header\nSome content without Claude must."
 	result := tr.extractInstructions(content)
-	if !strings.Contains(result, "Process this command according to the Ailloy workflow template") {
+	if !strings.Contains(result, "Process this command according to the Ailloy workflow blank") {
 		t.Error("expected fallback instruction")
 	}
 }
 
 func TestTransformer_Transform_WithAllSections(t *testing.T) {
 	tr := NewTransformer()
-	tmpl := TemplateInfo{
+	tmpl := BlankInfo{
 		Name:        "full-command",
 		Description: "A full command with all sections",
 		Content: []byte(`# Full Command

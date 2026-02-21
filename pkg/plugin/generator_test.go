@@ -8,17 +8,17 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/nimble-giant/ailloy/pkg/templates"
+	"github.com/nimble-giant/ailloy/pkg/blanks"
 )
 
-func testMoldReader() *templates.MoldReader {
+func testMoldReader() *blanks.MoldReader {
 	fsys := fstest.MapFS{
 		"mold.yaml":                    &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: mold\nname: test\nversion: 1.0.0\ncommands:\n  - test.md\n")},
 		".claude/commands/test.md":     &fstest.MapFile{Data: []byte("# Test\nTest command.")},
 		".claude/skills/brainstorm.md": &fstest.MapFile{Data: []byte("# Brainstorm\nSkill.")},
 		".github/workflows/ci.yml":     &fstest.MapFile{Data: []byte("name: CI\non: push")},
 	}
-	return templates.NewMoldReader(fsys)
+	return blanks.NewMoldReader(fsys)
 }
 
 func TestNewGenerator(t *testing.T) {
@@ -162,26 +162,26 @@ func TestGenerator_Generate_FullPlugin(t *testing.T) {
 	}
 }
 
-func TestGenerator_LoadTemplates(t *testing.T) {
+func TestGenerator_LoadBlanks(t *testing.T) {
 	g := NewGenerator(t.TempDir(), testMoldReader())
-	err := g.loadTemplates()
+	err := g.loadBlanks()
 	if err != nil {
-		t.Fatalf("unexpected error loading templates: %v", err)
+		t.Fatalf("unexpected error loading blanks: %v", err)
 	}
 	if len(g.commands) == 0 {
-		t.Error("expected at least one template to be loaded")
+		t.Error("expected at least one blank to be loaded")
 	}
 
 	for _, tmpl := range g.commands {
 		if tmpl.Name == "" {
-			t.Error("template has empty name")
+			t.Error("blank has empty name")
 		}
 		if len(tmpl.Content) == 0 {
-			t.Errorf("template %s has empty content", tmpl.Name)
+			t.Errorf("blank %s has empty content", tmpl.Name)
 		}
 		// Name should not have .md extension
 		if strings.HasSuffix(tmpl.Name, ".md") {
-			t.Errorf("template name should not have .md extension: %s", tmpl.Name)
+			t.Errorf("blank name should not have .md extension: %s", tmpl.Name)
 		}
 	}
 }
@@ -278,12 +278,12 @@ func TestGenerator_GenerateCommands(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	// Create structure and load templates
+	// Create structure and load blanks
 	if err := g.createStructure(); err != nil {
 		t.Fatalf("failed to create structure: %v", err)
 	}
-	if err := g.loadTemplates(); err != nil {
-		t.Fatalf("failed to load templates: %v", err)
+	if err := g.loadBlanks(); err != nil {
+		t.Fatalf("failed to load blanks: %v", err)
 	}
 
 	err := g.generateCommands()
@@ -357,7 +357,7 @@ func TestGenerator_BuildREADME(t *testing.T) {
 		Name:    "readme-test",
 		Version: "1.0.0",
 	}
-	g.commands = []TemplateInfo{
+	g.commands = []BlankInfo{
 		{Name: "cmd-one", Description: "First command"},
 		{Name: "cmd-two", Description: "Second command"},
 	}

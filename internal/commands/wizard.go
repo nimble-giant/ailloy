@@ -68,7 +68,7 @@ func runWizardAnneal(flux map[string]any) error {
 	ghClient := github.NewClient()
 
 	// Welcome banner
-	fmt.Println(styles.WorkingBanner("Interactive template annealing"))
+	fmt.Println(styles.WorkingBanner("Interactive blank annealing"))
 	fmt.Println()
 
 	// --- Section 1: Project Basics ---
@@ -176,7 +176,7 @@ func runWizardAnneal(flux map[string]any) error {
 			Value(&customVarsRaw).
 			Lines(6),
 	).Title("Section 4: Custom Flux Variables").
-		Description("Add freeform key-value pairs for template rendering")
+		Description("Add freeform key-value pairs for blank rendering")
 
 	// --- Section 5: Review & Save ---
 	group5 := huh.NewGroup(
@@ -235,7 +235,7 @@ func runWizardAnneal(flux map[string]any) error {
 	if annealOutput != "" {
 		dest = annealOutput
 	}
-	fmt.Println(styles.SuccessBanner("Template annealing saved to " + dest))
+	fmt.Println(styles.SuccessBanner("Blank annealing saved to " + dest))
 	return nil
 }
 

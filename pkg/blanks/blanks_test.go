@@ -1,4 +1,4 @@
-package templates
+package blanks
 
 import (
 	"strings"
@@ -36,79 +36,79 @@ org: test-org
 	return NewMoldReader(fsys)
 }
 
-func TestListTemplates(t *testing.T) {
+func TestListBlanks(t *testing.T) {
 	reader := testReader()
-	templates, err := reader.ListTemplates()
+	blanks, err := reader.ListBlanks()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(templates) == 0 {
-		t.Fatal("expected at least one template, got none")
+	if len(blanks) == 0 {
+		t.Fatal("expected at least one blank, got none")
 	}
 
-	for _, tmpl := range templates {
-		if !strings.HasSuffix(tmpl, ".md") {
-			t.Errorf("expected template name ending in .md, got %s", tmpl)
+	for _, b := range blanks {
+		if !strings.HasSuffix(b, ".md") {
+			t.Errorf("expected blank name ending in .md, got %s", b)
 		}
 	}
 }
 
-func TestListTemplates_ExpectedTemplates(t *testing.T) {
+func TestListBlanks_ExpectedBlanks(t *testing.T) {
 	reader := testReader()
-	templates, err := reader.ListTemplates()
+	blanks, err := reader.ListBlanks()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	expected := []string{"create-issue.md", "open-pr.md"}
-	templateSet := make(map[string]bool)
-	for _, tmpl := range templates {
-		templateSet[tmpl] = true
+	blankSet := make(map[string]bool)
+	for _, b := range blanks {
+		blankSet[b] = true
 	}
 	for _, exp := range expected {
-		if !templateSet[exp] {
-			t.Errorf("expected template %s not found in list", exp)
+		if !blankSet[exp] {
+			t.Errorf("expected blank %s not found in list", exp)
 		}
 	}
 }
 
-func TestGetTemplate_ValidTemplate(t *testing.T) {
+func TestGetBlank_ValidBlank(t *testing.T) {
 	reader := testReader()
-	content, err := reader.GetTemplate("create-issue.md")
+	content, err := reader.GetBlank("create-issue.md")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(content) == 0 {
-		t.Error("expected non-empty template content")
+		t.Error("expected non-empty blank content")
 	}
 	if content[0] != '#' {
-		t.Errorf("expected template to start with '#', got %q", string(content[0]))
+		t.Errorf("expected blank to start with '#', got %q", string(content[0]))
 	}
 }
 
-func TestGetTemplate_NonExistentTemplate(t *testing.T) {
+func TestGetBlank_NonExistentBlank(t *testing.T) {
 	reader := testReader()
-	_, err := reader.GetTemplate("nonexistent-template.md")
+	_, err := reader.GetBlank("nonexistent-blank.md")
 	if err == nil {
-		t.Error("expected error for non-existent template, got nil")
+		t.Error("expected error for non-existent blank, got nil")
 	}
 }
 
-func TestGetTemplate_AllTemplatesReadable(t *testing.T) {
+func TestGetBlank_AllBlanksReadable(t *testing.T) {
 	reader := testReader()
-	templates, err := reader.ListTemplates()
+	blanks, err := reader.ListBlanks()
 	if err != nil {
-		t.Fatalf("unexpected error listing templates: %v", err)
+		t.Fatalf("unexpected error listing blanks: %v", err)
 	}
-	for _, tmpl := range templates {
-		content, err := reader.GetTemplate(tmpl)
+	for _, b := range blanks {
+		content, err := reader.GetBlank(b)
 		if err != nil {
-			t.Errorf("failed to read template %s: %v", tmpl, err)
+			t.Errorf("failed to read blank %s: %v", b, err)
 			continue
 		}
 		if len(content) == 0 {
-			t.Errorf("template %s has empty content", tmpl)
+			t.Errorf("blank %s has empty content", b)
 		}
 	}
 }
@@ -151,14 +151,14 @@ func TestGetSkill_NonExistentSkill(t *testing.T) {
 	}
 }
 
-func TestListWorkflowTemplates(t *testing.T) {
+func TestListWorkflowBlanks(t *testing.T) {
 	reader := testReader()
-	workflows, err := reader.ListWorkflowTemplates()
+	workflows, err := reader.ListWorkflowBlanks()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(workflows) == 0 {
-		t.Fatal("expected at least one workflow template, got none")
+		t.Fatal("expected at least one workflow blank, got none")
 	}
 	for _, wf := range workflows {
 		if !strings.HasSuffix(wf, ".yml") {
@@ -167,25 +167,25 @@ func TestListWorkflowTemplates(t *testing.T) {
 	}
 }
 
-func TestGetWorkflowTemplate_ValidTemplate(t *testing.T) {
+func TestGetWorkflowBlank_ValidBlank(t *testing.T) {
 	reader := testReader()
-	content, err := reader.GetWorkflowTemplate("ci.yml")
+	content, err := reader.GetWorkflowBlank("ci.yml")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(content) == 0 {
-		t.Error("expected non-empty workflow template content")
+		t.Error("expected non-empty workflow blank content")
 	}
 	if !strings.Contains(string(content), "name:") {
-		t.Error("expected workflow template to contain 'name:' field")
+		t.Error("expected workflow blank to contain 'name:' field")
 	}
 }
 
-func TestGetWorkflowTemplate_NonExistentTemplate(t *testing.T) {
+func TestGetWorkflowBlank_NonExistentBlank(t *testing.T) {
 	reader := testReader()
-	_, err := reader.GetWorkflowTemplate("nonexistent-workflow.yml")
+	_, err := reader.GetWorkflowBlank("nonexistent-workflow.yml")
 	if err == nil {
-		t.Error("expected error for non-existent workflow template, got nil")
+		t.Error("expected error for non-existent workflow blank, got nil")
 	}
 }
 

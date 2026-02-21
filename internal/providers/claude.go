@@ -26,8 +26,8 @@ func (c *ClaudeProvider) Name() string {
 	return "claude"
 }
 
-// ExecuteTemplate runs a template against Claude AI
-func (c *ClaudeProvider) ExecuteTemplate(ctx context.Context, template Template, context map[string]interface{}) (*Response, error) {
+// ExecuteBlank runs a blank against Claude AI
+func (c *ClaudeProvider) ExecuteBlank(ctx context.Context, blank Blank, context map[string]interface{}) (*Response, error) {
 	if !c.enabled {
 		return nil, fmt.Errorf("claude provider is not enabled - check ANTHROPIC_API_KEY")
 	}
@@ -35,13 +35,13 @@ func (c *ClaudeProvider) ExecuteTemplate(ctx context.Context, template Template,
 	// TODO: Implement actual Claude API integration
 	// For now, return a placeholder response
 	return &Response{
-		Content: fmt.Sprintf("Template '%s' would be executed with Claude AI", template.Name),
+		Content: fmt.Sprintf("Blank '%s' would be executed with Claude AI", blank.Name),
 		Metadata: map[string]string{
 			"provider": "claude",
 			"model":    "claude-3-sonnet",
 		},
 		Provider: "claude",
-		Template: template.Name,
+		Blank:    blank.Name,
 		Success:  true,
 	}, nil
 }
