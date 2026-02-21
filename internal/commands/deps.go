@@ -30,7 +30,7 @@ var runtimeDeps = []dependency{
 	{
 		name:        "GitHub CLI",
 		binary:      "gh",
-		description: "GitHub integration for PR and issue templates",
+		description: "GitHub integration for PR and issue blanks",
 		installHelp: map[string]string{
 			"darwin":  "brew install gh",
 			"linux":   "sudo apt install gh  # see: https://cli.github.com",

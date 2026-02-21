@@ -99,7 +99,7 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 		files = append(files, archiveFile{path: "flux.schema.yaml", data: schemaData})
 	}
 
-	// Collect command templates
+	// Collect command blanks
 	for _, cmd := range m.Commands {
 		relPath := filepath.Join(".claude", "commands", cmd)
 		data, err := fs.ReadFile(moldFS, relPath)
@@ -109,7 +109,7 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 		files = append(files, archiveFile{path: relPath, data: data})
 	}
 
-	// Collect skill templates
+	// Collect skill blanks
 	for _, skill := range m.Skills {
 		relPath := filepath.Join(".claude", "skills", skill)
 		data, err := fs.ReadFile(moldFS, relPath)
@@ -119,7 +119,7 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 		files = append(files, archiveFile{path: relPath, data: data})
 	}
 
-	// Collect workflow templates
+	// Collect workflow blanks
 	for _, wf := range m.Workflows {
 		relPath := filepath.Join(".github", "workflows", wf)
 		data, err := fs.ReadFile(moldFS, relPath)

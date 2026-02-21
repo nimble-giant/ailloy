@@ -13,8 +13,8 @@ import (
 var annealCmd = &cobra.Command{
 	Use:     "anneal",
 	Aliases: []string{"configure"},
-	Short:   "Anneal template flux variables",
-	Long: `Anneal team-specific flux values for templates (alias: configure).
+	Short:   "Anneal blank flux variables",
+	Long: `Anneal team-specific flux values for blanks (alias: configure).
 
 This command runs an interactive wizard to configure flux variables
 (including ore models for GitHub Projects) and writes the result as a

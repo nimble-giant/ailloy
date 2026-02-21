@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
-	"github.com/nimble-giant/ailloy/pkg/templates"
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +20,7 @@ var castCmd = &cobra.Command{
 	Short:   "Cast Ailloy configuration into a project",
 	Long: `Cast Ailloy configuration into a project (alias: install).
 
-Installs rendered templates from the given mold into the current repository.
+Installs rendered blanks from the given mold into the current repository.
 Use -f to layer additional flux value files (Helm-style).`,
 	RunE: runCast,
 }
@@ -34,7 +34,7 @@ var (
 func init() {
 	rootCmd.AddCommand(castCmd)
 
-	castCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow templates (e.g. Claude Code agent)")
+	castCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks (e.g. Claude Code agent)")
 	castCmd.Flags().StringArrayVar(&castSetFlags, "set", nil, "override flux variable (format: key=value, can be repeated)")
 	castCmd.Flags().StringArrayVarP(&castValFiles, "values", "f", nil, "flux value files (can be repeated, later files override earlier)")
 }
@@ -45,7 +45,7 @@ func runCast(cmd *cobra.Command, args []string) error {
 	}
 
 	moldDir := args[0]
-	reader, err := templates.NewMoldReaderFromPath(moldDir)
+	reader, err := blanks.NewMoldReaderFromPath(moldDir)
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func runCast(cmd *cobra.Command, args []string) error {
 
 // loadCastFlux loads layered flux values using Helm-style precedence:
 // mold flux.yaml < mold.yaml schema defaults < -f files (left to right) < --set flags
-func loadCastFlux(reader *templates.MoldReader) (map[string]any, error) {
+func loadCastFlux(reader *blanks.MoldReader) (map[string]any, error) {
 	// Layer 1: Load mold flux.yaml as base
 	fluxDefaults, err := reader.LoadFluxDefaults()
 	if err != nil {
@@ -92,7 +92,7 @@ func loadCastFlux(reader *templates.MoldReader) (map[string]any, error) {
 	return flux, nil
 }
 
-func castProject(reader *templates.MoldReader) error {
+func castProject(reader *blanks.MoldReader) error {
 	// Welcome message
 	fmt.Println(styles.WorkingBanner("Casting Ailloy project structure..."))
 	fmt.Println()
@@ -131,15 +131,15 @@ func castProject(reader *templates.MoldReader) error {
 	}
 	fmt.Println()
 
-	// Copy template files from mold
-	if err := copyTemplateFiles(reader); err != nil {
-		return fmt.Errorf("failed to copy template files: %w", err)
+	// Copy blank files from mold
+	if err := copyBlankFiles(reader); err != nil {
+		return fmt.Errorf("failed to copy blank files: %w", err)
 	}
 
-	// Copy workflow templates (opt-in)
+	// Copy workflow blanks (opt-in)
 	if withWorkflows {
-		if err := copyWorkflowTemplates(reader); err != nil {
-			return fmt.Errorf("failed to copy workflow templates: %w", err)
+		if err := copyWorkflowBlanks(reader); err != nil {
+			return fmt.Errorf("failed to copy workflow blanks: %w", err)
 		}
 	}
 	// Copy skill files from mold
@@ -154,10 +154,10 @@ func castProject(reader *templates.MoldReader) error {
 
 	// Summary box
 	summaryContent := styles.SuccessStyle.Render("🎉 Setup Complete!\n\n") +
-		styles.FoxBullet("Command templates: ") + styles.CodeStyle.Render(".claude/commands/") + "\n"
-	summaryContent += styles.FoxBullet("Skill templates:   ") + styles.CodeStyle.Render(".claude/skills/") + "\n"
+		styles.FoxBullet("Command blanks:  ") + styles.CodeStyle.Render(".claude/commands/") + "\n"
+	summaryContent += styles.FoxBullet("Skill blanks:    ") + styles.CodeStyle.Render(".claude/skills/") + "\n"
 	if withWorkflows {
-		summaryContent += styles.FoxBullet("Workflow templates: ") + styles.CodeStyle.Render(".github/workflows/") + "\n"
+		summaryContent += styles.FoxBullet("Workflow blanks: ") + styles.CodeStyle.Render(".github/workflows/") + "\n"
 	}
 	summaryContent += styles.FoxBullet("Ready for AI-powered development! 🚀")
 
@@ -176,9 +176,9 @@ func castProject(reader *templates.MoldReader) error {
 	return nil
 }
 
-// copyTemplateFiles copies markdown template files from the mold to the project directory
-func copyTemplateFiles(reader *templates.MoldReader) error {
-	templateDir := ".claude/commands"
+// copyBlankFiles copies markdown blank files from the mold to the project directory
+func copyBlankFiles(reader *blanks.MoldReader) error {
+	blankDir := ".claude/commands"
 
 	flux, err := loadCastFlux(reader)
 	if err != nil {
@@ -207,14 +207,14 @@ func copyTemplateFiles(reader *templates.MoldReader) error {
 		cmdList = manifest.Commands
 	}
 
-	for _, templateName := range cmdList {
+	for _, blankName := range cmdList {
 		// Read from mold filesystem
-		content, err := reader.GetTemplate(templateName)
+		content, err := reader.GetBlank(blankName)
 		if err != nil {
-			// Create a placeholder if template doesn't exist
+			// Create a placeholder if blank doesn't exist
 			content = []byte(fmt.Sprintf(`# %s
 
-This is a placeholder for the %s Claude Code command template.
+This is a placeholder for the %s Claude Code command blank.
 
 ## Usage
 
@@ -222,32 +222,32 @@ Add your Claude Code command documentation here.
 
 ## Notes
 
-- This template was auto-generated during ailloy cast
+- This blank was auto-generated during ailloy cast
 - Replace this content with your actual Claude Code command
-`, strings.TrimSuffix(templateName, ".md"), strings.TrimSuffix(templateName, ".md")))
+`, strings.TrimSuffix(blankName, ".md"), strings.TrimSuffix(blankName, ".md")))
 		}
 
 		// Process template variables
 		processedContent, err := mold.ProcessTemplate(string(content), flux, opts...)
 		if err != nil {
-			return fmt.Errorf("failed to process template %s: %w", templateName, err)
+			return fmt.Errorf("failed to process blank %s: %w", blankName, err)
 		}
 
 		// Write to project directory
-		destPath := filepath.Join(templateDir, templateName)
-		//#nosec G306 -- Templates need to be readable
+		destPath := filepath.Join(blankDir, blankName)
+		//#nosec G306 -- Blanks need to be readable
 		if err := os.WriteFile(destPath, []byte(processedContent), 0644); err != nil {
-			return fmt.Errorf("failed to write template %s: %w", templateName, err)
+			return fmt.Errorf("failed to write blank %s: %w", blankName, err)
 		}
 
-		fmt.Println(styles.SuccessStyle.Render("✅ Created template: ") + styles.CodeStyle.Render(destPath))
+		fmt.Println(styles.SuccessStyle.Render("✅ Created blank: ") + styles.CodeStyle.Render(destPath))
 	}
 
 	return nil
 }
 
-// copyWorkflowTemplates copies GitHub Actions workflow templates from the mold to the project
-func copyWorkflowTemplates(reader *templates.MoldReader) error {
+// copyWorkflowBlanks copies GitHub Actions workflow blanks from the mold to the project
+func copyWorkflowBlanks(reader *blanks.MoldReader) error {
 	workflowDir := ".github/workflows"
 
 	manifest, _ := reader.LoadManifest()
@@ -257,9 +257,9 @@ func copyWorkflowTemplates(reader *templates.MoldReader) error {
 	}
 
 	for _, workflowName := range wfList {
-		content, err := reader.GetWorkflowTemplate(workflowName)
+		content, err := reader.GetWorkflowBlank(workflowName)
 		if err != nil {
-			return fmt.Errorf("failed to read workflow template %s: %w", workflowName, err)
+			return fmt.Errorf("failed to read workflow blank %s: %w", workflowName, err)
 		}
 
 		destPath := filepath.Join(workflowDir, workflowName)
@@ -275,7 +275,7 @@ func copyWorkflowTemplates(reader *templates.MoldReader) error {
 }
 
 // copySkillFiles copies skill files from the mold to the project directory
-func copySkillFiles(reader *templates.MoldReader) error {
+func copySkillFiles(reader *blanks.MoldReader) error {
 	skillDir := ".claude/skills"
 
 	flux, err := loadCastFlux(reader)

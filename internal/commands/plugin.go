@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/plugin"
 	"github.com/nimble-giant/ailloy/pkg/styles"
-	"github.com/nimble-giant/ailloy/pkg/templates"
 	"github.com/spf13/cobra"
 )
 
@@ -23,16 +23,16 @@ var (
 var pluginCmd = &cobra.Command{
 	Use:   "plugin",
 	Short: "Generate and manage Claude Code plugins",
-	Long: `Generate Claude Code plugins from Ailloy templates.
+	Long: `Generate Claude Code plugins from Ailloy blanks.
 
 This command dogfoods the Ailloy CLI by automatically generating
-Claude Code plugins from the embedded templates, ensuring consistency
+Claude Code plugins from the embedded blanks, ensuring consistency
 between the CLI and plugin experiences.`,
 }
 
 var generatePluginCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "Generate Claude Code plugin from templates",
+	Short: "Generate Claude Code plugin from blanks",
 	Long: `Generate a complete Claude Code plugin from a mold directory.
 
 The generated plugin will include:
@@ -47,10 +47,10 @@ The generated plugin will include:
 var updatePluginCmd = &cobra.Command{
 	Use:   "update [path]",
 	Short: "Update existing Claude Code plugin",
-	Long: `Update an existing Claude Code plugin with the latest templates.
+	Long: `Update an existing Claude Code plugin with the latest blanks.
 
 This preserves any custom additions while updating the core commands
-from the latest Ailloy templates.`,
+from the latest Ailloy blanks.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runUpdatePlugin,
 }
@@ -71,7 +71,7 @@ func init() {
 
 	// Generate command flags
 	generatePluginCmd.Flags().StringVarP(&pluginOutputDir, "output", "o", "ailloy", "Output directory for generated plugin")
-	generatePluginCmd.Flags().BoolVarP(&pluginWatch, "watch", "w", false, "Watch templates and regenerate on changes")
+	generatePluginCmd.Flags().BoolVarP(&pluginWatch, "watch", "w", false, "Watch blanks and regenerate on changes")
 	generatePluginCmd.Flags().BoolVarP(&pluginForce, "force", "f", false, "Overwrite existing plugin without prompting")
 	generatePluginCmd.Flags().StringVar(&pluginMoldDir, "mold", "", "mold directory to generate plugin from (required)")
 
@@ -82,7 +82,7 @@ func init() {
 
 func runGeneratePlugin(cmd *cobra.Command, args []string) error {
 	// Display generation header
-	fmt.Println(styles.WorkingBanner("Generating Claude Code Plugin from Ailloy Templates..."))
+	fmt.Println(styles.WorkingBanner("Generating Claude Code Plugin from Ailloy Blanks..."))
 	fmt.Println()
 
 	// Check if output directory exists
@@ -105,7 +105,7 @@ func runGeneratePlugin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--mold flag is required: ailloy plugin generate --mold <mold-dir>")
 	}
 
-	reader, err := templates.NewMoldReaderFromPath(pluginMoldDir)
+	reader, err := blanks.NewMoldReaderFromPath(pluginMoldDir)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func runGeneratePlugin(cmd *cobra.Command, args []string) error {
 	generator.Config = &plugin.Config{
 		Name:        "ailloy",
 		Version:     "1.0.0",
-		Description: "AI-assisted development workflows and structured templates for Claude Code",
+		Description: "AI-assisted development workflows and structured blanks for Claude Code",
 		Author: plugin.Author{
 			Name:  "Ailloy Team",
 			Email: "support@ailloy.dev",
@@ -152,7 +152,7 @@ func runGeneratePlugin(cmd *cobra.Command, args []string) error {
 	// Watch mode
 	if pluginWatch {
 		fmt.Println()
-		fmt.Println(styles.InfoStyle.Render("👁  Watch mode enabled. Monitoring templates for changes..."))
+		fmt.Println(styles.InfoStyle.Render("👁  Watch mode enabled. Monitoring blanks for changes..."))
 		// TODO: Implement file watching
 	}
 
@@ -174,7 +174,7 @@ func runUpdatePlugin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--mold flag is required: ailloy plugin update --mold <mold-dir>")
 	}
 
-	reader, err := templates.NewMoldReaderFromPath(pluginMoldDir)
+	reader, err := blanks.NewMoldReaderFromPath(pluginMoldDir)
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func runUpdatePlugin(cmd *cobra.Command, args []string) error {
 	}
 
 	// Update plugin
-	fmt.Println(styles.InfoStyle.Render("🔄 Updating commands from templates..."))
+	fmt.Println(styles.InfoStyle.Render("🔄 Updating commands from blanks..."))
 	if err := updater.Update(); err != nil {
 		return fmt.Errorf("failed to update plugin: %w", err)
 	}

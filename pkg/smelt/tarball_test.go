@@ -46,8 +46,8 @@ workflows:
 
 	files := map[string]string{
 		"mold.yaml":                 moldYAML,
-		".claude/commands/hello.md": "# Hello\nCommand template.\n",
-		".claude/skills/helper.md":  "# Helper\nSkill template.\n",
+		".claude/commands/hello.md": "# Hello\nCommand blank.\n",
+		".claude/skills/helper.md":  "# Helper\nSkill blank.\n",
 		".github/workflows/ci.yml":  "name: CI\non: push\n",
 	}
 	for rel, content := range files {
@@ -237,7 +237,7 @@ func TestPackageTarball_InvalidMold(t *testing.T) {
 	}
 }
 
-func TestPackageTarball_MissingTemplateFile(t *testing.T) {
+func TestPackageTarball_MissingBlankFile(t *testing.T) {
 	dir := t.TempDir()
 	moldYAML := `apiVersion: v1
 kind: mold
@@ -252,7 +252,7 @@ commands:
 
 	_, _, err := PackageTarball(dir, t.TempDir())
 	if err == nil {
-		t.Fatal("expected error for missing template file")
+		t.Fatal("expected error for missing blank file")
 	}
 	if !strings.Contains(err.Error(), "nonexistent.md") {
 		t.Errorf("expected error to mention missing file, got: %v", err)
@@ -400,7 +400,7 @@ cli: gh
 	files := map[string]string{
 		"mold.yaml":                 moldYAML,
 		"flux.yaml":                 fluxYAML,
-		".claude/commands/hello.md": "# Hello\nCommand template.\n",
+		".claude/commands/hello.md": "# Hello\nCommand blank.\n",
 	}
 	if includeSchema {
 		files["flux.schema.yaml"] = "- name: org\n  type: string\n  required: true\n"
@@ -438,7 +438,7 @@ func TestPackageTarball_HelmStyleMold(t *testing.T) {
 		t.Error("expected flux.yaml in tarball")
 	}
 	if !entrySet[prefix+"/.claude/commands/hello.md"] {
-		t.Error("expected command template in tarball")
+		t.Error("expected command blank in tarball")
 	}
 }
 

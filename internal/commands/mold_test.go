@@ -26,7 +26,7 @@ func TestGetMoldIcon(t *testing.T) {
 		{"preflight", "🔄"},
 		// "update-pr" contains "pr" which matches the "pr" case
 		{"update-pr", "🔄"},
-		{"unknown-template", "📋"},
+		{"unknown-blank", "📋"},
 		{"", "📋"},
 		// These names uniquely match later cases without containing "pr" or "issue"
 		{"code-review", "👀"},

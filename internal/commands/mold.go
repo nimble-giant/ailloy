@@ -13,7 +13,7 @@ import (
 
 var moldCmd = &cobra.Command{
 	Use:   "mold",
-	Short: "Work with Ailloy molds (templates)",
+	Short: "Work with Ailloy molds (blanks)",
 	Long: `Commands for managing and executing Ailloy molds.
 
 Molds are Markdown files that define AI commands and workflows.`,
@@ -57,12 +57,12 @@ func init() {
 
 func runListMolds(cmd *cobra.Command, args []string) error {
 	moldDirs := []string{
-		".claude/commands",         // Project commands directory (created by cast)
-		".claude/skills",           // Project skills directory (created by cast)
-		"commands",                 // Legacy project commands directory
-		"templates/claude",         // Source templates directory
-		".ailloy/templates/claude", // Legacy project templates
-		filepath.Join(os.Getenv("HOME"), ".ailloy/templates/claude"), // Global templates
+		".claude/commands",      // Project commands directory (created by cast)
+		".claude/skills",        // Project skills directory (created by cast)
+		"commands",              // Legacy project commands directory
+		"blanks/claude",         // Source blanks directory
+		".ailloy/blanks/claude", // Legacy project blanks
+		filepath.Join(os.Getenv("HOME"), ".ailloy/blanks/claude"), // Global blanks
 	}
 
 	workflowDirs := []string{
@@ -81,12 +81,12 @@ func runListMolds(cmd *cobra.Command, args []string) error {
 	foundMolds := false
 
 	for _, dir := range moldDirs {
-		if _, err := os.Stat(dir); os.IsNotExist(err) { // #nosec G703 -- CLI tool intentionally accesses user-specified template directories
+		if _, err := os.Stat(dir); os.IsNotExist(err) { // #nosec G703 -- CLI tool intentionally accesses user-specified blank directories
 			continue
 		}
 
-		// Walk through subdirectories to find templates
-		err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error { // #nosec G703 -- Intentional directory traversal for template discovery
+		// Walk through subdirectories to find blanks
+		err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error { // #nosec G703 -- Intentional directory traversal for blank discovery
 			if err != nil {
 				return nil // Skip errors, continue walking
 			}
@@ -105,13 +105,13 @@ func runListMolds(cmd *cobra.Command, args []string) error {
 				}
 
 				fileName := filepath.Base(path)
-				templateName := strings.TrimSuffix(fileName, ".md")
+				blankName := strings.TrimSuffix(fileName, ".md")
 
 				// Try to extract the first line as description
-				content, err := os.ReadFile(path) // #nosec G304 -- CLI tool reads user template files
+				content, err := os.ReadFile(path) // #nosec G304 -- CLI tool reads user blank files
 				if err != nil {
 					errorMsg := styles.ErrorStyle.Render("❌ ") +
-						styles.AccentStyle.Render(category+"/"+templateName) +
+						styles.AccentStyle.Render(category+"/"+blankName) +
 						styles.SubtleStyle.Render(" (unreadable)")
 					fmt.Println("  " + errorMsg)
 					return nil
@@ -122,15 +122,15 @@ func runListMolds(cmd *cobra.Command, args []string) error {
 				if len(lines) > 0 && strings.HasPrefix(lines[0], "# ") {
 					description = strings.TrimPrefix(lines[0], "# ")
 				} else {
-					description = "Claude Code template"
+					description = "Claude Code blank"
 				}
 
-				// Style the template listing
-				icon := getMoldIcon(templateName)
-				templateDisplay := styles.SuccessStyle.Render(icon+" ") +
-					styles.AccentStyle.Render(category+"/"+templateName) +
+				// Style the blank listing
+				icon := getMoldIcon(blankName)
+				blankDisplay := styles.SuccessStyle.Render(icon+" ") +
+					styles.AccentStyle.Render(category+"/"+blankName) +
 					styles.SubtleStyle.Render(" - "+description)
-				fmt.Println("  " + templateDisplay)
+				fmt.Println("  " + blankDisplay)
 				foundMolds = true
 			}
 
@@ -142,7 +142,7 @@ func runListMolds(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// List workflow templates
+	// List workflow blanks
 	for _, dir := range workflowDirs {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			continue
@@ -155,7 +155,7 @@ func runListMolds(cmd *cobra.Command, args []string) error {
 
 			if !d.IsDir() && strings.HasSuffix(path, ".yml") {
 				fileName := filepath.Base(path)
-				templateName := strings.TrimSuffix(fileName, ".yml")
+				blankName := strings.TrimSuffix(fileName, ".yml")
 
 				// Extract the workflow name from the YAML
 				content, err := os.ReadFile(path) // #nosec G304 -- CLI tool reads user workflow files
@@ -174,11 +174,11 @@ func runListMolds(cmd *cobra.Command, args []string) error {
 					description = "GitHub Actions workflow"
 				}
 
-				icon := getMoldIcon(templateName)
-				templateDisplay := styles.SuccessStyle.Render(icon+" ") +
-					styles.AccentStyle.Render("workflows/"+templateName) +
+				icon := getMoldIcon(blankName)
+				blankDisplay := styles.SuccessStyle.Render(icon+" ") +
+					styles.AccentStyle.Render("workflows/"+blankName) +
 					styles.SubtleStyle.Render(" - "+description)
-				fmt.Println("  " + templateDisplay)
+				fmt.Println("  " + blankDisplay)
 				foundMolds = true
 			}
 
@@ -217,7 +217,7 @@ func runShowMold(cmd *cobra.Command, args []string) error {
 	}
 
 	// Read and display the mold content
-	content, err := os.ReadFile(moldPath) // #nosec G304 -- CLI tool reads user template files
+	content, err := os.ReadFile(moldPath) // #nosec G304 -- CLI tool reads user blank files
 	if err != nil {
 		return fmt.Errorf("failed to read mold: %w", err)
 	}
@@ -245,28 +245,28 @@ func runShowMold(cmd *cobra.Command, args []string) error {
 
 func findMold(name string) (string, error) {
 	moldDirs := []string{
-		".claude/commands",         // Project commands directory (created by cast)
-		".claude/skills",           // Project skills directory (created by cast)
-		"commands",                 // Legacy project commands directory
-		"templates/claude",         // Source templates directory
-		".ailloy/templates/claude", // Legacy project templates
-		filepath.Join(os.Getenv("HOME"), ".ailloy/templates/claude"), // Global templates
+		".claude/commands",      // Project commands directory (created by cast)
+		".claude/skills",        // Project skills directory (created by cast)
+		"commands",              // Legacy project commands directory
+		"blanks/claude",         // Source blanks directory
+		".ailloy/blanks/claude", // Legacy project blanks
+		filepath.Join(os.Getenv("HOME"), ".ailloy/blanks/claude"), // Global blanks
 	}
 
 	for _, dir := range moldDirs {
-		if _, err := os.Stat(dir); os.IsNotExist(err) { // #nosec G703 -- CLI tool checks template directory existence
+		if _, err := os.Stat(dir); os.IsNotExist(err) { // #nosec G703 -- CLI tool checks blank directory existence
 			continue
 		}
 
 		// First try direct path (for backward compatibility)
-		templatePath := filepath.Join(dir, name+".md")
-		if _, err := os.Stat(templatePath); err == nil { // #nosec G703 -- CLI tool checks template file existence
-			return templatePath, nil
+		blankPath := filepath.Join(dir, name+".md")
+		if _, err := os.Stat(blankPath); err == nil { // #nosec G703 -- CLI tool checks blank file existence
+			return blankPath, nil
 		}
 
 		// Then try searching in subdirectories
 		var foundPath string
-		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error { // #nosec G703 -- Intentional directory traversal for template discovery
+		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error { // #nosec G703 -- Intentional directory traversal for blank discovery
 			if err != nil {
 				return nil
 			}
