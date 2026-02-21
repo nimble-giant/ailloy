@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.8](https://github.com/nimble-giant/ailloy/compare/v0.1.7...v0.1.8) (2026-02-21)
+
+
+### Features
+
+* add forge command for dry-run template rendering ([#42](https://github.com/nimble-giant/ailloy/issues/42)) ([3ed442b](https://github.com/nimble-giant/ailloy/commit/3ed442bd7da4ee215236ce499132df2e87003123))
+* add smelt command for mold packaging ([#45](https://github.com/nimble-giant/ailloy/issues/45)) ([78279de](https://github.com/nimble-giant/ailloy/commit/78279dea2a09acd00249c7694fd264ac84a63797))
+* convention-based mold structure with output path mappings ([bc1a460](https://github.com/nimble-giant/ailloy/commit/bc1a4608c9f501102aa9caecffe77d8e484e8eda))
+* define mold.yaml and ingot.yaml manifest formats ([#40](https://github.com/nimble-giant/ailloy/issues/40)) ([12d48c4](https://github.com/nimble-giant/ailloy/commit/12d48c4ef920f6891c1fd6e95620877d1eeee48f))
+* helm-style flux.yaml and optional flux.schema.yaml ([c217c02](https://github.com/nimble-giant/ailloy/commit/c217c028f61c611a69b8d3b252a873ac5d9738fa))
+* implement stuffbin-based binary output for smelt ([f834463](https://github.com/nimble-giant/ailloy/commit/f834463153b3af19ff211471e06f153c5bf99816))
+* ingot template partials and flux schema validation ([#44](https://github.com/nimble-giant/ailloy/issues/44)) ([68bacff](https://github.com/nimble-giant/ailloy/commit/68bacff33fc8153d8ab7cd71835ee7ccf9083e85))
+* surface command aliases in help text using lipgloss table ([8014da5](https://github.com/nimble-giant/ailloy/commit/8014da592e9537d973abf61cd1195507debaf0f5))
+
+
+### Bug Fixes
+
+* add gosec G104 nosec directives to mergo.Merge calls ([7bab98c](https://github.com/nimble-giant/ailloy/commit/7bab98cb2400bbaaf22d67c9935e995e05339482))
+* add nosec annotations for GoSec G304 in manifest loaders ([032ccba](https://github.com/nimble-giant/ailloy/commit/032ccba241222d8231eb986eac76c87ae6e47086))
+* address errcheck lint issue in smelt binary packaging ([a428687](https://github.com/nimble-giant/ailloy/commit/a428687731c8d18dfab3f6f8941d4e7598f0c829))
+* address errcheck lint issues in smelt package ([f22be39](https://github.com/nimble-giant/ailloy/commit/f22be39561490cc4362e217390114a49b6fad9bf))
+* sanitize file paths in manifest loaders (G304) ([0512278](https://github.com/nimble-giant/ailloy/commit/0512278b0734dc66ad53f05793644bb03468e204))
+* use dotted paths in smelt and add root mold.yaml ([a5d9b38](https://github.com/nimble-giant/ailloy/commit/a5d9b382885007848b5983b13a127deb513d9f9d))
+* use explicit error discard for mergo.Merge calls ([ab8f93c](https://github.com/nimble-giant/ailloy/commit/ab8f93c1205181add9cb48e9b6ec8c382c9532b4))
+
 ## [0.1.7](https://github.com/nimble-giant/ailloy/compare/v0.1.6...v0.1.7) (2026-02-18)
 
 
