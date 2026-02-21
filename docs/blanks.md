@@ -1,6 +1,6 @@
 # Ailloy Blanks
 
-Ailloy blanks are Markdown instruction files that live in mold directories. They define Claude Code slash commands and are rendered with flux variables via `ailloy forge` or installed into projects via `ailloy cast`.
+Blanks are the source files of the Ailloy compiler. They are Markdown instruction templates that live in mold directories, define Claude Code slash commands, and are compiled with flux variables via `ailloy forge` (dry-run) or `ailloy cast` (install).
 
 ## Blank Location
 

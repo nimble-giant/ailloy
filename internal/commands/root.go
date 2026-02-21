@@ -13,7 +13,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "ailloy",
-	Short: "AI-assisted development methodology and toolchain",
+	Short: "The package manager for AI instructions",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		styles.Init()
 	},
@@ -40,11 +40,11 @@ func buildLongDescription(version string) string {
 	banner := styles.WelcomeBanner(version)
 
 	description := styles.BoxStyle.Render(
-		"Ailloy is a modern AI-assisted development methodology and toolchain\n" +
-			"that fuses human creativity with AI precision.\n\n" +
+		"Ailloy is the package manager for AI instructions.\n" +
+			"Find, create, and share reusable AI workflow packages —\n" +
+			"the same way Helm manages Kubernetes applications.\n\n" +
 			"Like in metallurgy—where combining two elements yields a stronger alloy—\n" +
-			"Ailloy represents the fusion of traditional development practices with\n" +
-			"AI assistance to create more efficient engineering workflows.",
+			"Ailloy fuses human creativity with AI precision.",
 	)
 
 	quickStart := styles.InfoBoxStyle.Render(
