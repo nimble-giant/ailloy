@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.10](https://github.com/nimble-giant/ailloy/compare/v0.1.9...v0.1.10) (2026-02-21)
+
+
+### Features
+
+* add --global flag to cast for user-level installs ([c162c3a](https://github.com/nimble-giant/ailloy/commit/c162c3a53d87d8a4c144ab8158e54f4b03c908c2))
+* refactor anneal as dynamic mold-agnostic configuration wizard ([193251a](https://github.com/nimble-giant/ailloy/commit/193251a474edcb06da3e5201d9b9aa7ff7f6897e))
+
+
+### Bug Fixes
+
+* cast --global should install to ~/ not ~/.ailloy/ ([c162c3a](https://github.com/nimble-giant/ailloy/commit/c162c3a53d87d8a4c144ab8158e54f4b03c908c2))
+
 ## [0.1.9](https://github.com/nimble-giant/ailloy/compare/v0.1.8...v0.1.9) (2026-02-21)
 
 
