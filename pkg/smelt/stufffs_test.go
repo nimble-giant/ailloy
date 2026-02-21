@@ -59,7 +59,7 @@ func TestStuffFS_Open(t *testing.T) {
 func TestStuffFS_Open_NestedFile(t *testing.T) {
 	sfs := createStuffedFixture(t)
 
-	f, err := sfs.Open(".claude/commands/hello.md")
+	f, err := sfs.Open("commands/hello.md")
 	if err != nil {
 		t.Fatalf("Open nested file: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestStuffFS_ReadFile(t *testing.T) {
 func TestStuffFS_ReadFile_Nested(t *testing.T) {
 	sfs := createStuffedFixture(t)
 
-	data, err := sfs.ReadFile(".claude/skills/helper.md")
+	data, err := sfs.ReadFile("skills/helper.md")
 	if err != nil {
 		t.Fatalf("ReadFile nested: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestStuffFS_InvalidPath(t *testing.T) {
 func TestStuffFS_ReadDir(t *testing.T) {
 	sfs := createStuffedFixture(t)
 
-	f, err := sfs.Open(".claude/commands")
+	f, err := sfs.Open("commands")
 	if err != nil {
 		t.Fatalf("Open directory: %v", err)
 	}
@@ -199,8 +199,8 @@ func TestStuffFS_ReadDir_Root(t *testing.T) {
 	if !names["mold.yaml"] {
 		t.Error("expected mold.yaml in root listing")
 	}
-	if !names[".claude"] {
-		t.Error("expected .claude directory in root listing")
+	if !names["commands"] {
+		t.Error("expected commands directory in root listing")
 	}
 }
 
@@ -220,12 +220,12 @@ func TestStuffFS_Stat(t *testing.T) {
 	}
 
 	// Directory stat.
-	info, err = sfs.Stat(".claude")
+	info, err = sfs.Stat("commands")
 	if err != nil {
 		t.Fatalf("Stat directory: %v", err)
 	}
 	if !info.IsDir() {
-		t.Error(".claude should be a directory")
+		t.Error("commands should be a directory")
 	}
 
 	// Nonexistent.
@@ -239,7 +239,7 @@ func TestStuffFS_FsReadFile(t *testing.T) {
 	sfs := createStuffedFixture(t)
 
 	// Verify the adapter works with the standard library fs.ReadFile.
-	data, err := fs.ReadFile(sfs, ".github/workflows/ci.yml")
+	data, err := fs.ReadFile(sfs, "workflows/ci.yml")
 	if err != nil {
 		t.Fatalf("fs.ReadFile: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestStuffFS_FsReadDir(t *testing.T) {
 	sfs := createStuffedFixture(t)
 
 	// Verify the adapter works with the standard library fs.ReadDir.
-	entries, err := fs.ReadDir(sfs, ".claude/skills")
+	entries, err := fs.ReadDir(sfs, "skills")
 	if err != nil {
 		t.Fatalf("fs.ReadDir: %v", err)
 	}
@@ -321,8 +321,8 @@ func TestStuffFS_MoldReaderIntegration(t *testing.T) {
 		t.Error("expected schema to reference org")
 	}
 
-	// GetBlank reads .claude/commands/<name>.
-	blankData, err := fs.ReadFile(fsys, ".claude/commands/hello.md")
+	// Read command blank via source path.
+	blankData, err := fs.ReadFile(fsys, "commands/hello.md")
 	if err != nil {
 		t.Fatalf("reading command blank: %v", err)
 	}

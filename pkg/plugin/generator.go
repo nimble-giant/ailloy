@@ -3,11 +3,13 @@ package plugin
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/nimble-giant/ailloy/pkg/blanks"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
 // Generator handles the generation of Claude Code plugins from Ailloy blanks
@@ -88,24 +90,30 @@ func (g *Generator) Generate() error {
 	return nil
 }
 
-// loadBlanks loads all blanks from the mold reader
+// loadBlanks loads all blanks from the mold reader using convention-based discovery.
 func (g *Generator) loadBlanks() error {
-	blankList, err := g.reader.ListBlanks()
+	manifest, err := g.reader.LoadManifest()
 	if err != nil {
-		return err
+		return fmt.Errorf("loading manifest: %w", err)
 	}
 
-	for _, blankName := range blankList {
-		content, err := g.reader.GetBlank(blankName)
+	resolved, err := mold.ResolveFiles(manifest, g.reader.FS())
+	if err != nil {
+		return fmt.Errorf("resolving files: %w", err)
+	}
+
+	for _, rf := range resolved {
+		content, err := fs.ReadFile(g.reader.FS(), rf.SrcPath)
 		if err != nil {
-			return fmt.Errorf("failed to load blank %s: %w", blankName, err)
+			return fmt.Errorf("failed to load blank %s: %w", rf.SrcPath, err)
 		}
 
 		// Extract description from content
 		desc := extractDescription(content)
 
+		name := strings.TrimSuffix(filepath.Base(rf.SrcPath), filepath.Ext(rf.SrcPath))
 		g.commands = append(g.commands, BlankInfo{
-			Name:        strings.TrimSuffix(blankName, ".md"),
+			Name:        name,
 			Description: desc,
 			Content:     content,
 		})

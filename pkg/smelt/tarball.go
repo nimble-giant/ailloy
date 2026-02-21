@@ -99,34 +99,17 @@ func collectMoldFiles(m *mold.Mold, moldFS fs.FS, moldDir string) ([]archiveFile
 		files = append(files, archiveFile{path: "flux.schema.yaml", data: schemaData})
 	}
 
-	// Collect command blanks
-	for _, cmd := range m.Commands {
-		relPath := filepath.Join(".claude", "commands", cmd)
-		data, err := fs.ReadFile(moldFS, relPath)
-		if err != nil {
-			return nil, false, fmt.Errorf("reading command %s: %w", cmd, err)
-		}
-		files = append(files, archiveFile{path: relPath, data: data})
+	// Resolve output mapping and collect all content files.
+	resolved, err := mold.ResolveFiles(m, moldFS)
+	if err != nil {
+		return nil, false, fmt.Errorf("resolving output files: %w", err)
 	}
-
-	// Collect skill blanks
-	for _, skill := range m.Skills {
-		relPath := filepath.Join(".claude", "skills", skill)
-		data, err := fs.ReadFile(moldFS, relPath)
+	for _, rf := range resolved {
+		data, err := fs.ReadFile(moldFS, rf.SrcPath)
 		if err != nil {
-			return nil, false, fmt.Errorf("reading skill %s: %w", skill, err)
+			return nil, false, fmt.Errorf("reading %s: %w", rf.SrcPath, err)
 		}
-		files = append(files, archiveFile{path: relPath, data: data})
-	}
-
-	// Collect workflow blanks
-	for _, wf := range m.Workflows {
-		relPath := filepath.Join(".github", "workflows", wf)
-		data, err := fs.ReadFile(moldFS, relPath)
-		if err != nil {
-			return nil, false, fmt.Errorf("reading workflow %s: %w", wf, err)
-		}
-		files = append(files, archiveFile{path: relPath, data: data})
+		files = append(files, archiveFile{path: rf.SrcPath, data: data})
 	}
 
 	// Collect ingots directory if present

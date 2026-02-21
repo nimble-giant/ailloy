@@ -2,9 +2,11 @@ package commands
 
 import (
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -121,15 +123,36 @@ func castProject(reader *blanks.MoldReader) error {
 		fmt.Println()
 	}
 
-	// Create Claude Code directory structure
-	dirs := []string{
-		".claude",
-		".claude/commands",
-		".claude/skills",
+	// Load manifest and resolve output files.
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		return fmt.Errorf("failed to load mold manifest: %w", err)
 	}
-	if withWorkflows {
-		dirs = append(dirs, ".github/workflows")
+
+	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	if err != nil {
+		return fmt.Errorf("failed to resolve output files: %w", err)
 	}
+
+	// Filter out workflow files unless --with-workflows is set.
+	var filesToCast []mold.ResolvedFile
+	for _, rf := range resolved {
+		if !withWorkflows && strings.HasPrefix(rf.DestPath, ".github/") {
+			continue
+		}
+		filesToCast = append(filesToCast, rf)
+	}
+
+	// Collect unique output directories.
+	dirSet := make(map[string]bool)
+	for _, rf := range filesToCast {
+		dirSet[filepath.Dir(rf.DestPath)] = true
+	}
+	var dirs []string
+	for d := range dirSet {
+		dirs = append(dirs, d)
+	}
+	sort.Strings(dirs)
 
 	fmt.Println(styles.InfoStyle.Render("📁 Creating directory structure..."))
 	for i, dir := range dirs {
@@ -143,21 +166,11 @@ func castProject(reader *blanks.MoldReader) error {
 	}
 	fmt.Println()
 
-	// Copy blank files from mold
-	if err := copyBlankFiles(reader); err != nil {
-		return fmt.Errorf("failed to copy blank files: %w", err)
+	// Copy resolved files from mold
+	if err := copyResolvedFiles(reader, manifest, filesToCast); err != nil {
+		return fmt.Errorf("failed to copy files: %w", err)
 	}
 
-	// Copy workflow blanks (opt-in)
-	if withWorkflows {
-		if err := copyWorkflowBlanks(reader); err != nil {
-			return fmt.Errorf("failed to copy workflow blanks: %w", err)
-		}
-	}
-	// Copy skill files from mold
-	if err := copySkillFiles(reader); err != nil {
-		return fmt.Errorf("failed to copy skill files: %w", err)
-	}
 	// Success celebration
 	fmt.Println()
 	successMessage := "Project casting complete!"
@@ -165,11 +178,9 @@ func castProject(reader *blanks.MoldReader) error {
 	fmt.Println()
 
 	// Summary box
-	summaryContent := styles.SuccessStyle.Render("🎉 Setup Complete!\n\n") +
-		styles.FoxBullet("Command blanks:  ") + styles.CodeStyle.Render(".claude/commands/") + "\n"
-	summaryContent += styles.FoxBullet("Skill blanks:    ") + styles.CodeStyle.Render(".claude/skills/") + "\n"
-	if withWorkflows {
-		summaryContent += styles.FoxBullet("Workflow blanks: ") + styles.CodeStyle.Render(".github/workflows/") + "\n"
+	summaryContent := styles.SuccessStyle.Render("🎉 Setup Complete!\n\n")
+	for _, dir := range dirs {
+		summaryContent += styles.FoxBullet("Blanks: ") + styles.CodeStyle.Render(dir+"/") + "\n"
 	}
 	summaryContent += styles.FoxBullet("Ready for AI-powered development! 🚀")
 
@@ -188,17 +199,15 @@ func castProject(reader *blanks.MoldReader) error {
 	return nil
 }
 
-// copyBlankFiles copies markdown blank files from the mold to the project directory
-func copyBlankFiles(reader *blanks.MoldReader) error {
-	blankDir := ".claude/commands"
-
+// copyResolvedFiles copies resolved mold files to the project, applying template
+// processing where indicated by the output mapping.
+func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, resolved []mold.ResolvedFile) error {
 	flux, err := loadCastFlux(reader)
 	if err != nil {
 		flux = make(map[string]any)
 	}
 
 	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
-	manifest, _ := reader.LoadManifest()
 	var schema []mold.FluxVar
 	if s, err := reader.LoadFluxSchema(); err == nil && s != nil {
 		schema = s
@@ -213,133 +222,33 @@ func copyBlankFiles(reader *blanks.MoldReader) error {
 	resolver := buildIngotResolver(flux)
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
-	// Use manifest-driven command list
-	var cmdList []string
-	if manifest != nil {
-		cmdList = manifest.Commands
-	}
-
-	for _, blankName := range cmdList {
-		// Read from mold filesystem
-		content, err := reader.GetBlank(blankName)
+	for _, rf := range resolved {
+		content, err := fs.ReadFile(reader.FS(), rf.SrcPath)
 		if err != nil {
-			// Create a placeholder if blank doesn't exist
-			content = []byte(fmt.Sprintf(`# %s
-
-This is a placeholder for the %s Claude Code command blank.
-
-## Usage
-
-Add your Claude Code command documentation here.
-
-## Notes
-
-- This blank was auto-generated during ailloy cast
-- Replace this content with your actual Claude Code command
-`, strings.TrimSuffix(blankName, ".md"), strings.TrimSuffix(blankName, ".md")))
+			return fmt.Errorf("failed to read %s: %w", rf.SrcPath, err)
 		}
 
-		// Process template variables
-		processedContent, err := mold.ProcessTemplate(string(content), flux, opts...)
-		if err != nil {
-			return fmt.Errorf("failed to process blank %s: %w", blankName, err)
+		var outputContent []byte
+		if rf.Process {
+			processed, err := mold.ProcessTemplate(string(content), flux, opts...)
+			if err != nil {
+				return fmt.Errorf("failed to process %s: %w", rf.SrcPath, err)
+			}
+			outputContent = []byte(processed)
+		} else {
+			outputContent = content
 		}
 
-		// Write to project directory
-		destPath := filepath.Join(blankDir, blankName)
+		if err := os.MkdirAll(filepath.Dir(rf.DestPath), 0750); err != nil { // #nosec G301
+			return fmt.Errorf("failed to create directory for %s: %w", rf.DestPath, err)
+		}
+
 		//#nosec G306 -- Blanks need to be readable
-		if err := os.WriteFile(destPath, []byte(processedContent), 0644); err != nil {
-			return fmt.Errorf("failed to write blank %s: %w", blankName, err)
+		if err := os.WriteFile(rf.DestPath, outputContent, 0644); err != nil {
+			return fmt.Errorf("failed to write %s: %w", rf.DestPath, err)
 		}
 
-		fmt.Println(styles.SuccessStyle.Render("✅ Created blank: ") + styles.CodeStyle.Render(destPath))
-	}
-
-	return nil
-}
-
-// copyWorkflowBlanks copies GitHub Actions workflow blanks from the mold to the project
-func copyWorkflowBlanks(reader *blanks.MoldReader) error {
-	workflowDir := ".github/workflows"
-
-	manifest, _ := reader.LoadManifest()
-	var wfList []string
-	if manifest != nil {
-		wfList = manifest.Workflows
-	}
-
-	for _, workflowName := range wfList {
-		content, err := reader.GetWorkflowBlank(workflowName)
-		if err != nil {
-			return fmt.Errorf("failed to read workflow blank %s: %w", workflowName, err)
-		}
-
-		destPath := filepath.Join(workflowDir, workflowName)
-		//#nosec G306 -- Workflow files need to be readable
-		if err := os.WriteFile(destPath, content, 0644); err != nil {
-			return fmt.Errorf("failed to write workflow %s: %w", workflowName, err)
-		}
-
-		fmt.Println(styles.SuccessStyle.Render("✅ Created workflow: ") + styles.CodeStyle.Render(destPath))
-	}
-
-	return nil
-}
-
-// copySkillFiles copies skill files from the mold to the project directory
-func copySkillFiles(reader *blanks.MoldReader) error {
-	skillDir := ".claude/skills"
-
-	flux, err := loadCastFlux(reader)
-	if err != nil {
-		flux = make(map[string]any)
-	}
-
-	// Build ingot resolver
-	resolver := buildIngotResolver(flux)
-	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
-
-	// Use manifest-driven skill list
-	manifest, _ := reader.LoadManifest()
-	var skillList []string
-	if manifest != nil {
-		skillList = manifest.Skills
-	}
-
-	for _, skillName := range skillList {
-		// Read from mold filesystem
-		content, err := reader.GetSkill(skillName)
-		if err != nil {
-			// Create a placeholder if skill doesn't exist
-			content = []byte(fmt.Sprintf(`# Skill: %s
-
-This is a placeholder for the %s Claude Code skill.
-
-## Usage
-
-Add your Claude Code skill documentation here.
-
-## Notes
-
-- This skill was auto-generated during ailloy cast
-- Replace this content with your actual Claude Code skill
-`, strings.TrimSuffix(skillName, ".md"), strings.TrimSuffix(skillName, ".md")))
-		}
-
-		// Process template variables
-		processedContent, err := mold.ProcessTemplate(string(content), flux, opts...)
-		if err != nil {
-			return fmt.Errorf("failed to process skill %s: %w", skillName, err)
-		}
-
-		// Write to project directory
-		destPath := filepath.Join(skillDir, skillName)
-		//#nosec G306 -- Skills need to be readable
-		if err := os.WriteFile(destPath, []byte(processedContent), 0644); err != nil {
-			return fmt.Errorf("failed to write skill %s: %w", skillName, err)
-		}
-
-		fmt.Println(styles.SuccessStyle.Render("✅ Created skill: ") + styles.CodeStyle.Render(destPath))
+		fmt.Println(styles.SuccessStyle.Render("✅ Created: ") + styles.CodeStyle.Render(rf.DestPath))
 	}
 
 	return nil

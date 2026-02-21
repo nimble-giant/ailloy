@@ -76,32 +76,20 @@ func ValidateMold(m *Mold) error {
 	return nil
 }
 
-// ValidateMoldFiles checks that all files referenced in the mold manifest exist within the given filesystem.
-func ValidateMoldFiles(m *Mold, fsys fs.FS, base string) error {
-	var missing []string
-
-	for _, cmd := range m.Commands {
-		path := base + "/.claude/commands/" + cmd
-		if _, err := fs.Stat(fsys, path); err != nil {
-			missing = append(missing, path)
-		}
-	}
-	for _, skill := range m.Skills {
-		path := base + "/.claude/skills/" + skill
-		if _, err := fs.Stat(fsys, path); err != nil {
-			missing = append(missing, path)
-		}
-	}
-	for _, wf := range m.Workflows {
-		path := base + "/.github/workflows/" + wf
-		if _, err := fs.Stat(fsys, path); err != nil {
-			missing = append(missing, path)
-		}
+// ValidateOutputSources checks that all source directories/files referenced in
+// the output mapping actually exist in the mold filesystem.
+func ValidateOutputSources(m *Mold, fsys fs.FS) error {
+	if m.Output == nil {
+		return nil // no output mapping, identity mode — discovery handles existence
 	}
 
-	if len(missing) > 0 {
-		return fmt.Errorf("mold references missing files:\n  - %s", strings.Join(missing, "\n  - "))
+	resolved, err := ResolveFiles(m, fsys)
+	if err != nil {
+		return fmt.Errorf("resolving output mapping: %w", err)
 	}
+
+	// If we get here without error, all source dirs/files exist (walk succeeded).
+	_ = resolved
 	return nil
 }
 

@@ -35,6 +35,27 @@ type Dependency struct {
 	Version string `yaml:"version"`
 }
 
+// OutputTarget represents a single output directory or file mapping.
+// It supports two YAML forms:
+//   - Simple string: "dest/path" (process defaults to true)
+//   - Expanded map: {dest: "dest/path", process: false}
+type OutputTarget struct {
+	Dest    string `yaml:"dest"`
+	Process *bool  `yaml:"process,omitempty"` // nil = true (default)
+}
+
+// ShouldProcess returns whether files under this target should be template-processed.
+func (o OutputTarget) ShouldProcess() bool {
+	return o.Process == nil || *o.Process
+}
+
+// ResolvedFile represents a single file resolved from the output mapping.
+type ResolvedFile struct {
+	SrcPath  string // path within the mold fs (e.g., "commands/hello.md")
+	DestPath string // output path (e.g., ".claude/commands/hello.md")
+	Process  bool   // whether to apply template processing
+}
+
 // Mold represents a mold.yaml manifest.
 type Mold struct {
 	APIVersion   string       `yaml:"apiVersion"`
@@ -45,9 +66,7 @@ type Mold struct {
 	Author       Author       `yaml:"author,omitempty"`
 	Requires     Requires     `yaml:"requires,omitempty"`
 	Flux         []FluxVar    `yaml:"flux,omitempty"`
-	Commands     []string     `yaml:"commands,omitempty"`
-	Skills       []string     `yaml:"skills,omitempty"`
-	Workflows    []string     `yaml:"workflows,omitempty"`
+	Output       any          `yaml:"output,omitempty"`
 	Dependencies []Dependency `yaml:"dependencies,omitempty"`
 }
 

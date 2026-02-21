@@ -9,21 +9,19 @@ Two output formats are available:
 
 ## Directory Structure
 
-A mold directory should look like this:
+A mold directory uses clean top-level directories for source files. The `output:` field in `mold.yaml` defines where each directory maps to in the target project:
 
 ```
 my-mold/
-├── mold.yaml                # Required - metadata
+├── mold.yaml                # Required - metadata + output mappings
 ├── flux.yaml                # Optional - default variable values
 ├── flux.schema.yaml         # Optional - validation rules
-├── .claude/
-│   ├── commands/
-│   │   └── my-command.md    # Command blanks
-│   └── skills/
-│       └── my-skill.md      # Skill blanks
-├── .github/
-│   └── workflows/
-│       └── ci.yml           # Workflow blanks
+├── commands/
+│   └── my-command.md        # Command blanks
+├── skills/
+│   └── my-skill.md          # Skill blanks
+├── workflows/
+│   └── ci.yml               # Workflow files
 └── ingots/                  # Optional - ingot partials
     └── my-ingot/
         ├── ingot.yaml
@@ -32,7 +30,7 @@ my-mold/
 
 ## Step 1: Write `mold.yaml`
 
-This is lean metadata listing what your mold contains:
+This is lean metadata with output path mappings. The `output:` field maps source directories in your mold to destination paths in the target project:
 
 ```yaml
 apiVersion: v1
@@ -45,12 +43,37 @@ author:
   url: https://github.com/my-org
 requires:
   ailloy: ">=0.2.0"
-commands:
-  - my-command.md
-skills:
-  - my-skill.md
-workflows:
-  - ci.yml
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+  workflows:
+    dest: .github/workflows
+    process: false
+```
+
+### Output mapping forms
+
+**Simple map** — directory-to-directory mappings:
+
+```yaml
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+```
+
+**Expanded map** — per-directory options like disabling template processing:
+
+```yaml
+output:
+  workflows:
+    dest: .github/workflows
+    process: false          # skip Go template processing
+```
+
+**No output field** — files are placed at their source paths (identity mapping):
+
+```yaml
+# omitting output: means commands/my-cmd.md → commands/my-cmd.md
 ```
 
 ## Step 2: Write `flux.yaml` (optional)
@@ -101,7 +124,7 @@ When present, `flux.schema.yaml` is used for validation during `forge` and `cast
 
 ## Step 4: Create your blanks
 
-Add command blanks to `.claude/commands/`, skill blanks to `.claude/skills/`, and workflow files to `.github/workflows/`. Reference flux variables with Go template syntax:
+Add command blanks to `commands/`, skill blanks to `skills/`, and workflow files to `workflows/`. The `output:` mapping in `mold.yaml` determines where they end up in the target project. Reference flux variables with Go template syntax:
 
 ```markdown
 # My Command
@@ -141,14 +164,12 @@ The alias `ailloy package` also works.
 
 ## What goes in the tarball
 
-The archive includes all files referenced by `mold.yaml`:
+The archive includes all files discovered from the mold directory:
 
 - `mold.yaml`
 - `flux.yaml` (source file if present, otherwise generated from `flux:` declarations)
 - `flux.schema.yaml` (if present)
-- All command blanks listed under `commands:`
-- All skill blanks listed under `skills:`
-- All workflow files listed under `workflows:`
+- All files in directories referenced by `output:` (or all top-level directories if `output:` is omitted)
 - Everything in the `ingots/` directory (if present)
 
 The tarball is named `{name}-{version}.tar.gz` and entries are prefixed with `{name}-{version}/`.

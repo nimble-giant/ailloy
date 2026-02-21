@@ -26,17 +26,17 @@ flux:
     type: string
     required: false
     default: "acme"
-commands:
-  - hello.md
-skills:
-  - helper.md
-workflows:
-  - ci.yml
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+  workflows:
+    dest: .github/workflows
+    process: false
 `
 	dirs := []string{
-		filepath.Join(dir, ".claude", "commands"),
-		filepath.Join(dir, ".claude", "skills"),
-		filepath.Join(dir, ".github", "workflows"),
+		filepath.Join(dir, "commands"),
+		filepath.Join(dir, "skills"),
+		filepath.Join(dir, "workflows"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0750); err != nil {
@@ -45,10 +45,10 @@ workflows:
 	}
 
 	files := map[string]string{
-		"mold.yaml":                 moldYAML,
-		".claude/commands/hello.md": "# Hello\nCommand blank.\n",
-		".claude/skills/helper.md":  "# Helper\nSkill blank.\n",
-		".github/workflows/ci.yml":  "name: CI\non: push\n",
+		"mold.yaml":         moldYAML,
+		"commands/hello.md": "# Hello\nCommand blank.\n",
+		"skills/helper.md":  "# Helper\nSkill blank.\n",
+		"workflows/ci.yml":  "name: CI\non: push\n",
 	}
 	for rel, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, rel), []byte(content), 0644); err != nil {
@@ -167,9 +167,9 @@ func TestPackageTarball_ValidMold(t *testing.T) {
 	prefix := "test-mold-1.2.3"
 	expected := []string{
 		prefix + "/mold.yaml",
-		prefix + "/.claude/commands/hello.md",
-		prefix + "/.claude/skills/helper.md",
-		prefix + "/.github/workflows/ci.yml",
+		prefix + "/commands/hello.md",
+		prefix + "/skills/helper.md",
+		prefix + "/workflows/ci.yml",
 		prefix + "/flux.yaml",
 	}
 	entrySet := make(map[string]bool)
@@ -237,25 +237,21 @@ func TestPackageTarball_InvalidMold(t *testing.T) {
 	}
 }
 
-func TestPackageTarball_MissingBlankFile(t *testing.T) {
+func TestPackageTarball_NoOutputMapping(t *testing.T) {
 	dir := t.TempDir()
 	moldYAML := `apiVersion: v1
 kind: mold
-name: broken
+name: minimal
 version: 0.1.0
-commands:
-  - nonexistent.md
 `
 	if err := os.WriteFile(filepath.Join(dir, "mold.yaml"), []byte(moldYAML), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, _, err := PackageTarball(dir, t.TempDir())
-	if err == nil {
-		t.Fatal("expected error for missing blank file")
-	}
-	if !strings.Contains(err.Error(), "nonexistent.md") {
-		t.Errorf("expected error to mention missing file, got: %v", err)
+	outputDir := t.TempDir()
+	_, _, err := PackageTarball(dir, outputDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -380,8 +376,8 @@ kind: mold
 name: helm-style
 version: 2.0.0
 description: "Helm-style mold with no inline flux"
-commands:
-  - hello.md
+output:
+  commands: .claude/commands
 `
 	fluxYAML := `# Default values
 org: acme-corp
@@ -389,7 +385,7 @@ board: Engineering
 cli: gh
 `
 	dirs := []string{
-		filepath.Join(dir, ".claude", "commands"),
+		filepath.Join(dir, "commands"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0750); err != nil {
@@ -398,9 +394,9 @@ cli: gh
 	}
 
 	files := map[string]string{
-		"mold.yaml":                 moldYAML,
-		"flux.yaml":                 fluxYAML,
-		".claude/commands/hello.md": "# Hello\nCommand blank.\n",
+		"mold.yaml":         moldYAML,
+		"flux.yaml":         fluxYAML,
+		"commands/hello.md": "# Hello\nCommand blank.\n",
 	}
 	if includeSchema {
 		files["flux.schema.yaml"] = "- name: org\n  type: string\n  required: true\n"
@@ -437,7 +433,7 @@ func TestPackageTarball_HelmStyleMold(t *testing.T) {
 	if !entrySet[prefix+"/flux.yaml"] {
 		t.Error("expected flux.yaml in tarball")
 	}
-	if !entrySet[prefix+"/.claude/commands/hello.md"] {
+	if !entrySet[prefix+"/commands/hello.md"] {
 		t.Error("expected command blank in tarball")
 	}
 }
@@ -476,13 +472,13 @@ func TestPackageTarball_SourceFluxPreservedVerbatim(t *testing.T) {
 kind: mold
 name: verbatim
 version: 1.0.0
-commands:
-  - cmd.md
+output:
+  commands: .claude/commands
 `
 	// flux.yaml with comments and specific formatting
 	fluxYAML := "# My custom flux values\norg: my-org\n# Board setting\nboard: Product\n"
 
-	for _, d := range []string{filepath.Join(moldDir, ".claude", "commands")} {
+	for _, d := range []string{filepath.Join(moldDir, "commands")} {
 		if err := os.MkdirAll(d, 0750); err != nil {
 			t.Fatal(err)
 		}
@@ -493,7 +489,7 @@ commands:
 	if err := os.WriteFile(filepath.Join(moldDir, "flux.yaml"), []byte(fluxYAML), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(moldDir, ".claude", "commands", "cmd.md"), []byte("# Cmd\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(moldDir, "commands", "cmd.md"), []byte("# Cmd\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 

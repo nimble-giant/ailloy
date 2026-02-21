@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -124,49 +125,32 @@ func runForge(_ *cobra.Command, args []string) error {
 	resolver := buildIngotResolver(flux)
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
+	// Resolve all output files from the mold.
+	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	if err != nil {
+		return fmt.Errorf("resolving output files: %w", err)
+	}
+
 	var files []renderedFile
+	for _, rf := range resolved {
+		content, err := fs.ReadFile(reader.FS(), rf.SrcPath)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", rf.SrcPath, err)
+		}
 
-	// Render command blanks
-	for _, name := range manifest.Commands {
-		content, err := reader.GetBlank(name)
-		if err != nil {
-			return fmt.Errorf("reading command blank %s: %w", name, err)
+		var rendered string
+		if rf.Process {
+			rendered, err = renderFile(rf.SrcPath, content, flux, opts...)
+			if err != nil {
+				return err
+			}
+		} else {
+			rendered = string(content)
 		}
-		rendered, err := renderFile(name, content, flux, opts...)
-		if err != nil {
-			return err
-		}
+
 		files = append(files, renderedFile{
-			destPath: filepath.Join(".claude", "commands", name),
+			destPath: rf.DestPath,
 			content:  rendered,
-		})
-	}
-
-	// Render skill blanks
-	for _, name := range manifest.Skills {
-		content, err := reader.GetSkill(name)
-		if err != nil {
-			return fmt.Errorf("reading skill blank %s: %w", name, err)
-		}
-		rendered, err := renderFile(name, content, flux, opts...)
-		if err != nil {
-			return err
-		}
-		files = append(files, renderedFile{
-			destPath: filepath.Join(".claude", "skills", name),
-			content:  rendered,
-		})
-	}
-
-	// Workflow blanks are not Go-templated, include as-is
-	for _, name := range manifest.Workflows {
-		content, err := reader.GetWorkflowBlank(name)
-		if err != nil {
-			return fmt.Errorf("reading workflow blank %s: %w", name, err)
-		}
-		files = append(files, renderedFile{
-			destPath: filepath.Join(".github", "workflows", name),
-			content:  string(content),
 		})
 	}
 
