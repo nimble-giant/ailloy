@@ -5,7 +5,7 @@ Ailloy blanks are Markdown instruction files that live in mold directories. They
 ## Blank Location
 
 Blanks are stored in mold directories and loaded at runtime:
-- **Mold source**: `nimble-mold/.claude/commands/` (the official mold)
+- **Mold source**: `nimble-mold/commands/` (the official mold)
 - **Project output**: `.claude/commands/` (created by `ailloy cast`)
 - **Reader package**: `pkg/blanks/` (the `MoldReader` abstraction)
 
@@ -13,14 +13,15 @@ Blanks are stored in mold directories and loaded at runtime:
 
 ### Command Blanks
 
+- **`brainstorm.md`**: Analyze an idea for feasibility, scope, and value using structured brainstorming techniques
 - **`create-issue.md`**: Generate well-formatted GitHub issues with proper structure and metadata
 - **`start-issue.md`**: Fetch GitHub issue details and begin implementation workflow
 - **`open-pr.md`**: Create pull requests with structured descriptions
 - **`pr-description.md`**: Generate comprehensive PR descriptions
 - **`pr-review.md`**: Review pull requests with comprehensive feedback
 - **`pr-comments.md`**: Add structured comments to pull requests
-- **`update-pr.md`**: Update existing pull requests
 - **`preflight.md`**: Pre-flight checks and setup
+- **`update-pr.md`**: Update existing pull requests
 
 ### Future: Agents & Hooks
 
@@ -60,9 +61,9 @@ ailloy cast ./nimble-mold
 
 ## Blank Development
 
-Blanks live in mold directories (e.g., `nimble-mold/.claude/commands/`). To add new blanks:
+Blanks live in mold directories (e.g., `nimble-mold/commands/`). To add new blanks:
 
-1. Create a new `.md` file in `nimble-mold/.claude/commands/`
+1. Create a new `.md` file in `nimble-mold/commands/`
 2. Add the filename to `nimble-mold/mold.yaml` under `commands:`
 3. Include clear instructions for Claude Code
 4. Define workflow steps and expected outputs

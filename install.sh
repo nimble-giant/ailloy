@@ -213,11 +213,11 @@ main() {
 
     # Success message
     echo ""
-    success "Ready!" "Run 'ailloy init' to set up your project."
+    success "Ready!" "Run 'ailloy cast <mold-dir>' to set up your project."
     echo ""
-    info "Quick start:" "ailloy init            # Set up AI templates"
-    info "            " "ailloy template list   # View available templates"
-    info "            " "ailloy customize       # Configure settings"
+    info "Quick start:" "ailloy cast <mold-dir>  # Install blanks into project"
+    info "            " "ailloy mold list        # View available blanks"
+    info "            " "ailloy anneal           # Configure flux variables"
     echo ""
 }
 

@@ -6,24 +6,26 @@ This project is set up with Ailloy blanks for AI-assisted development workflows.
 
 The following command blanks are available in the `.claude/commands/` directory:
 
+- **brainstorm**: Analyze an idea for feasibility, scope, and value using structured brainstorming techniques
 - **create-issue**: Generate well-formatted GitHub issues with proper structure
 - **start-issue**: Fetch GitHub issue details and begin implementation
 - **open-pr**: Create pull requests with structured descriptions
 - **pr-description**: Generate comprehensive PR descriptions
 - **pr-comments**: Respond to PR review comments efficiently
 - **pr-review**: Conduct comprehensive code reviews with silent/interactive modes
+- **preflight**: Pre-flight checks and setup
 - **update-pr**: Update existing pull requests
-- **brainstorm**: Analyze an idea for feasibility, scope, and value using structured brainstorming techniques
 
 ## Available Skills
 
 The following skills are available in the `.claude/skills/` directory:
 
 - **brainstorm**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
+- **add-ailloy-blank**: Guided workflow for creating new Ailloy blanks with proper mold structure
 
 ## Workflow Blanks
 
-The following workflow blanks are available in `.github/workflows/`:
+The following workflow blanks are available in the official mold (`nimble-mold/workflows/`) and can be installed into a project's `.github/workflows/` via `ailloy cast --with-workflows`:
 
 - **claude-code**: GitHub Actions workflow for the Claude Code agent (responds to @claude mentions in issues and PRs)
 - **claude-code-review**: GitHub Actions workflow for automated PR reviews with Claude Code agent. Features brevity-focused formatting, collapsible sections, and comment management (updates summary, creates replies).
