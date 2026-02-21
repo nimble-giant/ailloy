@@ -81,10 +81,6 @@ func (t *Transformer) Transform(tmpl BlankInfo) ([]byte, error) {
 		output.WriteString(t.extractGitHubCommands(ghCommands))
 	}
 
-	// Add configuration note
-	output.WriteString("\n\n## Configuration\n\n")
-	output.WriteString("This command reads from `.ailloy/ailloy.yaml` for default values.\n")
-
 	return output.Bytes(), nil
 }
 

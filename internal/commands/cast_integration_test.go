@@ -239,63 +239,6 @@ func TestIntegration_CastProject_DirectoryCreation(t *testing.T) {
 	}
 }
 
-func TestIntegration_CastGlobal_DirectoryCreation(t *testing.T) {
-	tmpHome := t.TempDir()
-
-	globalDir := filepath.Join(tmpHome, ".ailloy")
-	dirs := []string{
-		globalDir,
-		filepath.Join(globalDir, "blanks"),
-		filepath.Join(globalDir, "providers"),
-	}
-
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0750); err != nil {
-			t.Fatalf("failed to create directory %s: %v", dir, err)
-		}
-	}
-
-	for _, dir := range dirs {
-		info, err := os.Stat(dir)
-		if err != nil {
-			t.Errorf("directory %s not created: %v", dir, err)
-			continue
-		}
-		if !info.IsDir() {
-			t.Errorf("expected %s to be a directory", dir)
-		}
-	}
-
-	configPath := filepath.Join(globalDir, "ailloy.yaml")
-	configContent := `user:
-  name: "Test User"
-  email: "test@example.com"
-providers:
-  claude:
-    enabled: true
-    api_key_env: "ANTHROPIC_API_KEY"
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
-		t.Fatalf("failed to create config: %v", err)
-	}
-
-	info, err := os.Stat(configPath)
-	if err != nil {
-		t.Fatalf("config file not created: %v", err)
-	}
-	if info.Mode().Perm() != 0600 {
-		t.Errorf("expected config permissions 0600, got %o", info.Mode().Perm())
-	}
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("failed to read config: %v", err)
-	}
-	if !strings.Contains(string(data), "claude") {
-		t.Error("expected config to mention claude provider")
-	}
-}
-
 func TestIntegration_FilePermissions(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()

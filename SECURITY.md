@@ -61,7 +61,7 @@ When using Ailloy:
 - **Keep Ailloy updated** to the latest version
 - **Store sensitive configuration** (API keys, tokens) in environment variables, not in configuration files
 - **Review blanks** before using them in your workflow
-- **Do not commit** `.ailloy/ailloy.yaml` files containing sensitive information
+- **Do not commit** `flux.yaml` files containing sensitive information
 
 ## Scope
 

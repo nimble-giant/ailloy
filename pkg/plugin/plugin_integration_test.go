@@ -213,9 +213,6 @@ func TestIntegration_BlankTransformationConsistency(t *testing.T) {
 			if !strings.Contains(content, "## Instructions for Claude") {
 				t.Errorf("missing instructions section for %s", tmpl.Name)
 			}
-			if !strings.Contains(content, "## Configuration") {
-				t.Errorf("missing configuration section for %s", tmpl.Name)
-			}
 		})
 	}
 }

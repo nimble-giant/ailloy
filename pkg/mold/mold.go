@@ -20,13 +20,31 @@ type Requires struct {
 	Ailloy string `yaml:"ailloy"`
 }
 
+// DiscoverSpec declares how to dynamically discover options for a flux variable.
+// Discovery commands are executed lazily during `ailloy anneal` when the user
+// reaches the relevant wizard section.
+type DiscoverSpec struct {
+	Command  string         `yaml:"command"`             // Shell command to run
+	Parse    string         `yaml:"parse,omitempty"`     // Go template to extract label|value pairs from JSON output
+	Prompt   string         `yaml:"prompt,omitempty"`    // "select" for dropdown, "input" for freeform (default)
+	AlsoSets map[string]int `yaml:"also_sets,omitempty"` // Maps flux var names to extra pipe-segment indices (0=label, 1=value, 2+)
+}
+
+// SelectOption declares a static option for a select-type flux variable.
+type SelectOption struct {
+	Label string `yaml:"label"`
+	Value string `yaml:"value"`
+}
+
 // FluxVar declares a template variable with type information.
 type FluxVar struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description,omitempty"`
-	Type        string `yaml:"type"`
-	Required    bool   `yaml:"required"`
-	Default     string `yaml:"default,omitempty"`
+	Name        string         `yaml:"name"`
+	Description string         `yaml:"description,omitempty"`
+	Type        string         `yaml:"type"`
+	Required    bool           `yaml:"required"`
+	Default     string         `yaml:"default,omitempty"`
+	Options     []SelectOption `yaml:"options,omitempty"`  // Static options for select type
+	Discover    *DiscoverSpec  `yaml:"discover,omitempty"` // Dynamic discovery specification
 }
 
 // Dependency declares a dependency on an ingot.

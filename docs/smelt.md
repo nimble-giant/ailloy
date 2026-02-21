@@ -118,9 +118,55 @@ Only declare variables that need validation. You don't need to list every variab
   type: string
 ```
 
-Supported types: `string`, `bool`, `int`, `list`.
+Supported types: `string`, `bool`, `int`, `list`, `select`.
 
-When present, `flux.schema.yaml` is used for validation during `forge` and `cast`. If absent, ailloy falls back to any `flux:` declarations in `mold.yaml`. If neither exists, no validation is performed.
+When present, `flux.schema.yaml` is used for validation during `forge` and `cast`, and drives the interactive wizard during `ailloy anneal`. If absent, ailloy falls back to any `flux:` declarations in `mold.yaml`. If neither exists, no validation is performed.
+
+### Select type
+
+Use `type: select` with static options for variables that have a fixed set of choices:
+
+```yaml
+- name: scm.provider
+  type: select
+  description: "Source control provider"
+  options:
+    - label: GitHub
+      value: github
+    - label: GitLab
+      value: gitlab
+    - label: Bitbucket
+      value: bitbucket
+```
+
+### Schema discovery (optional)
+
+Flux variables can declare a `discover` block to dynamically populate options from external commands during `ailloy anneal`:
+
+```yaml
+- name: project.id
+  type: string
+  description: "Default project board"
+  discover:
+    command: "gh api graphql -f query='...' -f org='{{.project.organization}}'"
+    parse: |
+      {{- range .data.organization.projectsV2.nodes -}}
+      {{ .title }}|{{ .id }}|{{ .title }}|{{ .number }}
+      {{ end -}}
+    also_sets:
+      project.board: 0
+      project.number: 1
+    prompt: select
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `command` | Yes | Shell command to execute. Supports `{{.variable}}` template expansion against current flux values. |
+| `parse` | No | Go template applied to JSON output. Each line should be `label\|value` or just `value`. Extra pipe-delimited segments beyond `label\|value` are available to `also_sets`. If omitted, each line of stdout becomes an option. |
+| `prompt` | No | `"select"` for a dropdown, `"input"` for freeform text (default). |
+| `also_sets` | No | Maps additional flux variable names to extra segment indices (0-based into segments after `label\|value`). Allows a single selection to populate multiple variables. |
+
+Discovery commands run lazily during `ailloy anneal` when the user reaches the relevant wizard section. If a discovery command's template dependencies (e.g. `{{.project.organization}}`) are not yet populated, the wizard shows a waiting placeholder until the user fills them in. If a command fails, the wizard falls back to manual input with a warning.
 
 ## Step 4: Create your blanks
 
@@ -264,6 +310,5 @@ When a mold is installed with `forge` or `cast`, flux values are resolved in thi
 
 1. `mold.yaml` `flux:` schema defaults
 2. `flux.yaml` defaults
-3. Project config (`ailloy.yaml` / `.ailloyrc`)
-4. Global config (`~/.ailloy/`)
-5. `--set` flags
+3. `-f, --values` flux overrides
+4. `--set` flags

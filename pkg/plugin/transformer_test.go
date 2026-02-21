@@ -57,10 +57,6 @@ This is a test command for testing.
 		t.Error("expected output to contain instructions section")
 	}
 
-	// Should contain configuration section
-	if !strings.Contains(content, "## Configuration") {
-		t.Error("expected output to contain configuration section")
-	}
 }
 
 func TestTransformer_ParseBlank(t *testing.T) {
@@ -437,7 +433,6 @@ A comprehensive test command.
 		"## Instructions for Claude",
 		"## Workflow",
 		"## GitHub CLI Commands",
-		"## Configuration",
 	}
 
 	for _, section := range sections {

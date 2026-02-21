@@ -23,6 +23,7 @@ var validFluxTypes = map[string]bool{
 	"bool":   true,
 	"int":    true,
 	"list":   true,
+	"select": true,
 }
 
 // ValidateMold validates a Mold manifest for required fields and correct formats.
@@ -57,7 +58,16 @@ func ValidateMold(m *Mold) error {
 		if f.Type == "" {
 			errs = append(errs, fmt.Sprintf("flux[%d].type is required", i))
 		} else if !validFluxTypes[f.Type] {
-			errs = append(errs, fmt.Sprintf("flux[%d].type %q is not valid (allowed: string, bool, int, list)", i, f.Type))
+			errs = append(errs, fmt.Sprintf("flux[%d].type %q is not valid (allowed: string, bool, int, list, select)", i, f.Type))
+		}
+		if f.Type == "select" && len(f.Options) == 0 && f.Discover == nil {
+			errs = append(errs, fmt.Sprintf("flux[%d] %q: select type requires options or discover", i, f.Name))
+		}
+		if f.Discover != nil && f.Discover.Command == "" {
+			errs = append(errs, fmt.Sprintf("flux[%d] %q: discover.command is required", i, f.Name))
+		}
+		if f.Discover != nil && f.Discover.Prompt != "" && f.Discover.Prompt != "select" && f.Discover.Prompt != "input" {
+			errs = append(errs, fmt.Sprintf("flux[%d] %q: discover.prompt must be \"select\" or \"input\"", i, f.Name))
 		}
 	}
 
@@ -350,7 +360,28 @@ func temperFluxSchema(fsys fs.FS, manifestFlux []FluxVar, result *TemperResult) 
 		} else if !validFluxTypes[f.Type] {
 			result.Diagnostics = append(result.Diagnostics, Diagnostic{
 				Severity: SeverityError,
-				Message:  fmt.Sprintf("flux[%d].type %q is not valid (allowed: string, bool, int, list)", i, f.Type),
+				Message:  fmt.Sprintf("flux[%d].type %q is not valid (allowed: string, bool, int, list, select)", i, f.Type),
+				File:     "flux.schema.yaml",
+			})
+		}
+		if f.Type == "select" && len(f.Options) == 0 && f.Discover == nil {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("flux[%d] %q: select type requires options or discover", i, f.Name),
+				File:     "flux.schema.yaml",
+			})
+		}
+		if f.Discover != nil && f.Discover.Command == "" {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("flux[%d] %q: discover.command is required", i, f.Name),
+				File:     "flux.schema.yaml",
+			})
+		}
+		if f.Discover != nil && f.Discover.Prompt != "" && f.Discover.Prompt != "select" && f.Discover.Prompt != "input" {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("flux[%d] %q: discover.prompt must be \"select\" or \"input\"", i, f.Name),
 				File:     "flux.schema.yaml",
 			})
 		}

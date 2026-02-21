@@ -277,6 +277,93 @@ func TestValidateOutputSources_NilOutput(t *testing.T) {
 	}
 }
 
+func TestValidateMold_SelectTypeValid(t *testing.T) {
+	m := &Mold{
+		APIVersion: "v1",
+		Kind:       "mold",
+		Name:       "test",
+		Version:    "1.0.0",
+		Flux: []FluxVar{{
+			Name: "provider",
+			Type: "select",
+			Options: []SelectOption{
+				{Label: "GitHub", Value: "github"},
+				{Label: "GitLab", Value: "gitlab"},
+			},
+		}},
+	}
+	if err := ValidateMold(m); err != nil {
+		t.Errorf("expected select with options to be valid, got: %v", err)
+	}
+}
+
+func TestValidateMold_SelectTypeWithDiscover(t *testing.T) {
+	m := &Mold{
+		APIVersion: "v1",
+		Kind:       "mold",
+		Name:       "test",
+		Version:    "1.0.0",
+		Flux: []FluxVar{{
+			Name:     "board",
+			Type:     "select",
+			Discover: &DiscoverSpec{Command: "gh api list-boards"},
+		}},
+	}
+	if err := ValidateMold(m); err != nil {
+		t.Errorf("expected select with discover to be valid, got: %v", err)
+	}
+}
+
+func TestValidateMold_SelectTypeWithoutOptions(t *testing.T) {
+	m := &Mold{
+		APIVersion: "v1",
+		Kind:       "mold",
+		Name:       "test",
+		Version:    "1.0.0",
+		Flux:       []FluxVar{{Name: "provider", Type: "select"}},
+	}
+	err := ValidateMold(m)
+	if err == nil {
+		t.Error("expected error for select without options or discover")
+	}
+}
+
+func TestValidateMold_DiscoverWithoutCommand(t *testing.T) {
+	m := &Mold{
+		APIVersion: "v1",
+		Kind:       "mold",
+		Name:       "test",
+		Version:    "1.0.0",
+		Flux: []FluxVar{{
+			Name:     "board",
+			Type:     "string",
+			Discover: &DiscoverSpec{Command: ""},
+		}},
+	}
+	err := ValidateMold(m)
+	if err == nil {
+		t.Error("expected error for discover without command")
+	}
+}
+
+func TestValidateMold_DiscoverInvalidPrompt(t *testing.T) {
+	m := &Mold{
+		APIVersion: "v1",
+		Kind:       "mold",
+		Name:       "test",
+		Version:    "1.0.0",
+		Flux: []FluxVar{{
+			Name:     "board",
+			Type:     "string",
+			Discover: &DiscoverSpec{Command: "echo test", Prompt: "invalid"},
+		}},
+	}
+	err := ValidateMold(m)
+	if err == nil {
+		t.Error("expected error for invalid discover.prompt")
+	}
+}
+
 func TestLoadMoldFromFS(t *testing.T) {
 	yaml := `apiVersion: v1
 kind: mold
