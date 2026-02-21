@@ -135,7 +135,7 @@ func BuildTemplateData(flux map[string]any, ore *Ore) map[string]any {
 
 	// Deep-merge nested flux variables into data
 	if flux != nil {
-		mergo.Merge(&data, flux, mergo.WithOverride) //nolint:errcheck // best-effort merge
+		mergo.Merge(&data, flux, mergo.WithOverride) //nolint:errcheck // #nosec G104 -- best-effort merge
 	}
 
 	// Add ore as nested structure (always present so conditionals work)
