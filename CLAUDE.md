@@ -1,10 +1,10 @@
 # Claude Code Configuration
 
-This project is set up with Ailloy templates for AI-assisted development workflows.
+This project is set up with Ailloy blanks for AI-assisted development workflows.
 
 ## Available Commands
 
-The following command templates are available in the `.claude/commands/` directory:
+The following command blanks are available in the `.claude/commands/` directory:
 
 - **create-issue**: Generate well-formatted GitHub issues with proper structure
 - **start-issue**: Fetch GitHub issue details and begin implementation
@@ -21,20 +21,20 @@ The following skills are available in the `.claude/skills/` directory:
 
 - **brainstorm**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
 
-## Workflow Templates
+## Workflow Blanks
 
-The following workflow templates are available in `.github/workflows/`:
+The following workflow blanks are available in `.github/workflows/`:
 
 - **claude-code**: GitHub Actions workflow for the Claude Code agent (responds to @claude mentions in issues and PRs)
 - **claude-code-review**: GitHub Actions workflow for automated PR reviews with Claude Code agent. Features brevity-focused formatting, collapsible sections, and comment management (updates summary, creates replies).
 
 ## Usage
 
-To use a command template:
+To use a command blank:
 
-1. Open the template file from the `.claude/commands/` directory
-2. Copy the template content into your Claude Code conversation
-3. Use the command syntax specified in the template
+1. Open the blank file from the `.claude/commands/` directory
+2. Copy the blank content into your Claude Code conversation
+3. Use the command syntax specified in the blank
 
 ## Git Hooks (lefthook)
 

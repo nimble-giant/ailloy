@@ -13,13 +13,13 @@ my-mold/
 ├── flux.schema.yaml         # Optional - validation rules
 ├── .claude/
 │   ├── commands/
-│   │   └── my-command.md    # Command templates
+│   │   └── my-command.md    # Command blanks
 │   └── skills/
-│       └── my-skill.md      # Skill templates
+│       └── my-skill.md      # Skill blanks
 ├── .github/
 │   └── workflows/
-│       └── ci.yml           # Workflow templates
-└── ingots/                  # Optional - template partials
+│       └── ci.yml           # Workflow blanks
+└── ingots/                  # Optional - ingot partials
     └── my-ingot/
         ├── ingot.yaml
         └── partial.md
@@ -34,7 +34,7 @@ apiVersion: v1
 kind: mold
 name: my-team-mold
 version: 1.0.0
-description: "Our team's Claude Code templates"
+description: "Our team's Claude Code blanks"
 author:
   name: My Team
   url: https://github.com/my-org
@@ -50,7 +50,7 @@ workflows:
 
 ## Step 2: Write `flux.yaml` (optional)
 
-Default values for template variables, like Helm's `values.yaml`. Use nested YAML to group related values:
+Default values for flux variables, like Helm's `values.yaml`. Use nested YAML to group related values:
 
 ```yaml
 project:
@@ -63,7 +63,7 @@ scm:
   base_url: https://github.com
 ```
 
-Templates reference nested values with dotted paths: `{{ scm.provider }}`, `{{ project.board }}`, etc.
+Blanks reference nested values with dotted paths: `{{ scm.provider }}`, `{{ project.board }}`, etc.
 
 Multiline values use YAML block syntax:
 
@@ -94,9 +94,9 @@ Supported types: `string`, `bool`, `int`, `list`.
 
 When present, `flux.schema.yaml` is used for validation during `forge` and `cast`. If absent, ailloy falls back to any `flux:` declarations in `mold.yaml`. If neither exists, no validation is performed.
 
-## Step 4: Create your templates
+## Step 4: Create your blanks
 
-Add command templates to `.claude/commands/`, skill templates to `.claude/skills/`, and workflow files to `.github/workflows/`. Reference flux variables with Go template syntax:
+Add command blanks to `.claude/commands/`, skill blanks to `.claude/skills/`, and workflow files to `.github/workflows/`. Reference flux variables with Go template syntax:
 
 ```markdown
 # My Command
@@ -141,8 +141,8 @@ The archive includes all files referenced by `mold.yaml`:
 - `mold.yaml`
 - `flux.yaml` (source file if present, otherwise generated from `flux:` declarations)
 - `flux.schema.yaml` (if present)
-- All command templates listed under `commands:`
-- All skill templates listed under `skills:`
+- All command blanks listed under `commands:`
+- All skill blanks listed under `skills:`
 - All workflow files listed under `workflows:`
 - Everything in the `ingots/` directory (if present)
 
@@ -174,7 +174,7 @@ ailloy forge ./my-mold
 # Write rendered output to a specific directory
 ailloy forge ./my-mold -o /tmp/preview
 
-# Install templates into the current project
+# Install blanks into the current project
 ailloy cast ./my-mold
 
 # Override flux values at install time

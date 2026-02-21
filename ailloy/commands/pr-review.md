@@ -13,8 +13,8 @@ bash
 
 ## Instructions for Claude
 
-Process this command according to the Ailloy workflow template.
-Refer to the full template documentation for detailed instructions.
+Process this command according to the Ailloy workflow blank.
+Refer to the full blank documentation for detailed instructions.
 
 
 ## Workflow

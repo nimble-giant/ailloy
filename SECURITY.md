@@ -60,7 +60,7 @@ When using Ailloy:
 
 - **Keep Ailloy updated** to the latest version
 - **Store sensitive configuration** (API keys, tokens) in environment variables, not in configuration files
-- **Review templates** before using them in your workflow
+- **Review blanks** before using them in your workflow
 - **Do not commit** `.ailloy/ailloy.yaml` files containing sensitive information
 
 ## Scope
@@ -68,10 +68,10 @@ When using Ailloy:
 This security policy applies to:
 
 - The Ailloy CLI tool
-- Official templates distributed with Ailloy
+- Official blanks distributed with Ailloy
 - Documentation and example configurations
 
-Third-party templates or plugins are not covered by this policy.
+Third-party blanks or plugins are not covered by this policy.
 
 ## Recognition
 

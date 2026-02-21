@@ -1,16 +1,17 @@
-# Ailloy Templates
+# Ailloy Blanks
 
-Ailloy templates are embedded in the CLI binary and automatically copied to projects during initialization. Templates support commands, agents, and hooks for Claude Code workflows.
+Ailloy blanks are Markdown instruction files that live in mold directories. They define Claude Code slash commands and are rendered with flux variables via `ailloy forge` or installed into projects via `ailloy cast`.
 
-## Template Location
+## Blank Location
 
-Templates are embedded in the Go binary from `pkg/templates/` and deployed to:
-- **Project templates**: `.claude/commands/` (created by `ailloy init`)
-- **Source templates**: `pkg/templates/claude/commands/` (embedded in binary)
+Blanks are stored in mold directories and loaded at runtime:
+- **Mold source**: `nimble-mold/.claude/commands/` (the official mold)
+- **Project output**: `.claude/commands/` (created by `ailloy cast`)
+- **Reader package**: `pkg/blanks/` (the `MoldReader` abstraction)
 
-## Available Templates
+## Available Blanks
 
-### Command Templates
+### Command Blanks
 
 - **`create-issue.md`**: Generate well-formatted GitHub issues with proper structure and metadata
 - **`start-issue.md`**: Fetch GitHub issue details and begin implementation workflow
@@ -23,14 +24,14 @@ Templates are embedded in the Go binary from `pkg/templates/` and deployed to:
 
 ### Future: Agents & Hooks
 
-Templates for specialized AI agents and workflow hooks are planned for future releases.
+Blanks for specialized AI agents and workflow hooks are planned for future releases.
 
-## Template Structure
+## Blank Structure
 
-Templates are Markdown files containing detailed instructions for Claude Code. Each template includes:
+Blanks are Markdown files containing detailed instructions for Claude Code. Each blank includes:
 
-- **Purpose**: Clear explanation of what the template accomplishes
-- **Command syntax**: How to invoke the template in Claude Code
+- **Purpose**: Clear explanation of what the blank accomplishes
+- **Command syntax**: How to invoke the blank in Claude Code
 - **Workflow steps**: Detailed instructions for Claude to follow
 - **Output format**: Expected structure of results
 - **Integration**: GitHub CLI commands and API usage
@@ -38,27 +39,33 @@ Templates are Markdown files containing detailed instructions for Claude Code. E
 ## Usage with CLI
 
 ```bash
-# List available templates
-ailloy template list
+# List available blanks
+ailloy mold list
 
-# View a specific template
-ailloy template show create-issue
+# View a specific blank
+ailloy mold show create-issue
+
+# Preview rendered output (dry run)
+ailloy forge ./nimble-mold
+
+# Install into current project
+ailloy cast ./nimble-mold
 ```
 
-## Using Templates with Claude Code
+## Using Blanks with Claude Code
 
-1. **View template**: Use `ailloy template show <template-name>` to see the full instructions
-2. **Copy to Claude**: Copy the template content into your Claude Code conversation  
-3. **Follow workflow**: Claude will execute the template's instructions
+1. **View blank**: Use `ailloy mold show <blank-name>` to see the full instructions
+2. **Copy to Claude**: Copy the blank content into your Claude Code conversation
+3. **Follow workflow**: Claude will execute the blank's instructions
 
-## Template Development
+## Blank Development
 
-Templates are embedded from `pkg/templates/claude/commands/` during the build process. To add new templates:
+Blanks live in mold directories (e.g., `nimble-mold/.claude/commands/`). To add new blanks:
 
-1. Create a new `.md` file in `pkg/templates/claude/commands/`
-2. Include clear instructions for Claude Code
-3. Define workflow steps and expected outputs
-4. Rebuild the Ailloy binary to embed the new template
-5. Test with `ailloy template show <new-template-name>`
+1. Create a new `.md` file in `nimble-mold/.claude/commands/`
+2. Add the filename to `nimble-mold/mold.yaml` under `commands:`
+3. Include clear instructions for Claude Code
+4. Define workflow steps and expected outputs
+5. Test with `ailloy forge ./nimble-mold`
 
-Templates are automatically discovered from the embedded filesystem.
+Blanks are automatically discovered by the `MoldReader` from the mold's `mold.yaml` manifest.

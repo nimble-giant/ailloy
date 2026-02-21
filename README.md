@@ -6,7 +6,7 @@
 
 ![Ailloy Mascot](.assets/Ailloy%20the%20Blacksmith%20Innovator.png)
 
-**Ailloy** is a CLI tool for initializing projects with agentic AI patterns to assist with software development lifecycle (SDLC) tasks. Currently focused on Claude Code integration, Ailloy helps developers set up structured AI workflows using templates and configuration files.
+**Ailloy** is a CLI tool for initializing projects with agentic AI patterns to assist with software development lifecycle (SDLC) tasks. Currently focused on Claude Code integration, Ailloy helps developers set up structured AI workflows using blanks and configuration files.
 
 Like in metallurgy—where combining two elements yields a stronger alloy—Ailloy represents the fusion of traditional development practices with AI assistance to create more efficient engineering workflows.
 
@@ -16,12 +16,12 @@ Like in metallurgy—where combining two elements yields a stronger alloy—Aill
 
 Ailloy helps you:
 
-- **Initialize AI-ready projects**: Set up command template structure for AI-assisted workflows
-- **Customize templates**: Configure team-specific defaults for consistent workflows
-- **Manage AI templates**: Access pre-built templates for common development tasks
+- **Initialize AI-ready projects**: Set up command blank structure for AI-assisted workflows
+- **Customize blanks**: Configure team-specific defaults for consistent workflows
+- **Manage AI blanks**: Access pre-built blanks for common development tasks
 - **Standardize AI workflows**: Use consistent patterns for GitHub issues, PRs, and development tasks
 
-Currently focused on **Claude Code** because it offers the level of customization and template support needed for sophisticated AI-assisted development workflows.
+Currently focused on **Claude Code** because it offers the level of customization and blank support needed for sophisticated AI-assisted development workflows.
 
 ## Quick Start
 
@@ -67,7 +67,7 @@ ailloy init
 ailloy init --global
 ```
 
-### Customize Templates
+### Customize Blanks
 
 ```bash
 # Set team-specific defaults
@@ -83,14 +83,14 @@ ailloy customize
 ailloy customize --global --set default_board="My Default Board"
 ```
 
-### Working with Templates
+### Working with Blanks
 
 ```bash
-# List available templates
-ailloy template list
+# List available blanks
+ailloy mold list
 
-# View a specific template
-ailloy template show create-issue
+# View a specific blank
+ailloy mold show create-issue
 ```
 
 ## Available Commands
@@ -104,26 +104,26 @@ Initialize Ailloy configuration:
 
 ### `ailloy customize`
 
-Configure template variables for team-specific defaults:
+Configure flux variables for team-specific defaults:
 
-- `--set key=value`: Set template variables
-- `--list`: List current template variables
-- `--delete key`: Delete a template variable
+- `--set key=value`: Set flux variables
+- `--list`: List current flux variables
+- `--delete key`: Delete a flux variable
 - `--global`: Work with global configuration (vs project-specific)
 - Interactive mode (no flags): 5-section guided wizard with automatic GitHub Project field discovery, model configuration, and change review
 
-### `ailloy template`
+### `ailloy mold`
 
-Manage AI command templates:
+Manage AI command blanks:
 
-- `list`: Show all available templates
-- `show <template-name>`: Display template content
+- `list`: Show all available blanks
+- `show <blank-name>`: Display blank content
 
-## Templates
+## Blanks
 
-Ailloy includes pre-built templates for common SDLC tasks, optimized for Claude Code:
+Ailloy includes pre-built blanks for common SDLC tasks, optimized for Claude Code:
 
-### Available Templates
+### Available Blanks
 
 - **`brainstorm`**: Analyze an idea for feasibility, scope, and value using structured brainstorming techniques
 - **`create-issue`**: Generate well-formatted GitHub issues with proper structure
@@ -138,33 +138,33 @@ Skills are proactive workflows that Claude Code can use automatically based on c
 
 - **`brainstorm`**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
 
-### Workflow Templates
+### Workflow Blanks
 
-Ailloy also includes GitHub Actions workflow templates:
+Ailloy also includes GitHub Actions workflow blanks:
 
 - **`claude-code`**: GitHub Actions workflow for the [Claude Code agent](https://github.com/anthropics/claude-code-action). Responds to `@claude` mentions in issues, PR comments, and PR reviews. Requires an `ANTHROPIC_API_KEY` secret in your repository.
 - **`claude-code-review`**: GitHub Actions workflow for automated PR reviews with the [Claude Code agent](https://github.com/anthropics/claude-code-action). Features brevity-focused formatting, collapsible sections for detailed analysis, and intelligent comment management (updates summary comments, creates reply comments). Requires an `ANTHROPIC_API_KEY` secret in your repository.
 
-### Using Templates
+### Using Blanks
 
-Templates are Markdown files containing instructions for Claude Code. You can:
+Blanks are Markdown files containing instructions for Claude Code. You can:
 
-1. View templates: `ailloy template show create-issue`
-2. Copy template content into Claude Code conversations
-3. Customize templates for your project's specific needs
+1. View blanks: `ailloy mold show create-issue`
+2. Copy blank content into Claude Code conversations
+3. Customize blanks for your project's specific needs
 
-### Template Structure
+### Blank Structure
 
-Each template includes:
+Each blank includes:
 
 - Clear instructions for Claude Code
 - Context requirements
 - Expected output format
 - Integration with GitHub CLI commands
 
-### Template Customization
+### Blank Customization
 
-Templates use `{{variable_name}}` syntax, powered by Go's [text/template](https://pkg.go.dev/text/template) engine. Common variables include:
+Blanks use `{{variable_name}}` syntax, powered by Go's [text/template](https://pkg.go.dev/text/template) engine. Common variables include:
 
 - `{{default_board}}`: Default GitHub project board name
 - `{{default_priority}}`: Default issue priority (P0, P1, P2)
@@ -172,7 +172,7 @@ Templates use `{{variable_name}}` syntax, powered by Go's [text/template](https:
 - `{{organization}}`: GitHub organization name
 - `{{project_id}}`: GitHub project ID for API calls
 
-Templates also support **conditional rendering** based on your configuration:
+Blanks also support **conditional rendering** based on your configuration:
 
 ```markdown
 {{if .models.status.enabled}}
@@ -180,11 +180,11 @@ Status Field: {{.models.status.field_id}}
 {{end}}
 ```
 
-Variables and conditionals are processed when templates are copied during `ailloy init`. See the [Configuration Guide](docs/configuration.md) for full details on template syntax, models, and conditional rendering.
+Variables and conditionals are processed when blanks are copied during `ailloy init`. See the [Configuration Guide](docs/configuration.md) for full details on blank syntax, models, and conditional rendering.
 
 ## Configuration
 
-Ailloy uses YAML configuration files to store settings and template variables:
+Ailloy uses YAML configuration files to store settings and flux variables:
 
 ### Configuration Files
 
@@ -240,22 +240,22 @@ When both global and project configurations exist:
 
 1. Project variables take precedence over global variables
 2. Global variables serve as defaults for undefined project variables
-3. Variables are merged automatically during template processing
+3. Variables are merged automatically during blank processing
 
 ## Project Structure
 
 ```text
 /cmd/ailloy          # CLI tool entry point
 /internal            # Private Go packages
-  /commands          # CLI command implementations (customize wizard, init, etc.)
+  /commands          # CLI command implementations (cast, forge, smelt, etc.)
 /pkg
-  /config            # Configuration types, YAML I/O, template engine
+  /blanks            # MoldReader abstraction (reads mold directories)
   /github            # GitHub ProjectV2 discovery via gh API GraphQL
+  /mold              # Template engine, flux loading, ingot resolution
   /plugin            # Plugin generation pipeline
+  /smelt             # Mold packaging (tarball/binary)
   /styles            # Terminal UI styles (lipgloss)
-  /templates         # Embedded template filesystem
-/templates           # AI command templates
-  /claude            # Claude Code-specific templates
+/nimble-mold         # Official mold (commands, skills, workflows, flux)
 /docs                # Documentation
 /examples            # Example configurations
 ```
@@ -264,12 +264,12 @@ When both global and project configurations exist:
 
 **Alpha Stage**: Ailloy is an early-stage tool focused on Claude Code integration. The CLI provides:
 
-- ✅ Project initialization with command template setup
-- ✅ Template management and viewing
-- ✅ Template customization with team-specific variables
-- ✅ Conditional template rendering with model-aware context
+- ✅ Project initialization with command blank setup
+- ✅ Blank management and viewing
+- ✅ Blank customization with team-specific variables
+- ✅ Conditional blank rendering with model-aware context
 - ✅ YAML configuration system with global and project scopes
-- ✅ Claude Code-optimized workflow templates
+- ✅ Claude Code-optimized workflow blanks
 - ✅ Automatic GitHub Project field discovery via GraphQL
 - ✅ Interactive wizard with charmbracelet/huh for guided configuration
 - 🔄 Additional AI provider support (planned)
@@ -339,7 +339,7 @@ make ci
 
 1. Fork the repository
 2. Create a feature branch
-3. Add templates or improve CLI functionality
+3. Add blanks or improve CLI functionality
 4. Ensure tests pass: `make test`
 5. Ensure linting passes: `make lint`
 6. Submit a pull request

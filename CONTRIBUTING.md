@@ -69,13 +69,14 @@ Thank you for your interest in contributing to Ailloy! This document provides gu
 ailloy/
 ├── cmd/ailloy/          # CLI entry point
 ├── internal/            # Private Go packages
-│   └── commands/        # CLI command implementations
+│   └── commands/        # CLI command implementations (cast, forge, smelt, etc.)
 ├── pkg/                 # Public Go packages
-│   ├── config/          # Configuration handling
-│   ├── plugin/          # Plugin system
-│   ├── styles/          # Terminal styling
-│   └── templates/       # Template embedding
-├── templates/           # AI command templates (source)
+│   ├── blanks/          # MoldReader abstraction
+│   ├── mold/            # Template engine, flux loading, ingot resolution
+│   ├── plugin/          # Plugin generation pipeline
+│   ├── smelt/           # Mold packaging (tarball/binary)
+│   └── styles/          # Terminal styling
+├── nimble-mold/         # Official mold (commands, skills, workflows, flux)
 ├── docs/                # Documentation
 ├── examples/            # Example configurations
 └── Makefile             # Build targets
@@ -90,7 +91,7 @@ We welcome contributions in many forms:
 - **Bug fixes**: Found a bug? Submit a fix!
 - **New features**: Have an idea? Propose it first via an issue
 - **Documentation**: Improve docs, add examples, fix typos
-- **Templates**: Create or improve AI workflow templates
+- **Blanks**: Create or improve AI workflow blanks
 - **Tests**: Increase test coverage
 
 ### Before You Start
@@ -105,7 +106,7 @@ We welcome contributions in many forms:
 
 Use descriptive branch names with a prefix:
 
-- `feat/add-template-validation` - New features
+- `feat/add-blank-validation` - New features
 - `fix/config-loading-error` - Bug fixes
 - `docs/improve-readme` - Documentation
 - `chore/update-dependencies` - Maintenance tasks
@@ -212,14 +213,14 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/) for clear
 
 - `cli`: CLI commands and flags
 - `config`: Configuration system
-- `templates`: Template system
+- `blanks`: Blank system
 - `plugin`: Plugin functionality
 - `docs`: Documentation
 
 ### Examples
 
 ```
-feat(cli): add template validation command
+feat(cli): add blank validation command
 
 fix(config): handle missing configuration file gracefully
 

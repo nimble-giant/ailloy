@@ -18,13 +18,13 @@
 
 #### Ailloy Management Commands
 - **`/ailloy-init`** - Initialize Ailloy configuration
-- **`/ailloy-customize`** - Configure template variables
-- **`/ailloy-templates`** - List and manage templates
+- **`/ailloy-customize`** - Configure flux variables
+- **`/ailloy-blanks`** - List and manage blanks
 
 ### 3. Configuration Support
 - Reads from `.ailloy/ailloy.yaml` for project config
 - Supports global config at `~/.ailloy/ailloy.yaml`
-- Variable substitution in templates
+- Variable substitution in blanks
 - Hierarchical configuration (project > global > defaults)
 
 ### 4. Advanced Features
@@ -37,7 +37,7 @@
 
 ### 1. Command Format
 - Used standard Claude Code command markdown format
-- Preserved original Ailloy template functionality
+- Preserved original Ailloy blank functionality
 - Added clear descriptions for discoverability
 
 ### 2. Configuration Integration
@@ -54,7 +54,7 @@
 ### 4. Extensibility
 - Hooks for event-based customization
 - Agent framework for complex workflows
-- Template variable system
+- Flux variable system
 - Custom command support
 
 ## 🚀 Installation & Usage
@@ -80,7 +80,7 @@ cd claude-plugin
 | Commands | ✅ Complete | 8 workflow commands |
 | Configuration | ✅ Complete | YAML-based config |
 | GitHub Integration | ✅ Complete | Full `gh` CLI integration |
-| Variable Substitution | ✅ Complete | Template variables |
+| Variable Substitution | ✅ Complete | Flux variables |
 | Hooks | ✅ Framework | Event-based automation |
 | Agents | ✅ Framework | Complex workflow agent |
 | Documentation | ✅ Complete | README and inline docs |
@@ -90,7 +90,7 @@ cd claude-plugin
 ### With Ailloy CLI
 - Plugin can work standalone or with CLI
 - Shares configuration format
-- Templates are compatible
+- Blanks are compatible
 
 ### With Claude Code
 - Native slash command support
@@ -121,7 +121,7 @@ cd claude-plugin
 ### Future Enhancements
 - More sophisticated agents
 - Advanced hook implementations
-- Template marketplace integration
+- Blank marketplace integration
 - Team collaboration features
 - Analytics and metrics
 
