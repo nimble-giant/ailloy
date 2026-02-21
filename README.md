@@ -6,26 +6,38 @@
 
 ![Ailloy Mascot](.assets/Ailloy%20the%20Blacksmith%20Innovator.png)
 
-**Ailloy** is a CLI tool for initializing projects with agentic AI patterns to assist with software development lifecycle (SDLC) tasks. Currently focused on Claude Code integration, Ailloy helps developers set up structured AI workflows using blanks and configuration files.
+**Ailloy is the package manager for AI instructions.** It helps you find, create, and share reusable AI workflow packages — the same way [Helm](https://helm.sh/) manages Kubernetes applications. Molds are to Ailloy what charts are to Helm: versioned, configurable packages that can be installed into any project or workload.
 
-Like in metallurgy—where combining two elements yields a stronger alloy—Ailloy represents the fusion of traditional development practices with AI assistance to create more efficient engineering workflows.
+Ailloy gives teams a reproducible pipeline for authoring, packaging, and distributing AI-assisted development workflows.
+
+Like in metallurgy — where combining two elements yields a stronger alloy — Ailloy represents the fusion of human development practices with AI assistance.
 
 ![Ailloy with Claude Integration](.assets/Friendly%20Ailloy%20with%20Glowing%20Orb.png)
 
 ## What is Ailloy?
 
-Ailloy helps you:
+Ailloy is the best way to find, create, and share AI instruction packages. Like Helm for Kubernetes, it provides:
 
-- **Initialize AI-ready projects**: Set up command blank structure for AI-assisted workflows
-- **Customize blanks**: Configure team-specific defaults for consistent workflows
-- **Manage AI blanks**: Access pre-built blanks for common development tasks
-- **Standardize AI workflows**: Use consistent patterns for GitHub issues, PRs, and development tasks
+- **Manage Complexity**: Molds describe complete AI workflows — commands, skills, GitHub Actions — with a single `mold.yaml` manifest and configurable flux variables
+- **Easy Updates**: Override defaults at install time with `--set` flags or layered value files, following Helm-style precedence
+- **Simple Sharing**: Package molds into distributable tarballs or self-contained binaries with `ailloy smelt`, then share them across teams and projects
 
-Currently focused on **Claude Code** because it offers the level of customization and blank support needed for sophisticated AI-assisted development workflows.
+### The Ailloy Pipeline
+
+| Step | Command | Helm Equivalent | What It Does |
+|------|---------|-----------------|--------------|
+| Author | — | — | Write instruction templates (blanks) with Go `text/template` syntax |
+| Configure | `ailloy anneal` | — | Interactive wizard to set flux variables |
+| Preview | `ailloy forge` | `helm template` | Dry-run render of blanks with flux values |
+| Install | `ailloy cast` | `helm install` | Compile and install blanks into a project |
+| Package | `ailloy smelt` | `helm package` | Bundle a mold into a tarball or binary |
+| Validate | `ailloy temper` | `helm lint` | Lint mold structure, manifests, and templates |
+
+Currently focused on **Claude Code** because it offers the level of customization and instruction support needed for sophisticated AI-assisted development workflows.
 
 ## Quick Start
 
-Get started in minutes with the CLI:
+Get started in minutes:
 
 ![Ailloy Ready to Help](.assets/Ailloy%20Winking%20with%20Orb%20and%20Hammer.png)
 
@@ -150,7 +162,7 @@ Generate and manage Claude Code plugins:
 
 ## Blanks
 
-Ailloy includes pre-built blanks for common SDLC tasks, optimized for Claude Code:
+The official mold ships with pre-built blanks for common SDLC tasks, optimized for Claude Code:
 
 ### Available Blanks
 
@@ -263,7 +275,7 @@ ailloy cast ./nimble-mold --set project.organization=mycompany
 
 ## Current Status
 
-**Alpha Stage**: Ailloy is an early-stage tool focused on Claude Code integration. The CLI provides:
+**Alpha Stage**: Ailloy is an early-stage package manager for AI instructions. The toolchain provides:
 
 - ✅ Mold casting and forging with flux variable rendering
 - ✅ Blank management and viewing
@@ -280,7 +292,7 @@ ailloy cast ./nimble-mold --set project.organization=mycompany
 
 ## Contributing
 
-This is an evolving framework—community input welcome! As AI development practices mature, Ailloy aims to capture and standardize the most effective patterns for human-AI collaboration.
+This is an evolving project — community input welcome! As AI development practices mature, Ailloy aims to be the standard package manager for AI instructions, the way Helm became the standard for Kubernetes.
 
 ### Prerequisites
 

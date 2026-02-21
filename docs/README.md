@@ -87,7 +87,7 @@
       font-size: 1.1em;
       margin-top: 20px;
       line-height: 1.6;
-    ">Comprehensive guides for AI-powered development workflows</p>
+    ">Comprehensive guides for the package manager for AI instructions</p>
   </div>
 </div>
 
@@ -100,7 +100,7 @@
 
 </div>
 
-This directory contains comprehensive documentation for the Ailloy methodology and toolchain.
+This directory contains comprehensive documentation for Ailloy, the package manager for AI instructions.
 
 ## Guides
 

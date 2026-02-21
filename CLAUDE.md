@@ -1,6 +1,6 @@
 # Claude Code Configuration
 
-This project is set up with Ailloy blanks for AI-assisted development workflows.
+Ailloy is the package manager for AI instructions. This project uses Ailloy blanks for AI-assisted development workflows.
 
 ## Available Commands
 
@@ -50,7 +50,7 @@ This project uses [lefthook](https://github.com/evilmartians/lefthook) for gradu
 
 ## Project Setup
 
-This project was initialized with Ailloy to provide structured AI workflows for:
+This project uses Ailloy's compiler pipeline to provide structured AI workflows for:
 - GitHub issue management
 - Pull request workflows
 - Development task automation
