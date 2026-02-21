@@ -8,18 +8,9 @@ author:
   url: https://github.com/nimble-giant/ailloy
 requires:
   ailloy: ">=0.2.0"
-commands:
-  - brainstorm.md
-  - create-issue.md
-  - open-pr.md
-  - pr-comments.md
-  - pr-description.md
-  - pr-review.md
-  - preflight.md
-  - start-issue.md
-  - update-pr.md
-skills:
-  - brainstorm.md
-workflows:
-  - claude-code.yml
-  - claude-code-review.yml
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+  workflows:
+    dest: .github/workflows
+    process: false

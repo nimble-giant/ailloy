@@ -1,25 +1,26 @@
 package blanks
 
 import (
-	"strings"
+	"io/fs"
 	"testing"
 	"testing/fstest"
+
+	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
-// testReader creates a MoldReader backed by an fstest.MapFS with dotted paths.
+// testReader creates a MoldReader backed by an fstest.MapFS with convention-based structure.
 func testReader() *MoldReader {
 	fsys := fstest.MapFS{
 		"mold.yaml": &fstest.MapFile{Data: []byte(`apiVersion: v1
 kind: mold
 name: test-mold
 version: 1.0.0
-commands:
-  - create-issue.md
-  - open-pr.md
-skills:
-  - brainstorm.md
-workflows:
-  - ci.yml
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+  workflows:
+    dest: .github/workflows
+    process: false
 `)},
 		"flux.yaml": &fstest.MapFile{Data: []byte(`board: Engineering
 org: test-org
@@ -28,164 +29,100 @@ org: test-org
   type: string
   required: true
 `)},
-		".claude/commands/create-issue.md": &fstest.MapFile{Data: []byte("# create-issue\nCreate a GitHub issue.")},
-		".claude/commands/open-pr.md":      &fstest.MapFile{Data: []byte("# open-pr\nOpen a pull request.")},
-		".claude/skills/brainstorm.md":     &fstest.MapFile{Data: []byte("# brainstorm\nStructured brainstorming.")},
-		".github/workflows/ci.yml":         &fstest.MapFile{Data: []byte("name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest")},
+		"commands/create-issue.md": &fstest.MapFile{Data: []byte("# create-issue\nCreate a GitHub issue.")},
+		"commands/open-pr.md":      &fstest.MapFile{Data: []byte("# open-pr\nOpen a pull request.")},
+		"skills/brainstorm.md":     &fstest.MapFile{Data: []byte("# brainstorm\nStructured brainstorming.")},
+		"workflows/ci.yml":         &fstest.MapFile{Data: []byte("name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest")},
 	}
 	return NewMoldReader(fsys)
 }
 
-func TestListBlanks(t *testing.T) {
+func TestResolveFiles(t *testing.T) {
 	reader := testReader()
-	blanks, err := reader.ListBlanks()
+	manifest, err := reader.LoadManifest()
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected error loading manifest: %v", err)
 	}
 
-	if len(blanks) == 0 {
-		t.Fatal("expected at least one blank, got none")
-	}
-
-	for _, b := range blanks {
-		if !strings.HasSuffix(b, ".md") {
-			t.Errorf("expected blank name ending in .md, got %s", b)
-		}
-	}
-}
-
-func TestListBlanks_ExpectedBlanks(t *testing.T) {
-	reader := testReader()
-	blanks, err := reader.ListBlanks()
+	resolved, err := mold.ResolveFiles(manifest, reader.FS())
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected error resolving files: %v", err)
 	}
 
-	expected := []string{"create-issue.md", "open-pr.md"}
-	blankSet := make(map[string]bool)
-	for _, b := range blanks {
-		blankSet[b] = true
+	if len(resolved) == 0 {
+		t.Fatal("expected resolved files, got none")
 	}
-	for _, exp := range expected {
-		if !blankSet[exp] {
-			t.Errorf("expected blank %s not found in list", exp)
-		}
-	}
-}
 
-func TestGetBlank_ValidBlank(t *testing.T) {
-	reader := testReader()
-	content, err := reader.GetBlank("create-issue.md")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(content) == 0 {
-		t.Error("expected non-empty blank content")
-	}
-	if content[0] != '#' {
-		t.Errorf("expected blank to start with '#', got %q", string(content[0]))
-	}
-}
-
-func TestGetBlank_NonExistentBlank(t *testing.T) {
-	reader := testReader()
-	_, err := reader.GetBlank("nonexistent-blank.md")
-	if err == nil {
-		t.Error("expected error for non-existent blank, got nil")
-	}
-}
-
-func TestGetBlank_AllBlanksReadable(t *testing.T) {
-	reader := testReader()
-	blanks, err := reader.ListBlanks()
-	if err != nil {
-		t.Fatalf("unexpected error listing blanks: %v", err)
-	}
-	for _, b := range blanks {
-		content, err := reader.GetBlank(b)
+	// Verify we can read each resolved file
+	for _, rf := range resolved {
+		content, err := fs.ReadFile(reader.FS(), rf.SrcPath)
 		if err != nil {
-			t.Errorf("failed to read blank %s: %v", b, err)
+			t.Errorf("failed to read resolved file %s: %v", rf.SrcPath, err)
 			continue
 		}
 		if len(content) == 0 {
-			t.Errorf("blank %s has empty content", b)
+			t.Errorf("resolved file %s is empty", rf.SrcPath)
 		}
 	}
 }
 
-func TestListSkills(t *testing.T) {
+func TestResolveFiles_OutputMapping(t *testing.T) {
 	reader := testReader()
-	skills, err := reader.ListSkills()
+	manifest, err := reader.LoadManifest()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(skills) == 0 {
-		t.Fatal("expected at least one skill, got none")
+
+	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, skill := range skills {
-		if !strings.HasSuffix(skill, ".md") {
-			t.Errorf("expected skill name ending in .md, got %s", skill)
+
+	expected := map[string]string{
+		"commands/create-issue.md": ".claude/commands/create-issue.md",
+		"commands/open-pr.md":      ".claude/commands/open-pr.md",
+		"skills/brainstorm.md":     ".claude/skills/brainstorm.md",
+		"workflows/ci.yml":         ".github/workflows/ci.yml",
+	}
+
+	if len(resolved) != len(expected) {
+		t.Fatalf("expected %d resolved files, got %d", len(expected), len(resolved))
+	}
+
+	for _, rf := range resolved {
+		wantDest, ok := expected[rf.SrcPath]
+		if !ok {
+			t.Errorf("unexpected src path: %s", rf.SrcPath)
+			continue
+		}
+		if rf.DestPath != wantDest {
+			t.Errorf("src %s: expected dest %s, got %s", rf.SrcPath, wantDest, rf.DestPath)
 		}
 	}
 }
 
-func TestGetSkill_ValidSkill(t *testing.T) {
+func TestResolveFiles_ProcessFlag(t *testing.T) {
 	reader := testReader()
-	content, err := reader.GetSkill("brainstorm.md")
+	manifest, err := reader.LoadManifest()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(content) == 0 {
-		t.Error("expected non-empty skill content")
-	}
-	if content[0] != '#' {
-		t.Errorf("expected skill to start with '#', got %q", string(content[0]))
-	}
-}
 
-func TestGetSkill_NonExistentSkill(t *testing.T) {
-	reader := testReader()
-	_, err := reader.GetSkill("nonexistent-skill.md")
-	if err == nil {
-		t.Error("expected error for non-existent skill, got nil")
-	}
-}
-
-func TestListWorkflowBlanks(t *testing.T) {
-	reader := testReader()
-	workflows, err := reader.ListWorkflowBlanks()
+	resolved, err := mold.ResolveFiles(manifest, reader.FS())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(workflows) == 0 {
-		t.Fatal("expected at least one workflow blank, got none")
-	}
-	for _, wf := range workflows {
-		if !strings.HasSuffix(wf, ".yml") {
-			t.Errorf("expected workflow name ending in .yml, got %s", wf)
+
+	for _, rf := range resolved {
+		if rf.SrcPath == "workflows/ci.yml" {
+			if rf.Process {
+				t.Error("expected workflows to have Process=false")
+			}
+		} else {
+			if !rf.Process {
+				t.Errorf("expected %s to have Process=true", rf.SrcPath)
+			}
 		}
-	}
-}
-
-func TestGetWorkflowBlank_ValidBlank(t *testing.T) {
-	reader := testReader()
-	content, err := reader.GetWorkflowBlank("ci.yml")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(content) == 0 {
-		t.Error("expected non-empty workflow blank content")
-	}
-	if !strings.Contains(string(content), "name:") {
-		t.Error("expected workflow blank to contain 'name:' field")
-	}
-}
-
-func TestGetWorkflowBlank_NonExistentBlank(t *testing.T) {
-	reader := testReader()
-	_, err := reader.GetWorkflowBlank("nonexistent-workflow.yml")
-	if err == nil {
-		t.Error("expected error for non-existent workflow blank, got nil")
 	}
 }
 
@@ -198,11 +135,8 @@ func TestLoadManifest(t *testing.T) {
 	if manifest.Name != "test-mold" {
 		t.Errorf("expected name=test-mold, got %q", manifest.Name)
 	}
-	if len(manifest.Commands) != 2 {
-		t.Errorf("expected 2 commands, got %d", len(manifest.Commands))
-	}
-	if len(manifest.Skills) != 1 {
-		t.Errorf("expected 1 skill, got %d", len(manifest.Skills))
+	if manifest.Output == nil {
+		t.Error("expected output to be set")
 	}
 }
 

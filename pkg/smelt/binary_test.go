@@ -135,10 +135,10 @@ func TestPackageBinary_ContentRoundTrip(t *testing.T) {
 	}
 
 	wantFiles := map[string]string{
-		"mold.yaml":                 "apiVersion: v1",
-		".claude/commands/hello.md": "# Hello",
-		".claude/skills/helper.md":  "# Helper",
-		".github/workflows/ci.yml":  "name: CI",
+		"mold.yaml":         "apiVersion: v1",
+		"commands/hello.md": "# Hello",
+		"skills/helper.md":  "# Helper",
+		"workflows/ci.yml":  "name: CI",
 	}
 
 	for path, wantSubstr := range wantFiles {

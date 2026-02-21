@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -34,7 +35,7 @@ func testMoldReader(t *testing.T) *blanks.MoldReader {
 	return reader
 }
 
-func TestIntegration_CopyBlankFiles(t *testing.T) {
+func TestIntegration_CopyResolvedFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -44,66 +45,44 @@ func TestIntegration_CopyBlankFiles(t *testing.T) {
 
 	reader := testMoldReader(t)
 
-	// Create required directory structure
-	if err := os.MkdirAll(".claude/commands", 0750); err != nil {
-		t.Fatalf("failed to create dirs: %v", err)
-	}
-	if err := os.MkdirAll(".claude/skills", 0750); err != nil {
-		t.Fatalf("failed to create skills dir: %v", err)
-	}
-
-	err := copyBlankFiles(reader)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	err = copySkillFiles(reader)
-	if err != nil {
-		t.Fatalf("unexpected error copying skills: %v", err)
-	}
-
-	// Verify all expected blanks were created (from manifest)
 	manifest, err := reader.LoadManifest()
 	if err != nil {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	for _, tmpl := range manifest.Commands {
-		path := filepath.Join(".claude", "commands", tmpl)
-		if _, err := os.Stat(path); err != nil {
-			t.Errorf("expected blank %s to be created: %v", tmpl, err)
-			continue
-		}
-
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("failed to read %s: %v", tmpl, err)
-			continue
-		}
-		if len(content) == 0 {
-			t.Errorf("blank %s is empty", tmpl)
-		}
+	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	if err != nil {
+		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	for _, skill := range manifest.Skills {
-		path := filepath.Join(".claude", "skills", skill)
-		if _, err := os.Stat(path); err != nil {
-			t.Errorf("expected skill %s to be created: %v", skill, err)
+	if len(resolved) == 0 {
+		t.Fatal("expected resolved files, got none")
+	}
+
+	err = copyResolvedFiles(reader, manifest, resolved)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify all resolved files were created
+	for _, rf := range resolved {
+		if _, err := os.Stat(rf.DestPath); err != nil {
+			t.Errorf("expected file %s to be created: %v", rf.DestPath, err)
 			continue
 		}
 
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(rf.DestPath)
 		if err != nil {
-			t.Errorf("failed to read skill %s: %v", skill, err)
+			t.Errorf("failed to read %s: %v", rf.DestPath, err)
 			continue
 		}
 		if len(content) == 0 {
-			t.Errorf("skill %s is empty", skill)
+			t.Errorf("file %s is empty", rf.DestPath)
 		}
 	}
 }
 
-func TestIntegration_CopyBlankFiles_WithVariableSubstitution(t *testing.T) {
+func TestIntegration_CopyResolvedFiles_WithVariableSubstitution(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -124,41 +103,43 @@ func TestIntegration_CopyBlankFiles_WithVariableSubstitution(t *testing.T) {
 	}
 	castValFiles = []string{valuesPath}
 
-	// Create directory structure
-	if err := os.MkdirAll(".claude/commands", 0750); err != nil {
-		t.Fatalf("failed to create dirs: %v", err)
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	err := copyBlankFiles(reader)
+	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	if err != nil {
+		t.Fatalf("failed to resolve files: %v", err)
+	}
+
+	// Filter to only processable files for this test
+	var processable []mold.ResolvedFile
+	for _, rf := range resolved {
+		if rf.Process {
+			processable = append(processable, rf)
+		}
+	}
+
+	err = copyResolvedFiles(reader, manifest, processable)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Check that blanks exist and are non-empty
-	entries, err := os.ReadDir(".claude/commands")
-	if err != nil {
-		t.Fatalf("failed to read commands dir: %v", err)
-	}
-	if len(entries) == 0 {
-		t.Error("expected blanks to be copied")
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
+	// Check that files exist and are non-empty
+	for _, rf := range processable {
+		content, err := os.ReadFile(rf.DestPath)
+		if err != nil {
+			t.Errorf("failed to read %s: %v", rf.DestPath, err)
 			continue
 		}
-		path := filepath.Join(".claude", "commands", entry.Name())
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("failed to read %s: %v", entry.Name(), err)
-		}
 		if len(content) == 0 {
-			t.Errorf("%s is empty", entry.Name())
+			t.Errorf("%s is empty", rf.DestPath)
 		}
 	}
 }
 
-func TestIntegration_BlankFilesMatchMold(t *testing.T) {
+func TestIntegration_ResolvedFilesMatchMold(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -168,82 +149,54 @@ func TestIntegration_BlankFilesMatchMold(t *testing.T) {
 
 	reader := testMoldReader(t)
 
-	// Create directory structure
-	if err := os.MkdirAll(".claude/commands", 0750); err != nil {
-		t.Fatalf("failed to create dirs: %v", err)
-	}
-	if err := os.MkdirAll(".claude/skills", 0750); err != nil {
-		t.Fatalf("failed to create skills dir: %v", err)
-	}
-
-	err := copyBlankFiles(reader)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	err = copySkillFiles(reader)
-	if err != nil {
-		t.Fatalf("unexpected error copying skills: %v", err)
-	}
-
-	// Load flux defaults matching the layered flow in copyBlankFiles
 	manifest, err := reader.LoadManifest()
 	if err != nil {
 		t.Fatalf("failed to load manifest: %v", err)
 	}
+
+	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	if err != nil {
+		t.Fatalf("failed to resolve files: %v", err)
+	}
+
+	err = copyResolvedFiles(reader, manifest, resolved)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Load flux defaults matching the layered flow in copyResolvedFiles
 	flux := mold.ApplyFluxDefaults(manifest.Flux, make(map[string]any))
 	if fluxDefaults, err := reader.LoadFluxDefaults(); err == nil {
 		flux = mold.ApplyFluxFileDefaults(fluxDefaults, flux)
 	}
 
-	// Verify each blank matches what the reader+template engine would produce
-	for _, tmplName := range manifest.Commands {
-		moldContent, err := reader.GetBlank(tmplName)
+	// Verify each file matches what the reader+template engine would produce
+	for _, rf := range resolved {
+		moldContent, err := fs.ReadFile(reader.FS(), rf.SrcPath)
 		if err != nil {
-			t.Errorf("failed to get mold blank %s: %v", tmplName, err)
+			t.Errorf("failed to read mold file %s: %v", rf.SrcPath, err)
 			continue
 		}
 
-		expectedContent, err := mold.ProcessTemplate(string(moldContent), flux)
-		if err != nil {
-			t.Errorf("failed to process blank %s: %v", tmplName, err)
-			continue
+		var expectedContent string
+		if rf.Process {
+			expectedContent, err = mold.ProcessTemplate(string(moldContent), flux)
+			if err != nil {
+				t.Errorf("failed to process %s: %v", rf.SrcPath, err)
+				continue
+			}
+		} else {
+			expectedContent = string(moldContent)
 		}
 
-		filePath := filepath.Join(".claude", "commands", tmplName)
-		fileContent, err := os.ReadFile(filePath)
+		fileContent, err := os.ReadFile(rf.DestPath)
 		if err != nil {
-			t.Errorf("failed to read copied blank %s: %v", tmplName, err)
-			continue
-		}
-
-		if expectedContent != string(fileContent) {
-			t.Errorf("blank %s content mismatch between processed mold and copied version", tmplName)
-		}
-	}
-
-	for _, skillName := range manifest.Skills {
-		moldContent, err := reader.GetSkill(skillName)
-		if err != nil {
-			t.Errorf("failed to get mold skill %s: %v", skillName, err)
-			continue
-		}
-
-		expectedContent, err := mold.ProcessTemplate(string(moldContent), flux)
-		if err != nil {
-			t.Errorf("failed to process skill %s: %v", skillName, err)
-			continue
-		}
-
-		filePath := filepath.Join(".claude", "skills", skillName)
-		fileContent, err := os.ReadFile(filePath)
-		if err != nil {
-			t.Errorf("failed to read copied skill %s: %v", skillName, err)
+			t.Errorf("failed to read copied file %s: %v", rf.DestPath, err)
 			continue
 		}
 
 		if expectedContent != string(fileContent) {
-			t.Errorf("skill %s content mismatch between processed mold and copied version", skillName)
+			t.Errorf("file %s content mismatch between processed mold and copied version", rf.DestPath)
 		}
 	}
 }
@@ -256,19 +209,25 @@ func TestIntegration_CastProject_DirectoryCreation(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
-	dirs := []string{
-		".claude",
+	reader := testMoldReader(t)
+
+	// castProject dynamically creates directories from the output mapping
+	withWorkflows = true
+	defer func() { withWorkflows = false }()
+
+	err := castProject(reader)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify expected output directories were created
+	expectedDirs := []string{
 		".claude/commands",
 		".claude/skills",
+		".github/workflows",
 	}
 
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0750); err != nil {
-			t.Fatalf("failed to create directory %s: %v", dir, err)
-		}
-	}
-
-	for _, dir := range dirs {
+	for _, dir := range expectedDirs {
 		info, err := os.Stat(dir)
 		if err != nil {
 			t.Errorf("directory %s not created: %v", dir, err)
@@ -337,7 +296,7 @@ providers:
 	}
 }
 
-func TestIntegration_BlankFilePermissions(t *testing.T) {
+func TestIntegration_FilePermissions(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
@@ -347,47 +306,32 @@ func TestIntegration_BlankFilePermissions(t *testing.T) {
 
 	reader := testMoldReader(t)
 
-	if err := os.MkdirAll(".claude/commands", 0750); err != nil {
-		t.Fatalf("failed to create dirs: %v", err)
-	}
-	if err := os.MkdirAll(".claude/skills", 0750); err != nil {
-		t.Fatalf("failed to create skills dir: %v", err)
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	err := copyBlankFiles(reader)
+	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	if err != nil {
+		t.Fatalf("failed to resolve files: %v", err)
+	}
+
+	err = copyResolvedFiles(reader, manifest, resolved)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	err = copySkillFiles(reader)
-	if err != nil {
-		t.Fatalf("unexpected error copying skills: %v", err)
-	}
-
-	checkPermissions := func(dir string) {
-		entries, err := os.ReadDir(dir)
+	for _, rf := range resolved {
+		info, err := os.Stat(rf.DestPath)
 		if err != nil {
-			t.Fatalf("failed to read dir %s: %v", dir, err)
+			t.Errorf("failed to stat %s: %v", rf.DestPath, err)
+			continue
 		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			path := filepath.Join(dir, entry.Name())
-			info, err := os.Stat(path)
-			if err != nil {
-				t.Errorf("failed to stat %s: %v", entry.Name(), err)
-				continue
-			}
-			perm := info.Mode().Perm()
-			if perm != 0644 {
-				t.Errorf("expected permissions 0644 for %s, got %o", path, perm)
-			}
+		perm := info.Mode().Perm()
+		if perm != 0644 {
+			t.Errorf("expected permissions 0644 for %s, got %o", rf.DestPath, perm)
 		}
 	}
-
-	checkPermissions(".claude/commands")
-	checkPermissions(".claude/skills")
 }
 
 func TestIntegration_CastProject_DefaultSkipsWorkflows(t *testing.T) {
@@ -458,78 +402,56 @@ func TestIntegration_CastProject_WithWorkflowsFlag(t *testing.T) {
 	}
 }
 
-func TestIntegration_CopyWorkflowBlanks(t *testing.T) {
+func TestIntegration_WorkflowsNotProcessed(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("failed to chdir: %v", err)
 	}
-	defer func() { _ = os.Chdir(origDir) }()
+	defer func() {
+		withWorkflows = false
+		_ = os.Chdir(origDir)
+	}()
 
 	reader := testMoldReader(t)
+	withWorkflows = true
 
-	if err := os.MkdirAll(".github/workflows", 0750); err != nil {
-		t.Fatalf("failed to create dirs: %v", err)
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
 	}
 
-	err := copyWorkflowBlanks(reader)
+	resolved, err := mold.ResolveFiles(manifest, reader.FS())
+	if err != nil {
+		t.Fatalf("failed to resolve files: %v", err)
+	}
+
+	err = copyResolvedFiles(reader, manifest, resolved)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	manifest, _ := reader.LoadManifest()
-	for _, wf := range manifest.Workflows {
-		path := filepath.Join(".github", "workflows", wf)
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("expected workflow %s to be created: %v", wf, err)
-			continue
-		}
-		if len(content) == 0 {
-			t.Errorf("workflow %s is empty", wf)
-		}
-		if !strings.Contains(string(content), "name:") {
-			t.Errorf("workflow %s does not contain YAML name field", wf)
-		}
-	}
-}
-
-func TestIntegration_WorkflowFilesMatchMold(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("failed to chdir: %v", err)
-	}
-	defer func() { _ = os.Chdir(origDir) }()
-
-	reader := testMoldReader(t)
-
-	if err := os.MkdirAll(".github/workflows", 0750); err != nil {
-		t.Fatalf("failed to create dirs: %v", err)
-	}
-
-	err := copyWorkflowBlanks(reader)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	manifest, _ := reader.LoadManifest()
-	for _, wfName := range manifest.Workflows {
-		moldContent, err := reader.GetWorkflowBlank(wfName)
-		if err != nil {
-			t.Errorf("failed to get mold workflow %s: %v", wfName, err)
+	// Workflow files should be copied as-is (process: false)
+	for _, rf := range resolved {
+		if !strings.HasPrefix(rf.DestPath, ".github/workflows") {
 			continue
 		}
 
-		filePath := filepath.Join(".github", "workflows", wfName)
-		fileContent, err := os.ReadFile(filePath)
+		moldContent, err := fs.ReadFile(reader.FS(), rf.SrcPath)
 		if err != nil {
-			t.Errorf("failed to read copied workflow %s: %v", wfName, err)
+			t.Errorf("failed to read mold file %s: %v", rf.SrcPath, err)
 			continue
 		}
 
+		fileContent, err := os.ReadFile(rf.DestPath)
+		if err != nil {
+			t.Errorf("failed to read copied file %s: %v", rf.DestPath, err)
+			continue
+		}
+
+		// Since process: false, content should match exactly
 		if string(moldContent) != string(fileContent) {
-			t.Errorf("workflow %s content mismatch between mold and copied version", wfName)
+			t.Errorf("workflow %s should be copied verbatim (process: false) but content differs", rf.DestPath)
 		}
 	}
 }

@@ -13,10 +13,10 @@ import (
 
 func testMoldReader() *blanks.MoldReader {
 	fsys := fstest.MapFS{
-		"mold.yaml":                    &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: mold\nname: test\nversion: 1.0.0\ncommands:\n  - test.md\n")},
-		".claude/commands/test.md":     &fstest.MapFile{Data: []byte("# Test\nTest command.")},
-		".claude/skills/brainstorm.md": &fstest.MapFile{Data: []byte("# Brainstorm\nSkill.")},
-		".github/workflows/ci.yml":     &fstest.MapFile{Data: []byte("name: CI\non: push")},
+		"mold.yaml":            &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: mold\nname: test\nversion: 1.0.0\noutput:\n  commands: .claude/commands\n  skills: .claude/skills\n  workflows:\n    dest: .github/workflows\n    process: false\n")},
+		"commands/test.md":     &fstest.MapFile{Data: []byte("# Test\nTest command.")},
+		"skills/brainstorm.md": &fstest.MapFile{Data: []byte("# Brainstorm\nSkill.")},
+		"workflows/ci.yml":     &fstest.MapFile{Data: []byte("name: CI\non: push")},
 	}
 	return blanks.NewMoldReader(fsys)
 }

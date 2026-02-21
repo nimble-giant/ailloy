@@ -28,13 +28,12 @@ flux:
     type: string
     required: false
     default: "Engineering"
-commands:
-  - create-issue.md
-  - open-pr.md
-skills:
-  - brainstorm.md
-workflows:
-  - ci.yml
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+  workflows:
+    dest: .github/workflows
+    process: false
 dependencies:
   - ingot: pr-format
     version: "^1.0.0"
@@ -78,14 +77,8 @@ dependencies:
 	if m.Flux[1].Default != "Engineering" {
 		t.Errorf("expected flux[1].default Engineering, got %s", m.Flux[1].Default)
 	}
-	if len(m.Commands) != 2 {
-		t.Errorf("expected 2 commands, got %d", len(m.Commands))
-	}
-	if len(m.Skills) != 1 {
-		t.Errorf("expected 1 skill, got %d", len(m.Skills))
-	}
-	if len(m.Workflows) != 1 {
-		t.Errorf("expected 1 workflow, got %d", len(m.Workflows))
+	if m.Output == nil {
+		t.Error("expected output to be set")
 	}
 	if len(m.Dependencies) != 1 {
 		t.Fatalf("expected 1 dependency, got %d", len(m.Dependencies))
@@ -262,41 +255,25 @@ func TestValidateMold_ValidFluxTypes(t *testing.T) {
 	}
 }
 
-func TestValidateMoldFiles(t *testing.T) {
+func TestValidateOutputSources(t *testing.T) {
 	m := &Mold{
-		Commands:  []string{"create-issue.md"},
-		Skills:    []string{"brainstorm.md"},
-		Workflows: []string{"ci.yml"},
+		Output: map[string]any{
+			"commands": ".claude/commands",
+		},
 	}
-
 	fsys := fstest.MapFS{
-		"root/.claude/commands/create-issue.md": &fstest.MapFile{Data: []byte("# test")},
-		"root/.claude/skills/brainstorm.md":     &fstest.MapFile{Data: []byte("# test")},
-		"root/.github/workflows/ci.yml":         &fstest.MapFile{Data: []byte("name: CI")},
+		"commands/create-issue.md": &fstest.MapFile{Data: []byte("# test")},
 	}
-
-	if err := ValidateMoldFiles(m, fsys, "root"); err != nil {
+	if err := ValidateOutputSources(m, fsys); err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
 
-func TestValidateMoldFiles_MissingFiles(t *testing.T) {
-	m := &Mold{
-		Commands: []string{"missing.md"},
-		Skills:   []string{"also-missing.md"},
-	}
-
+func TestValidateOutputSources_NilOutput(t *testing.T) {
+	m := &Mold{Output: nil}
 	fsys := fstest.MapFS{}
-
-	err := ValidateMoldFiles(m, fsys, "root")
-	if err == nil {
-		t.Fatal("expected error for missing files")
-	}
-	if !strings.Contains(err.Error(), "missing.md") {
-		t.Errorf("expected error to mention missing.md, got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "also-missing.md") {
-		t.Errorf("expected error to mention also-missing.md, got: %v", err)
+	if err := ValidateOutputSources(m, fsys); err != nil {
+		t.Errorf("expected no error for nil output, got: %v", err)
 	}
 }
 

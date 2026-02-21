@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"strings"
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
@@ -50,73 +49,4 @@ func (r *MoldReader) LoadFluxDefaults() (map[string]any, error) {
 // Returns nil if no schema file exists.
 func (r *MoldReader) LoadFluxSchema() ([]mold.FluxVar, error) {
 	return mold.LoadFluxSchema(r.fsys, "flux.schema.yaml")
-}
-
-// GetBlank returns the content of a command blank file.
-func (r *MoldReader) GetBlank(name string) ([]byte, error) {
-	path := fmt.Sprintf(".claude/commands/%s", name)
-	return fs.ReadFile(r.fsys, path)
-}
-
-// ListBlanks returns a list of available command blank files.
-func (r *MoldReader) ListBlanks() ([]string, error) {
-	entries, err := fs.ReadDir(r.fsys, ".claude/commands")
-	if err != nil {
-		return nil, err
-	}
-
-	var blanks []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
-			blanks = append(blanks, entry.Name())
-		}
-	}
-
-	return blanks, nil
-}
-
-// GetSkill returns the content of a skill file.
-func (r *MoldReader) GetSkill(name string) ([]byte, error) {
-	path := fmt.Sprintf(".claude/skills/%s", name)
-	return fs.ReadFile(r.fsys, path)
-}
-
-// ListSkills returns a list of available skill files.
-func (r *MoldReader) ListSkills() ([]string, error) {
-	entries, err := fs.ReadDir(r.fsys, ".claude/skills")
-	if err != nil {
-		return nil, err
-	}
-
-	var skills []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
-			skills = append(skills, entry.Name())
-		}
-	}
-
-	return skills, nil
-}
-
-// GetWorkflowBlank returns the content of a GitHub workflow blank file.
-func (r *MoldReader) GetWorkflowBlank(name string) ([]byte, error) {
-	path := fmt.Sprintf(".github/workflows/%s", name)
-	return fs.ReadFile(r.fsys, path)
-}
-
-// ListWorkflowBlanks returns a list of available GitHub workflow blank files.
-func (r *MoldReader) ListWorkflowBlanks() ([]string, error) {
-	entries, err := fs.ReadDir(r.fsys, ".github/workflows")
-	if err != nil {
-		return nil, err
-	}
-
-	var blanks []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".yml") {
-			blanks = append(blanks, entry.Name())
-		}
-	}
-
-	return blanks, nil
 }
