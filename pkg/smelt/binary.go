@@ -55,7 +55,7 @@ func PackageBinary(moldDir, outputDir string) (string, int64, error) {
 	if err != nil {
 		return "", 0, fmt.Errorf("creating staging directory: %w", err)
 	}
-	defer os.RemoveAll(stagingDir) // #nosec G104
+	defer func() { _ = os.RemoveAll(stagingDir) }()
 
 	stuffPaths, err := stageFiles(stagingDir, files)
 	if err != nil {
