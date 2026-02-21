@@ -99,6 +99,7 @@ ailloy mold show create-issue
 
 Install rendered blanks from a mold into the current project (alias: `install`):
 
+- `-g, --global`: Install into user home directory (`~/`) instead of current project
 - `--with-workflows`: Include GitHub Actions workflow blanks
 - `--set key=value`: Override flux variables (can be repeated)
 - `-f, --values file`: Layer additional flux value files (can be repeated)
