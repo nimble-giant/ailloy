@@ -1,4 +1,4 @@
-package config
+package mold
 
 import (
 	"bytes"
@@ -112,7 +112,7 @@ func TestBuildTemplateData_FlatVariables(t *testing.T) {
 		"name":  "test",
 		"board": "Engineering",
 	}
-	data := BuildTemplateData(flux, nil)
+	data := BuildTemplateData(flux)
 
 	if data["name"] != "test" {
 		t.Errorf("expected name='test', got %v", data["name"])
@@ -122,17 +122,22 @@ func TestBuildTemplateData_FlatVariables(t *testing.T) {
 	}
 }
 
-func TestBuildTemplateData_OrePresent(t *testing.T) {
-	ore := &Ore{
-		Status: OreConfig{
-			Enabled: true,
-			FieldID: "PVTSSF_abc",
-			Options: map[string]OreOption{
-				"ready": {Label: "Ready", ID: "opt_1"},
+func TestBuildTemplateData_NestedFlux(t *testing.T) {
+	flux := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{
+				"enabled":  true,
+				"field_id": "PVTSSF_abc",
+				"options": map[string]any{
+					"ready": map[string]any{
+						"label": "Ready",
+						"id":    "opt_1",
+					},
+				},
 			},
 		},
 	}
-	data := BuildTemplateData(nil, ore)
+	data := BuildTemplateData(flux)
 
 	oreData, ok := data["ore"].(map[string]any)
 	if !ok {
@@ -164,19 +169,13 @@ func TestBuildTemplateData_OrePresent(t *testing.T) {
 	}
 }
 
-func TestBuildTemplateData_NilOreGetsDefaults(t *testing.T) {
-	data := BuildTemplateData(nil, nil)
-
-	oreData, ok := data["ore"].(map[string]any)
-	if !ok {
-		t.Fatal("expected ore to be present even with nil input")
+func TestBuildTemplateData_NilFlux(t *testing.T) {
+	data := BuildTemplateData(nil)
+	if data == nil {
+		t.Fatal("expected non-nil map even with nil flux")
 	}
-	statusData, ok := oreData["status"].(map[string]any)
-	if !ok {
-		t.Fatal("expected status to be present in default ore")
-	}
-	if statusData["enabled"] != false {
-		t.Error("expected default status to be disabled")
+	if len(data) != 0 {
+		t.Errorf("expected empty map, got %d entries", len(data))
 	}
 }
 
@@ -184,11 +183,13 @@ func TestBuildTemplateData_NilOreGetsDefaults(t *testing.T) {
 
 func TestProcessTemplate_ConditionalEnabled(t *testing.T) {
 	content := `{{if .ore.status.enabled}}Status is ON{{end}}`
-	ore := &Ore{
-		Status: OreConfig{Enabled: true},
+	flux := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{"enabled": true},
+		},
 	}
 
-	result, err := ProcessTemplate(content, nil, ore)
+	result, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -199,11 +200,13 @@ func TestProcessTemplate_ConditionalEnabled(t *testing.T) {
 
 func TestProcessTemplate_ConditionalDisabled(t *testing.T) {
 	content := `{{if .ore.status.enabled}}Status is ON{{end}}`
-	ore := &Ore{
-		Status: OreConfig{Enabled: false},
+	flux := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{"enabled": false},
+		},
 	}
 
-	result, err := ProcessTemplate(content, nil, ore)
+	result, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -214,11 +217,13 @@ func TestProcessTemplate_ConditionalDisabled(t *testing.T) {
 
 func TestProcessTemplate_ConditionalElse(t *testing.T) {
 	content := `{{if .ore.status.enabled}}ON{{else}}OFF{{end}}`
-	ore := &Ore{
-		Status: OreConfig{Enabled: false},
+	flux := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{"enabled": false},
+		},
 	}
 
-	result, err := ProcessTemplate(content, nil, ore)
+	result, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -229,14 +234,16 @@ func TestProcessTemplate_ConditionalElse(t *testing.T) {
 
 func TestProcessTemplate_NestedOreAccess(t *testing.T) {
 	content := `Field: {{.ore.status.field_id}}`
-	ore := &Ore{
-		Status: OreConfig{
-			Enabled: true,
-			FieldID: "PVTSSF_abc123",
+	flux := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{
+				"enabled":  true,
+				"field_id": "PVTSSF_abc123",
+			},
 		},
 	}
 
-	result, err := ProcessTemplate(content, nil, ore)
+	result, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -248,16 +255,21 @@ func TestProcessTemplate_NestedOreAccess(t *testing.T) {
 
 func TestProcessTemplate_OptionAccess(t *testing.T) {
 	content := `Ready: {{.ore.status.options.ready.label}} ({{.ore.status.options.ready.id}})`
-	ore := &Ore{
-		Status: OreConfig{
-			Enabled: true,
-			Options: map[string]OreOption{
-				"ready": {Label: "Not Started", ID: "opt_abc"},
+	flux := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{
+				"enabled": true,
+				"options": map[string]any{
+					"ready": map[string]any{
+						"label": "Not Started",
+						"id":    "opt_abc",
+					},
+				},
 			},
 		},
 	}
 
-	result, err := ProcessTemplate(content, nil, ore)
+	result, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -269,21 +281,22 @@ func TestProcessTemplate_OptionAccess(t *testing.T) {
 
 func TestProcessTemplate_RangeOverOptions(t *testing.T) {
 	content := `{{range $key, $opt := .ore.priority.options}}{{$opt.label}} {{end}}`
-	ore := &Ore{
-		Priority: OreConfig{
-			Enabled: true,
-			Options: map[string]OreOption{
-				"p0": {Label: "P0"},
-				"p1": {Label: "P1"},
+	flux := map[string]any{
+		"ore": map[string]any{
+			"priority": map[string]any{
+				"enabled": true,
+				"options": map[string]any{
+					"p0": map[string]any{"label": "P0"},
+					"p1": map[string]any{"label": "P1"},
+				},
 			},
 		},
 	}
 
-	result, err := ProcessTemplate(content, nil, ore)
+	result, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Map iteration order is non-deterministic, but both labels should appear
 	if !strings.Contains(result, "P0") {
 		t.Error("expected 'P0' in range output")
 	}
@@ -294,12 +307,14 @@ func TestProcessTemplate_RangeOverOptions(t *testing.T) {
 
 func TestProcessTemplate_OrConditional(t *testing.T) {
 	content := `{{if or .ore.status.enabled .ore.priority.enabled}}HAS ORE{{end}}`
-	ore := &Ore{
-		Status:   OreConfig{Enabled: false},
-		Priority: OreConfig{Enabled: true},
+	flux := map[string]any{
+		"ore": map[string]any{
+			"status":   map[string]any{"enabled": false},
+			"priority": map[string]any{"enabled": true},
+		},
 	}
 
-	result, err := ProcessTemplate(content, nil, ore)
+	result, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -317,7 +332,7 @@ func TestProcessTemplate_BareVariables(t *testing.T) {
 		"default_status": "Ready",
 	}
 
-	result, err := ProcessTemplate(content, flux, nil)
+	result, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -333,15 +348,15 @@ func TestProcessTemplate_MixedBareAndConditionals(t *testing.T) {
 
 	flux := map[string]any{
 		"default_board": "Engineering",
-	}
-	ore := &Ore{
-		Status: OreConfig{
-			Enabled: true,
-			FieldID: "PVTSSF_xyz",
+		"ore": map[string]any{
+			"status": map[string]any{
+				"enabled":  true,
+				"field_id": "PVTSSF_xyz",
+			},
 		},
 	}
 
-	result, err := ProcessTemplate(content, flux, ore)
+	result, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -355,14 +370,16 @@ func TestProcessTemplate_MixedBareAndConditionals(t *testing.T) {
 
 func TestProcessTemplate_BareDottedPath(t *testing.T) {
 	content := "Field: {{ore.status.field_id}}"
-	ore := &Ore{
-		Status: OreConfig{
-			Enabled: true,
-			FieldID: "PVTSSF_test",
+	flux := map[string]any{
+		"ore": map[string]any{
+			"status": map[string]any{
+				"enabled":  true,
+				"field_id": "PVTSSF_test",
+			},
 		},
 	}
 
-	result, err := ProcessTemplate(content, nil, ore)
+	result, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -377,14 +394,14 @@ func TestProcessTemplate_BareDottedPath(t *testing.T) {
 func TestWarnUnresolvedVars_LogsWarning(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
-	log.SetFlags(0) // Remove timestamp for easier testing
+	log.SetFlags(0)
 	defer func() {
 		log.SetOutput(nil)
 		log.SetFlags(log.LstdFlags)
 	}()
 
 	content := "Value: {{missing_var}}"
-	_, err := ProcessTemplate(content, nil, nil)
+	_, err := ProcessTemplate(content, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -409,7 +426,7 @@ func TestWarnUnresolvedVars_NoWarningForResolved(t *testing.T) {
 
 	content := "Board: {{default_board}}"
 	flux := map[string]any{"default_board": "Engineering"}
-	_, err := ProcessTemplate(content, flux, nil)
+	_, err := ProcessTemplate(content, flux)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -472,9 +489,9 @@ func TestProcessTemplate_IngotFunction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := NewIngotResolver([]string{dir}, nil, nil)
+	r := NewIngotResolver([]string{dir}, nil)
 	content := `Hello {{ingot "footer"}}`
-	result, err := ProcessTemplate(content, nil, nil, WithIngotResolver(r))
+	result, err := ProcessTemplate(content, nil, WithIngotResolver(r))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -494,9 +511,9 @@ func TestProcessTemplate_IngotWithFlux(t *testing.T) {
 	}
 
 	flux := map[string]any{"organization": "Acme"}
-	r := NewIngotResolver([]string{dir}, flux, nil)
+	r := NewIngotResolver([]string{dir}, flux)
 	content := `{{ingot "banner"}} Corp`
-	result, err := ProcessTemplate(content, flux, nil, WithIngotResolver(r))
+	result, err := ProcessTemplate(content, flux, WithIngotResolver(r))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -506,9 +523,8 @@ func TestProcessTemplate_IngotWithFlux(t *testing.T) {
 }
 
 func TestProcessTemplate_WithoutIngotResolver(t *testing.T) {
-	// Without a resolver, {{ingot "x"}} should cause a parse error since the function isn't registered
 	content := `{{ingot "test"}}`
-	_, err := ProcessTemplate(content, nil, nil)
+	_, err := ProcessTemplate(content, nil)
 	if err == nil {
 		t.Error("expected error when ingot function is not registered")
 	}
@@ -518,14 +534,14 @@ func TestProcessTemplate_WithoutIngotResolver(t *testing.T) {
 
 func TestProcessTemplate_InvalidTemplateSyntax(t *testing.T) {
 	content := "{{if}}missing condition{{end}}"
-	_, err := ProcessTemplate(content, nil, nil)
+	_, err := ProcessTemplate(content, nil)
 	if err == nil {
 		t.Error("expected error for invalid template syntax")
 	}
 }
 
 func TestProcessTemplate_EmptyContentReturnsEmpty(t *testing.T) {
-	result, err := ProcessTemplate("", nil, nil)
+	result, err := ProcessTemplate("", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -535,7 +551,7 @@ func TestProcessTemplate_EmptyContentReturnsEmpty(t *testing.T) {
 }
 
 func TestProcessTemplate_NilEverything(t *testing.T) {
-	result, err := ProcessTemplate("plain text", nil, nil)
+	result, err := ProcessTemplate("plain text", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

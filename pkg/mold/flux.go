@@ -3,6 +3,7 @@ package mold
 import (
 	"fmt"
 	"io/fs"
+	"os"
 	"strconv"
 	"strings"
 
@@ -140,6 +141,81 @@ func ApplyFluxFileDefaults(defaults, flux map[string]any) map[string]any {
 	_ = mergo.Merge(&result, defaults)
 
 	return result
+}
+
+// LayerFluxFiles loads YAML files from OS paths and deep-merges them left-to-right.
+// Each successive file overrides values from the previous ones.
+func LayerFluxFiles(paths []string) (map[string]any, error) {
+	result := make(map[string]any)
+
+	for _, p := range paths {
+		data, err := os.ReadFile(p) // #nosec G304 -- CLI tool reads user-specified flux files
+		if err != nil {
+			return nil, fmt.Errorf("reading flux file %s: %w", p, err)
+		}
+
+		var vals map[string]any
+		if err := yaml.Unmarshal(data, &vals); err != nil {
+			return nil, fmt.Errorf("parsing flux file %s: %w", p, err)
+		}
+		if vals != nil {
+			_ = mergo.Merge(&result, vals, mergo.WithOverride)
+		}
+	}
+
+	return result, nil
+}
+
+// ApplySetOverrides applies --set key=value flags to a flux map using dotted paths.
+func ApplySetOverrides(flux map[string]any, setFlags []string) error {
+	for _, flag := range setFlags {
+		parts := strings.SplitN(flag, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid --set format: %q (expected key=value)", flag)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			return fmt.Errorf("--set key cannot be empty")
+		}
+		SetNestedValue(flux, key, value)
+	}
+	return nil
+}
+
+// GetNestedAny retrieves any value (not just string) from a nested map by dotted path.
+func GetNestedAny(m map[string]any, dottedPath string) (any, bool) {
+	segments := strings.Split(dottedPath, ".")
+	var current any = m
+	for _, seg := range segments {
+		cm, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		current, ok = cm[seg]
+		if !ok {
+			return nil, false
+		}
+	}
+	return current, true
+}
+
+// SetNestedAny sets any value (not just string) in a nested map by dotted path.
+func SetNestedAny(m map[string]any, dottedKey string, value any) {
+	segments := strings.Split(dottedKey, ".")
+	current := m
+	for i, seg := range segments {
+		if i == len(segments)-1 {
+			current[seg] = value
+			return
+		}
+		next, ok := current[seg].(map[string]any)
+		if !ok {
+			next = make(map[string]any)
+			current[seg] = next
+		}
+		current = next
+	}
 }
 
 // validateFluxType checks that a value conforms to the declared type.

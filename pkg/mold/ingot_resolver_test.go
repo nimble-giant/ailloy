@@ -1,4 +1,4 @@
-package config
+package mold
 
 import (
 	"os"
@@ -17,7 +17,7 @@ func TestIngotResolver_BareFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := NewIngotResolver([]string{dir}, nil, nil)
+	r := NewIngotResolver([]string{dir}, nil)
 	result, err := r.Resolve("footer")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -52,7 +52,7 @@ files:
 		t.Fatal(err)
 	}
 
-	r := NewIngotResolver([]string{dir}, nil, nil)
+	r := NewIngotResolver([]string{dir}, nil)
 	result, err := r.Resolve("pr-format")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -85,12 +85,11 @@ files:
 	if err := os.WriteFile(filepath.Join(ingotDir, "content.md"), []byte("from manifest"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	// Also create bare file
 	if err := os.WriteFile(filepath.Join(dir, "ingots", "snippet.md"), []byte("from bare file"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	r := NewIngotResolver([]string{dir}, nil, nil)
+	r := NewIngotResolver([]string{dir}, nil)
 	result, err := r.Resolve("snippet")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -112,7 +111,7 @@ func TestIngotResolver_SearchPathOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := NewIngotResolver([]string{dir1, dir2}, nil, nil)
+	r := NewIngotResolver([]string{dir1, dir2}, nil)
 	result, err := r.Resolve("shared")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -139,7 +138,7 @@ func TestIngotResolver_FirstPathWins(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := NewIngotResolver([]string{dir1, dir2}, nil, nil)
+	r := NewIngotResolver([]string{dir1, dir2}, nil)
 	result, err := r.Resolve("item")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -151,7 +150,7 @@ func TestIngotResolver_FirstPathWins(t *testing.T) {
 
 func TestIngotResolver_NotFound(t *testing.T) {
 	dir := t.TempDir()
-	r := NewIngotResolver([]string{dir}, nil, nil)
+	r := NewIngotResolver([]string{dir}, nil)
 
 	_, err := r.Resolve("nonexistent")
 	if err == nil {
@@ -171,12 +170,11 @@ func TestIngotResolver_CircularReference(t *testing.T) {
 	if err := os.MkdirAll(ingotDir, 0750); err != nil {
 		t.Fatal(err)
 	}
-	// Ingot A references itself
 	if err := os.WriteFile(filepath.Join(ingotDir, "self.md"), []byte(`{{ingot "self"}}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	r := NewIngotResolver([]string{dir}, nil, nil)
+	r := NewIngotResolver([]string{dir}, nil)
 	_, err := r.Resolve("self")
 	if err == nil {
 		t.Fatal("expected error for circular reference")
@@ -197,7 +195,7 @@ func TestIngotResolver_FluxVariablesRendered(t *testing.T) {
 	}
 
 	flux := map[string]any{"organization": "Acme"}
-	r := NewIngotResolver([]string{dir}, flux, nil)
+	r := NewIngotResolver([]string{dir}, flux)
 	result, err := r.Resolve("greeting")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -220,7 +218,7 @@ func TestIngotResolver_NestedIngots(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := NewIngotResolver([]string{dir}, nil, nil)
+	r := NewIngotResolver([]string{dir}, nil)
 	result, err := r.Resolve("outer")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -231,7 +229,7 @@ func TestIngotResolver_NestedIngots(t *testing.T) {
 }
 
 func TestIngotResolver_EmptySearchPaths(t *testing.T) {
-	r := NewIngotResolver(nil, nil, nil)
+	r := NewIngotResolver(nil, nil)
 	_, err := r.Resolve("anything")
 	if err == nil {
 		t.Fatal("expected error with no search paths")

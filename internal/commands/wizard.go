@@ -7,26 +7,18 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
-	"github.com/nimble-giant/ailloy/pkg/config"
 	"github.com/nimble-giant/ailloy/pkg/github"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 )
 
-// runWizardAnneal runs the 5-section huh wizard for interactive annealing
-func runWizardAnneal(cfg *config.Config) error {
-	scope := "project"
-	if globalCustomize {
-		scope = "global"
-	}
-
-	// Snapshot original config for diff summary
-	origVars := snapshotVars(cfg)
-	origOre := snapshotOre(cfg)
-
+// runWizardAnneal runs the 5-section huh wizard for interactive annealing.
+// It populates the given flux map and writes the output via writeFluxOutput.
+func runWizardAnneal(flux map[string]any) error {
 	// Wizard state
 	var (
-		projectName string
-		orgName     string
+		projectBoard string
+		orgName      string
 
 		enableGitHub  bool
 		selectedBoard string // "number:id" format for select value
@@ -42,38 +34,41 @@ func runWizardAnneal(cfg *config.Config) error {
 		confirmSave bool
 	)
 
-	// Pre-populate from existing config
-	if v, ok := cfg.Templates.Flux["default_board"].(string); ok {
-		projectName = v
+	// Pre-populate from existing flux if present
+	if v, ok := getFluxString(flux, "project.board"); ok {
+		projectBoard = v
 	}
-	if v, ok := cfg.Templates.Flux["organization"].(string); ok {
+	if v, ok := getFluxString(flux, "project.organization"); ok {
 		orgName = v
 	}
 
 	// Pre-populate enabled ore models
-	if cfg.Ore.Status.Enabled {
+	if enabled, ok := getFluxBool(flux, "ore.status.enabled"); ok && enabled {
 		enabledOreModels = append(enabledOreModels, "status")
 	}
-	if cfg.Ore.Priority.Enabled {
+	if enabled, ok := getFluxBool(flux, "ore.priority.enabled"); ok && enabled {
 		enabledOreModels = append(enabledOreModels, "priority")
 	}
-	if cfg.Ore.Iteration.Enabled {
+	if enabled, ok := getFluxBool(flux, "ore.iteration.enabled"); ok && enabled {
 		enabledOreModels = append(enabledOreModels, "iteration")
 	}
 
 	// Pre-populate field IDs
-	statusField = cfg.Ore.Status.FieldID
-	priorityField = cfg.Ore.Priority.FieldID
-	iterationField = cfg.Ore.Iteration.FieldID
-
-	// Pre-populate custom vars
-	customVarsRaw = buildCustomVarsText(cfg)
+	if v, ok := getFluxString(flux, "ore.status.field_id"); ok {
+		statusField = v
+	}
+	if v, ok := getFluxString(flux, "ore.priority.field_id"); ok {
+		priorityField = v
+	}
+	if v, ok := getFluxString(flux, "ore.iteration.field_id"); ok {
+		iterationField = v
+	}
 
 	// GitHub discovery client (lazy, cached)
 	ghClient := github.NewClient()
 
 	// Welcome banner
-	fmt.Println(styles.WorkingBanner("Interactive template annealing (" + scope + ")"))
+	fmt.Println(styles.WorkingBanner("Interactive template annealing"))
 	fmt.Println()
 
 	// --- Section 1: Project Basics ---
@@ -82,7 +77,7 @@ func runWizardAnneal(cfg *config.Config) error {
 			Title("Project board name").
 			Description("Default GitHub project board name").
 			Placeholder("e.g., Engineering").
-			Value(&projectName),
+			Value(&projectBoard),
 		huh.NewInput().
 			Title("Organization").
 			Description("GitHub organization name").
@@ -130,7 +125,7 @@ func runWizardAnneal(cfg *config.Config) error {
 	).Title("Section 3: Ore Configuration").
 		Description("Configure semantic ore models for your workflow")
 
-	// Field mapping for Status — hidden unless status is enabled AND GitHub integration is on
+	// Field mapping for Status
 	group3status := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Map Status ore to GitHub field").
@@ -176,7 +171,7 @@ func runWizardAnneal(cfg *config.Config) error {
 	group4 := huh.NewGroup(
 		huh.NewText().
 			Title("Custom flux variables").
-			Description("One per line, format: key=value. Leave empty to skip.").
+			Description("One per line, format: key=value (supports dotted paths like scm.provider=GitLab)").
 			Placeholder("default_reviewer=alice\nslack_channel=#eng").
 			Value(&customVarsRaw).
 			Lines(6),
@@ -188,9 +183,8 @@ func runWizardAnneal(cfg *config.Config) error {
 		huh.NewNote().
 			Title("Review Changes").
 			DescriptionFunc(func() string {
-				return buildSummaryDiff(
-					origVars, origOre,
-					projectName, orgName,
+				return buildSummaryPreview(
+					projectBoard, orgName,
 					enabledOreModels,
 					statusField, priorityField, iterationField,
 					customVarsRaw,
@@ -199,8 +193,8 @@ func runWizardAnneal(cfg *config.Config) error {
 			Next(true).
 			NextLabel("Continue"),
 		huh.NewConfirm().
-			Title("Save these changes?").
-			Description("Write configuration to "+scope+" config file").
+			Title("Save these flux values?").
+			Description("Write flux YAML to output").
 			Affirmative("Save").
 			Negative("Cancel").
 			Value(&confirmSave),
@@ -227,17 +221,21 @@ func runWizardAnneal(cfg *config.Config) error {
 		return nil
 	}
 
-	// Apply wizard results to config
-	applyWizardResults(cfg, projectName, orgName, enabledOreModels,
+	// Apply wizard results to flux map
+	applyWizardResults(flux, projectBoard, orgName, enabledOreModels,
 		statusField, priorityField, iterationField,
 		customVarsRaw, enableGitHub, selectedBoard, ghClient)
 
-	if err := config.SaveConfig(cfg, globalCustomize); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
+	if err := writeFluxOutput(flux); err != nil {
+		return err
 	}
 
 	fmt.Println()
-	fmt.Println(styles.SuccessBanner("Template annealing saved to " + scope + " configuration"))
+	dest := "stdout"
+	if annealOutput != "" {
+		dest = annealOutput
+	}
+	fmt.Println(styles.SuccessBanner("Template annealing saved to " + dest))
 	return nil
 }
 
@@ -299,7 +297,6 @@ func discoverFieldOptions(client *github.Client, org, boardValue, oreName string
 
 	opts := []huh.Option[string]{huh.NewOption("(skip - don't map this ore)", "")}
 
-	// Try smart matching to determine which to pre-select
 	smartMatch := github.MatchFieldByName(result.Fields, oreName)
 
 	for _, f := range result.Fields {
@@ -316,10 +313,10 @@ func discoverFieldOptions(client *github.Client, org, boardValue, oreName string
 	return opts
 }
 
-// applyWizardResults applies wizard state to the config
+// applyWizardResults applies wizard state to the flux map
 func applyWizardResults(
-	cfg *config.Config,
-	projectName, orgName string,
+	flux map[string]any,
+	projectBoard, orgName string,
 	enabledOreModels []string,
 	statusFieldID, priorityFieldID, iterationFieldID string,
 	customVarsRaw string,
@@ -328,49 +325,49 @@ func applyWizardResults(
 	ghClient *github.Client,
 ) {
 	// Basic flux variables
-	if projectName != "" {
-		cfg.Templates.Flux["default_board"] = projectName
+	if projectBoard != "" {
+		mold.SetNestedAny(flux, "project.board", projectBoard)
 	}
 	if orgName != "" {
-		cfg.Templates.Flux["organization"] = orgName
+		mold.SetNestedAny(flux, "project.organization", orgName)
 	}
 
 	// Store project ID if board was selected
 	if enableGitHub && selectedBoard != "" {
 		boardID := parseBoardID(selectedBoard)
 		if boardID != "" {
-			cfg.Templates.Flux["project_id"] = boardID
+			mold.SetNestedAny(flux, "project.id", boardID)
 		}
 	}
 
 	// Ore configuration
-	cfg.Ore.Status.Enabled = contains(enabledOreModels, "status")
-	cfg.Ore.Priority.Enabled = contains(enabledOreModels, "priority")
-	cfg.Ore.Iteration.Enabled = contains(enabledOreModels, "iteration")
+	mold.SetNestedAny(flux, "ore.status.enabled", contains(enabledOreModels, "status"))
+	mold.SetNestedAny(flux, "ore.priority.enabled", contains(enabledOreModels, "priority"))
+	mold.SetNestedAny(flux, "ore.iteration.enabled", contains(enabledOreModels, "iteration"))
 
 	// Field mapping
 	if statusFieldID != "" {
-		cfg.Ore.Status.FieldID = statusFieldID
-		applyFieldMapping(cfg, ghClient, orgName, selectedBoard, &cfg.Ore.Status, statusFieldID)
+		mold.SetNestedAny(flux, "ore.status.field_id", statusFieldID)
+		applyFieldMapping(flux, ghClient, orgName, selectedBoard, "ore.status", statusFieldID)
 	}
 	if priorityFieldID != "" {
-		cfg.Ore.Priority.FieldID = priorityFieldID
-		applyFieldMapping(cfg, ghClient, orgName, selectedBoard, &cfg.Ore.Priority, priorityFieldID)
+		mold.SetNestedAny(flux, "ore.priority.field_id", priorityFieldID)
+		applyFieldMapping(flux, ghClient, orgName, selectedBoard, "ore.priority", priorityFieldID)
 	}
 	if iterationFieldID != "" {
-		cfg.Ore.Iteration.FieldID = iterationFieldID
-		applyFieldMapping(cfg, ghClient, orgName, selectedBoard, &cfg.Ore.Iteration, iterationFieldID)
+		mold.SetNestedAny(flux, "ore.iteration.field_id", iterationFieldID)
+		applyFieldMapping(flux, ghClient, orgName, selectedBoard, "ore.iteration", iterationFieldID)
 	}
 
 	// Custom flux variables
 	customVars := parseCustomVars(customVarsRaw)
 	for k, v := range customVars {
-		cfg.Templates.Flux[k] = v
+		mold.SetNestedValue(flux, k, v)
 	}
 }
 
-// applyFieldMapping looks up the field name and auto-maps options
-func applyFieldMapping(cfg *config.Config, ghClient *github.Client, org, boardValue string, ore *config.OreConfig, fieldID string) {
+// applyFieldMapping looks up the field name and auto-maps options using dotted paths.
+func applyFieldMapping(flux map[string]any, ghClient *github.Client, org, boardValue, orePrefix, fieldID string) {
 	if boardValue == "" || org == "" {
 		return
 	}
@@ -387,15 +384,30 @@ func applyFieldMapping(cfg *config.Config, ghClient *github.Client, org, boardVa
 	// Find the field by ID and set the mapping name
 	for _, f := range result.Fields {
 		if f.ID == fieldID {
-			ore.FieldMapping = f.Name
+			mold.SetNestedAny(flux, orePrefix+".field_mapping", f.Name)
 
-			// Auto-map options by label matching
-			if ore.Options != nil {
-				for conceptKey, opt := range ore.Options {
-					if matched := github.MatchOptionByName(f.Options, opt.Label); matched != nil {
-						opt.ID = matched.ID
-						ore.Options[conceptKey] = opt
+			// Auto-map options by looking at existing option keys in flux
+			optionsVal, hasOptions := mold.GetNestedAny(flux, orePrefix+".options")
+			if hasOptions {
+				if optionsMap, ok := optionsVal.(map[string]any); ok {
+					for conceptKey, optVal := range optionsMap {
+						if optMap, ok := optVal.(map[string]any); ok {
+							label, _ := optMap["label"].(string)
+							if label == "" {
+								continue
+							}
+							if matched := github.MatchOptionByName(f.Options, label); matched != nil {
+								mold.SetNestedAny(flux, orePrefix+".options."+conceptKey+".id", matched.ID)
+							}
+						}
 					}
+				}
+			} else {
+				// No existing options in flux — map directly from field options
+				for _, opt := range f.Options {
+					key := strings.ToLower(strings.ReplaceAll(opt.Name, " ", "_"))
+					mold.SetNestedAny(flux, orePrefix+".options."+key+".label", opt.Name)
+					mold.SetNestedAny(flux, orePrefix+".options."+key+".id", opt.ID)
 				}
 			}
 			break
@@ -424,96 +436,45 @@ func parseCustomVars(raw string) map[string]string {
 	return vars
 }
 
-// buildCustomVarsText converts existing custom vars to "key=value\n" text,
-// excluding well-known variables that are managed by the wizard
-func buildCustomVarsText(cfg *config.Config) string {
-	managed := map[string]bool{
-		"default_board":      true,
-		"default_priority":   true,
-		"default_status":     true,
-		"organization":       true,
-		"project_id":         true,
-		"status_field_id":    true,
-		"priority_field_id":  true,
-		"iteration_field_id": true,
-	}
-
-	var lines []string
-	for k, v := range cfg.Templates.Flux {
-		if managed[k] {
-			continue
-		}
-		if s, ok := v.(string); ok {
-			lines = append(lines, k+"="+s)
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
-// snapshotVars captures current flux variable state for diff comparison
-func snapshotVars(cfg *config.Config) map[string]string {
-	snap := make(map[string]string, len(cfg.Templates.Flux))
-	for k, v := range cfg.Templates.Flux {
-		if s, ok := v.(string); ok {
-			snap[k] = s
-		}
-	}
-	return snap
-}
-
-type oreSnapshot struct {
-	StatusEnabled    bool
-	PriorityEnabled  bool
-	IterationEnabled bool
-	StatusFieldID    string
-	PriorityFieldID  string
-	IterationFieldID string
-}
-
-func snapshotOre(cfg *config.Config) oreSnapshot {
-	return oreSnapshot{
-		StatusEnabled:    cfg.Ore.Status.Enabled,
-		PriorityEnabled:  cfg.Ore.Priority.Enabled,
-		IterationEnabled: cfg.Ore.Iteration.Enabled,
-		StatusFieldID:    cfg.Ore.Status.FieldID,
-		PriorityFieldID:  cfg.Ore.Priority.FieldID,
-		IterationFieldID: cfg.Ore.Iteration.FieldID,
-	}
-}
-
-// buildSummaryDiff creates a styled diff of changes for the review section
-func buildSummaryDiff(
-	origVars map[string]string,
-	origOre oreSnapshot,
-	projectName, orgName string,
+// buildSummaryPreview creates a styled preview for the review section
+func buildSummaryPreview(
+	projectBoard, orgName string,
 	enabledOreModels []string,
 	statusFieldID, priorityFieldID, iterationFieldID string,
 	customVarsRaw string,
 ) string {
 	var b strings.Builder
 
-	b.WriteString("Changes to apply:\n\n")
+	b.WriteString("Flux values to write:\n\n")
 
-	// Basic variables
-	diffVar(&b, "default_board", origVars["default_board"], projectName)
-	diffVar(&b, "organization", origVars["organization"], orgName)
+	if projectBoard != "" {
+		fmt.Fprintf(&b, "  project.board: %s\n", projectBoard)
+	}
+	if orgName != "" {
+		fmt.Fprintf(&b, "  project.organization: %s\n", orgName)
+	}
 
 	b.WriteString("\n")
 
 	// Ore models
-	diffBool(&b, "Status ore", origOre.StatusEnabled, contains(enabledOreModels, "status"))
-	diffBool(&b, "Priority ore", origOre.PriorityEnabled, contains(enabledOreModels, "priority"))
-	diffBool(&b, "Iteration ore", origOre.IterationEnabled, contains(enabledOreModels, "iteration"))
+	for _, model := range []string{"status", "priority", "iteration"} {
+		enabled := contains(enabledOreModels, model)
+		state := "disabled"
+		if enabled {
+			state = "enabled"
+		}
+		fmt.Fprintf(&b, "  ore.%s.enabled: %s\n", model, state)
+	}
 
 	// Field IDs
-	if statusFieldID != "" || origOre.StatusFieldID != "" {
-		diffVar(&b, "Status field ID", origOre.StatusFieldID, statusFieldID)
+	if statusFieldID != "" {
+		fmt.Fprintf(&b, "  ore.status.field_id: %s\n", statusFieldID)
 	}
-	if priorityFieldID != "" || origOre.PriorityFieldID != "" {
-		diffVar(&b, "Priority field ID", origOre.PriorityFieldID, priorityFieldID)
+	if priorityFieldID != "" {
+		fmt.Fprintf(&b, "  ore.priority.field_id: %s\n", priorityFieldID)
 	}
-	if iterationFieldID != "" || origOre.IterationFieldID != "" {
-		diffVar(&b, "Iteration field ID", origOre.IterationFieldID, iterationFieldID)
+	if iterationFieldID != "" {
+		fmt.Fprintf(&b, "  ore.iteration.field_id: %s\n", iterationFieldID)
 	}
 
 	// Custom variables
@@ -521,46 +482,34 @@ func buildSummaryDiff(
 	if len(customVars) > 0 {
 		b.WriteString("\nCustom variables:\n")
 		for k, v := range customVars {
-			b.WriteString(fmt.Sprintf("  %s = %s\n", k, v))
+			fmt.Fprintf(&b, "  %s: %s\n", k, v)
 		}
 	}
 
 	return b.String()
 }
 
-func diffVar(b *strings.Builder, name, old, new string) {
-	if old == new {
-		if old != "" {
-			fmt.Fprintf(b, "  %s: %s (unchanged)\n", name, old)
-		}
-		return
-	}
-	if old == "" {
-		fmt.Fprintf(b, "  + %s: %s\n", name, new)
-	} else if new == "" {
-		fmt.Fprintf(b, "  - %s: %s\n", name, old)
-	} else {
-		fmt.Fprintf(b, "  ~ %s: %s -> %s\n", name, old, new)
-	}
-}
-
-func diffBool(b *strings.Builder, name string, old, new bool) {
-	if old == new {
-		state := "disabled"
-		if old {
-			state = "enabled"
-		}
-		fmt.Fprintf(b, "  %s: %s (unchanged)\n", name, state)
-		return
-	}
-	if new {
-		fmt.Fprintf(b, "  + %s: enabled\n", name)
-	} else {
-		fmt.Fprintf(b, "  - %s: disabled\n", name)
-	}
-}
-
 // --- helpers ---
+
+// getFluxString retrieves a string value from nested flux by dotted path.
+func getFluxString(flux map[string]any, path string) (string, bool) {
+	val, ok := mold.GetNestedAny(flux, path)
+	if !ok {
+		return "", false
+	}
+	s, ok := val.(string)
+	return s, ok
+}
+
+// getFluxBool retrieves a bool value from nested flux by dotted path.
+func getFluxBool(flux map[string]any, path string) (bool, bool) {
+	val, ok := mold.GetNestedAny(flux, path)
+	if !ok {
+		return false, false
+	}
+	b, ok := val.(bool)
+	return b, ok
+}
 
 func contains(slice []string, item string) bool {
 	for _, s := range slice {
@@ -572,7 +521,6 @@ func contains(slice []string, item string) bool {
 }
 
 func parseBoardNumber(boardValue string) int {
-	// boardValue format is "number:id"
 	parts := strings.SplitN(boardValue, ":", 2)
 	if len(parts) < 1 {
 		return 0

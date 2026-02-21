@@ -1,4 +1,4 @@
-package config
+package mold
 
 import (
 	"bytes"
@@ -54,10 +54,6 @@ func WithIngotResolver(r *IngotResolver) TemplateOption {
 // preProcessTemplate normalises simple {{variable}} references into
 // Go template {{.variable}} syntax. This lets template authors use the
 // shorter form while keeping full Go template compatibility.
-//
-// Actions that already have a dot prefix, contain Go template directives
-// (if, range, etc.), or use dollar-prefixed loop variables ($key) are
-// left untouched.
 func preProcessTemplate(content string) string {
 	return bareVarPattern.ReplaceAllStringFunc(content, func(match string) string {
 		sub := bareVarPattern.FindStringSubmatch(match)
@@ -66,7 +62,6 @@ func preProcessTemplate(content string) string {
 		}
 		prefix, token, suffix := sub[1], sub[2], sub[3]
 
-		// Extract the first path segment to check against keywords
 		firstSegment, _, _ := strings.Cut(token, ".")
 
 		if goTemplateKeywords[firstSegment] {
@@ -83,12 +78,12 @@ func preProcessTemplate(content string) string {
 //   - Dotted path access: {{ore.status.field_id}}
 //   - Go template conditionals: {{if .ore.status.enabled}}...{{end}}
 //   - Go template ranges: {{range $k, $v := .ore.status.options}}...{{end}}
-//   - Nested ore data access: {{.ore.status.options.ready.id}}
+//   - Nested data access: {{.ore.status.options.ready.id}}
 //
 // Simple {{variable}} references are automatically normalised to {{.variable}}
 // before parsing. Unresolved variables produce logged warnings and resolve to
 // empty strings. Returns an error only for template parse/execution failures.
-func ProcessTemplate(content string, flux map[string]any, ore *Ore, opts ...TemplateOption) (string, error) {
+func ProcessTemplate(content string, flux map[string]any, opts ...TemplateOption) (string, error) {
 	if content == "" {
 		return "", nil
 	}
@@ -98,28 +93,22 @@ func ProcessTemplate(content string, flux map[string]any, ore *Ore, opts ...Temp
 		opt(&cfg)
 	}
 
-	// Normalise simple {{variable}} references to {{.variable}}
 	content = preProcessTemplate(content)
 
-	// Build the data map available to templates
-	data := BuildTemplateData(flux, ore)
+	data := BuildTemplateData(flux)
 
-	// Build template function map
 	funcMap := template.FuncMap{}
 	if cfg.ingotResolver != nil {
 		funcMap["ingot"] = cfg.ingotResolver.Resolve
 	}
 
-	// Parse the template
 	tmpl, err := template.New("").Funcs(funcMap).Option("missingkey=zero").Parse(content)
 	if err != nil {
 		return "", fmt.Errorf("template parse error: %w", err)
 	}
 
-	// Warn about unresolved variable references
 	warnUnresolvedVars(content, data)
 
-	// Execute the template
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("template execution error: %w", err)
@@ -129,53 +118,15 @@ func ProcessTemplate(content string, flux map[string]any, ore *Ore, opts ...Temp
 }
 
 // BuildTemplateData creates the data map passed to Go's text/template.Execute.
-// Nested flux variables are deep-merged into the data map; ore data is nested under "ore".
-func BuildTemplateData(flux map[string]any, ore *Ore) map[string]any {
+// Flux variables are deep-merged into the data map.
+func BuildTemplateData(flux map[string]any) map[string]any {
 	data := make(map[string]any)
 
-	// Deep-merge nested flux variables into data
 	if flux != nil {
 		_ = mergo.Merge(&data, flux, mergo.WithOverride)
 	}
 
-	// Add ore as nested structure (always present so conditionals work)
-	if ore != nil {
-		data["ore"] = oreToTemplateMap(*ore)
-	} else {
-		data["ore"] = oreToTemplateMap(DefaultOre())
-	}
-
 	return data
-}
-
-// oreToTemplateMap converts the Ore struct into a nested map structure
-// suitable for Go template field access (e.g., {{.ore.status.enabled}}).
-func oreToTemplateMap(ore Ore) map[string]any {
-	return map[string]any{
-		"status":    oreConfigToMap(ore.Status),
-		"priority":  oreConfigToMap(ore.Priority),
-		"iteration": oreConfigToMap(ore.Iteration),
-	}
-}
-
-// oreConfigToMap converts a single OreConfig into a map for template access.
-func oreConfigToMap(oc OreConfig) map[string]any {
-	m := map[string]any{
-		"enabled":       oc.Enabled,
-		"field_mapping": oc.FieldMapping,
-		"field_id":      oc.FieldID,
-	}
-
-	opts := make(map[string]any)
-	for k, v := range oc.Options {
-		opts[k] = map[string]any{
-			"label": v.Label,
-			"id":    v.ID,
-		}
-	}
-	m["options"] = opts
-
-	return m
 }
 
 // warnUnresolvedVars scans a template for variable references
