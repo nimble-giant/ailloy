@@ -10,6 +10,7 @@ import (
 
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/mold"
+	"github.com/nimble-giant/ailloy/pkg/smelt"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +22,8 @@ var castCmd = &cobra.Command{
 	Long: `Cast Ailloy configuration into a project (alias: install).
 
 Installs rendered blanks from the given mold into the current repository.
+If run from a stuffed binary (created by smelt -o binary), the embedded mold
+is used automatically when no mold-dir is provided.
 Use -f to layer additional flux value files (Helm-style).`,
 	RunE: runCast,
 }
@@ -39,18 +42,27 @@ func init() {
 	castCmd.Flags().StringArrayVarP(&castValFiles, "values", "f", nil, "flux value files (can be repeated, later files override earlier)")
 }
 
-func runCast(cmd *cobra.Command, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("mold directory is required: ailloy cast <mold-dir>")
-	}
-
-	moldDir := args[0]
-	reader, err := blanks.NewMoldReaderFromPath(moldDir)
+func runCast(_ *cobra.Command, args []string) error {
+	reader, err := resolveMoldReader(args)
 	if err != nil {
 		return err
 	}
-
 	return castProject(reader)
+}
+
+// resolveMoldReader creates a MoldReader from args or the embedded mold.
+func resolveMoldReader(args []string) (*blanks.MoldReader, error) {
+	if len(args) >= 1 {
+		return blanks.NewMoldReaderFromPath(args[0])
+	}
+	if smelt.HasEmbeddedMold() {
+		fsys, err := smelt.OpenEmbeddedMold()
+		if err != nil {
+			return nil, fmt.Errorf("opening embedded mold: %w", err)
+		}
+		return blanks.NewMoldReader(fsys), nil
+	}
+	return nil, fmt.Errorf("mold directory is required: ailloy cast <mold-dir>")
 }
 
 // loadCastFlux loads layered flux values using Helm-style precedence:
@@ -62,7 +74,7 @@ func loadCastFlux(reader *blanks.MoldReader) (map[string]any, error) {
 		fluxDefaults = make(map[string]any)
 	}
 
-	// Layer 2: Apply mold.yaml schema defaults (backwards compat)
+	// Layer 2: Apply mold.yaml schema defaults (for in-mold compatibility)
 	manifest, _ := reader.LoadManifest()
 	if manifest != nil && len(manifest.Flux) > 0 {
 		fluxDefaults = mold.ApplyFluxDefaults(manifest.Flux, fluxDefaults)
