@@ -1,6 +1,6 @@
 # Ailloy Configuration Guide
 
-Ailloy uses YAML configuration files to manage settings, template variables, and AI provider configurations. This guide covers the configuration system in detail.
+Ailloy uses YAML configuration files to manage settings, flux variables, and AI provider configurations. This guide covers the configuration system in detail.
 
 ## Configuration Files
 
@@ -15,7 +15,7 @@ When both configurations exist:
 
 1. Project configuration takes precedence over global
 2. Global configuration provides defaults for undefined values
-3. Template variables are merged (project overrides global)
+3. Flux variables are merged (project overrides global)
 
 ## Configuration Structure
 
@@ -29,12 +29,12 @@ project:
   ai_providers: ["claude"]              # Enabled AI providers
   template_directories: []              # Additional template directories
 
-# Template system configuration
+# Blank system configuration
 templates:
-  default_provider: "claude"            # Default AI provider for templates
-  auto_update: true                     # Auto-update templates (future)
-  repositories: []                      # Template repositories (future)
-  variables:                            # Template variables for customization
+  default_provider: "claude"            # Default AI provider for blanks
+  auto_update: true                     # Auto-update blanks (future)
+  repositories: []                      # Blank repositories (future)
+  variables:                            # Flux variables for customization
     default_board: "Engineering"        # Default GitHub project board
     default_priority: "P1"              # Default issue priority
     default_status: "Ready"             # Default issue status
@@ -67,11 +67,11 @@ providers:
 
 ## Template Engine
 
-Ailloy uses Go's [text/template](https://pkg.go.dev/text/template) engine for template processing. Templates are rendered during `ailloy init`, combining your configuration variables and model state to produce the final output files.
+Ailloy uses Go's [text/template](https://pkg.go.dev/text/template) engine for blank processing. Blanks are rendered during `ailloy cast` (install) and `ailloy forge` (dry-run preview), combining your flux variables and model state to produce the final output files.
 
 ### Variable Syntax
 
-Template variables use `{{variable_name}}` syntax. The engine automatically handles the Go template dot prefix, so you can write:
+Flux variables use `{{variable_name}}` syntax. The engine automatically handles the Go template dot prefix, so you can write:
 
 ```markdown
 Board: {{default_board}}
@@ -83,7 +83,7 @@ The dot-prefixed form `{{.variable_name}}` also works and is required inside Go 
 
 ### Conditional Rendering
 
-Templates can conditionally include or exclude entire sections based on your model configuration:
+Blanks can conditionally include or exclude entire sections based on your model configuration:
 
 ```markdown
 {{if .models.status.enabled}}
@@ -138,11 +138,11 @@ Example accessing nested data:
 
 ### Unresolved Variables
 
-When a template references a variable that isn't defined in your configuration, the engine logs a warning and renders it as an empty string. This allows templates to degrade gracefully when optional variables aren't configured.
+When a blank references a variable that isn't defined in your configuration, the engine logs a warning and renders it as an empty string. This allows blanks to degrade gracefully when optional variables aren't configured.
 
-## Template Variables
+## Flux Variables
 
-Template variables customize templates for your team's needs. Set them via `ailloy customize` or directly in your YAML configuration.
+Flux variables customize blanks for your team's needs. Set them via `ailloy customize` or directly in your YAML configuration.
 
 ### Common Variables
 
@@ -154,9 +154,9 @@ Template variables customize templates for your team's needs. Set them via `aill
 | `organization` | `{{organization}}` | GitHub organization name | "mycompany" |
 | `project_id` | `{{project_id}}` | GitHub project ID for API calls | "PVT_kwDOBTfXA84A808H" |
 
-### Setting Template Variables
+### Setting Flux Variables
 
-Use the `ailloy customize` command to manage template variables:
+Use the `ailloy customize` command to manage flux variables:
 
 ```bash
 # Set individual variables
@@ -185,7 +185,7 @@ ailloy customize --global --set default_board="Global Default"
 
 ## Models
 
-Models represent GitHub Projects v2 fields (status, priority, iteration) and drive conditional template rendering. When a model is enabled, templates can include sections with field IDs, option lists, and GraphQL mutations specific to your project board.
+Models represent GitHub Projects v2 fields (status, priority, iteration) and drive conditional blank rendering. When a model is enabled, blanks can include sections with field IDs, option lists, and GraphQL mutations specific to your project board.
 
 ### Model Configuration
 
@@ -231,7 +231,7 @@ models:
     enabled: false
 ```
 
-When models are disabled (the default), conditional template sections that depend on them are excluded from the rendered output.
+When models are disabled (the default), conditional blank sections that depend on them are excluded from the rendered output.
 
 ### Finding GitHub Projects Field IDs
 
@@ -285,15 +285,15 @@ gh api graphql -f query='
 }'
 ```
 
-### How Models Affect Templates
+### How Models Affect Blanks
 
-With models **disabled** (default), the `create-issue` template generates a simple issue creation workflow. With models **enabled**, the same template automatically includes:
+With models **disabled** (default), the `create-issue` blank generates a simple issue creation workflow. With models **enabled**, the same blank automatically includes:
 
 - Field IDs for your project board
 - Status and priority option lists with their IDs
 - Ready-to-use GraphQL mutations for setting field values
 
-This means templates adapt to your team's configuration without manual editing.
+This means blanks adapt to your team's configuration without manual editing.
 
 ## Configuration Management
 
@@ -368,7 +368,7 @@ The interactive mode (`ailloy customize`) launches a guided wizard with five sec
 1. **Project Basics**: Board name and organization name
 2. **GitHub Integration**: Enable automatic project discovery via `gh api graphql`, select a board from discovered ProjectV2 boards
 3. **Model Configuration**: Enable Status, Priority, and Iteration models; map each to a GitHub Project field with smart matching and auto-map options
-4. **Custom Variables**: Add freeform key-value pairs for template rendering
+4. **Custom Variables**: Add freeform key-value pairs for blank rendering
 5. **Review & Save**: See a styled summary of all changes before writing to disk
 
 Each section can be skipped by pressing Enter to keep existing values. The wizard uses `charmbracelet/huh` for a polished terminal UI experience.

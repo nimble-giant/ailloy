@@ -1,6 +1,6 @@
 # 🧠 Ailloy Plugin for Claude Code
 
-*Auto-generated from Ailloy CLI templates*
+*Auto-generated from Ailloy CLI blanks*
 
 ## 🚀 Quick Start
 

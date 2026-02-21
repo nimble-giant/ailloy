@@ -9,7 +9,7 @@ sample-project/
 ├── .ailloy/
 │   ├── config/
 │   │   └── project.yaml
-│   └── templates/
+│   └── blanks/
 │       └── custom-workflow.md
 ├── src/
 │   └── (your application code)
@@ -19,7 +19,7 @@ sample-project/
 ## Configuration Files
 
 - `project.yaml` - Project-specific Ailloy configuration
-- `custom-workflow.md` - Example custom template for this project
+- `custom-workflow.md` - Example custom blank for this project
 
 ## Usage Examples
 
@@ -27,11 +27,11 @@ sample-project/
 # Initialize Ailloy in this project
 ailloy init
 
-# Run a template
-ailloy template run create-issue
+# Run a blank
+ailloy mold run create-issue
 
-# List available templates
-ailloy template list
+# List available blanks
+ailloy mold list
 ```
 
 ## Integration Points

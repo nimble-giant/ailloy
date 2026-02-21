@@ -106,18 +106,18 @@ This directory contains comprehensive documentation for the Ailloy methodology a
 
 - `methodology/` - Core Ailloy development methodology documentation
 - `cli/` - CLI tool usage and configuration guides  
-- `templates/` - Template creation and management guides
+- `blanks/` - Blank creation and management guides
 - `providers/` - AI provider integration documentation
 - `examples/` - Real-world usage examples and case studies
 
 ## Getting Started
 
 1. [Quick Start Guide](quickstart.md) - Get up and running with Ailloy
-2. [Configuration Guide](configuration.md) - YAML configuration and template customization
+2. [Configuration Guide](configuration.md) - YAML configuration and blank customization
 3. [Packaging Molds](smelt.md) - Create and package custom molds with `ailloy smelt`
 4. [Methodology Overview](methodology/README.md) - Understanding the Ailloy approach
 5. [CLI Reference](cli/README.md) - Complete CLI documentation
-6. [Template Guide](templates/README.md) - Creating and using templates
+6. [Blanks Guide](blanks/README.md) - Creating and using blanks
 
 ## Phase 2 Development
 
