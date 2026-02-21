@@ -521,9 +521,7 @@ func TestValidateFlux_FileLoadedSchemaRejectsInvalid(t *testing.T) {
 	}
 }
 
-// --- Backwards compatibility: mold with inline flux: section ---
-
-func TestBackwardsCompat_InlineFluxStillWorks(t *testing.T) {
+func Test_InlineFluxStillWorks(t *testing.T) {
 	// Old-style mold with flux: section in mold.yaml
 	schema := []FluxVar{
 		{Name: "org", Type: "string", Required: true, Default: "default-org"},
@@ -549,7 +547,7 @@ func TestBackwardsCompat_InlineFluxStillWorks(t *testing.T) {
 		t.Error("expected nil schema")
 	}
 
-	// Apply inline schema defaults (backwards compat path)
+	// Apply inline schema defaults
 	flux := ApplyFluxDefaults(schema, map[string]any{})
 
 	// Validate with inline schema (since flux.schema.yaml is nil)
