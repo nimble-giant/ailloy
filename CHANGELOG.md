@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/nimble-giant/ailloy/compare/v0.1.10...v0.1.11) (2026-02-22)
+
+
+### Features
+
+* scm-native foundry resolution and local cache for remote molds ([e2bc197](https://github.com/nimble-giant/ailloy/commit/e2bc1975eff4ff5ef9263cc26a45676563459101))
+
 ## [0.1.10](https://github.com/nimble-giant/ailloy/compare/v0.1.9...v0.1.10) (2026-02-21)
 
 
