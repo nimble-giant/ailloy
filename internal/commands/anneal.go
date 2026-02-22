@@ -8,6 +8,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
+	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
@@ -62,9 +63,19 @@ func runAnneal(_ *cobra.Command, args []string) error {
 		moldDir = args[0]
 	}
 
-	reader, err := blanks.NewMoldReaderFromPath(moldDir)
-	if err != nil {
-		return fmt.Errorf("reading mold directory: %w", err)
+	var reader *blanks.MoldReader
+	if foundry.IsRemoteReference(moldDir) {
+		fsys, err := foundry.Resolve(moldDir)
+		if err != nil {
+			return fmt.Errorf("resolving remote mold: %w", err)
+		}
+		reader = blanks.NewMoldReader(fsys)
+	} else {
+		var err error
+		reader, err = blanks.NewMoldReaderFromPath(moldDir)
+		if err != nil {
+			return fmt.Errorf("reading mold directory: %w", err)
+		}
 	}
 
 	// Resolve schema and flux defaults

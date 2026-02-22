@@ -72,13 +72,13 @@ ailloy/
 │   └── commands/        # CLI command implementations (cast, forge, smelt, etc.)
 ├── pkg/                 # Public Go packages
 │   ├── blanks/          # MoldReader abstraction
+│   ├── foundry/         # SCM-native mold resolution, caching, version management
 │   ├── github/          # GitHub ProjectV2 discovery via gh API GraphQL
 │   ├── mold/            # Template engine, flux loading, ingot resolution
 │   ├── plugin/          # Plugin generation pipeline
 │   ├── safepath/        # Safe path utilities
 │   ├── smelt/           # Mold packaging (tarball/binary)
 │   └── styles/          # Terminal styling
-├── nimble-mold/         # Official mold (commands, skills, workflows, flux)
 ├── docs/                # Documentation
 └── Makefile             # Build targets
 ```

@@ -5,7 +5,7 @@ Blanks are the source files of the Ailloy compiler. They are Markdown instructio
 ## Blank Location
 
 Blanks are stored in mold directories and loaded at runtime:
-- **Mold source**: `nimble-mold/commands/` (the official mold)
+- **Official mold**: [`github.com/nimble-giant/nimble-mold`](https://github.com/nimble-giant/nimble-mold) (resolved from git)
 - **Project output**: `.claude/commands/` (created by `ailloy cast`)
 - **Reader package**: `pkg/blanks/` (the `MoldReader` abstraction)
 
@@ -47,10 +47,10 @@ ailloy mold list
 ailloy mold show create-issue
 
 # Preview rendered output (dry run)
-ailloy forge ./nimble-mold
+ailloy forge github.com/nimble-giant/nimble-mold
 
 # Install into current project
-ailloy cast ./nimble-mold
+ailloy cast github.com/nimble-giant/nimble-mold
 ```
 
 ## Using Blanks with Claude Code
@@ -61,12 +61,12 @@ ailloy cast ./nimble-mold
 
 ## Blank Development
 
-Blanks live in mold directories (e.g., `nimble-mold/commands/`). To add new blanks:
+Blanks live in mold directories (e.g., `commands/` within a mold). To add new blanks:
 
-1. Create a new `.md` file in `nimble-mold/commands/`
-2. Ensure the directory is mapped in the `output:` section of `nimble-mold/flux.yaml`
+1. Create a new `.md` file in your mold's `commands/` directory
+2. Ensure the directory is mapped in the `output:` section of `flux.yaml`
 3. Include clear instructions for Claude Code
 4. Define workflow steps and expected outputs
-5. Test with `ailloy forge ./nimble-mold`
+5. Test with `ailloy forge ./my-mold`
 
 Blanks are automatically discovered by the `MoldReader` from the mold's output mapping in `flux.yaml`.

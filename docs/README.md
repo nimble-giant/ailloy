@@ -106,3 +106,4 @@ This directory contains comprehensive documentation for Ailloy, the package mana
 
 - [Blanks](blanks.md) - Guide to creating and using blanks
 - [Packaging Molds](smelt.md) - Create and package custom molds with `ailloy smelt`
+- [Remote Molds](foundry.md) - Resolve molds from git repositories with semver constraints

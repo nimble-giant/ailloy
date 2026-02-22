@@ -25,7 +25,7 @@ The following skills are available in the `.claude/skills/` directory:
 
 ## Workflow Blanks
 
-The following workflow blanks are available in the official mold (`nimble-mold/workflows/`) and can be installed into a project's `.github/workflows/` via `ailloy cast --with-workflows`:
+The following workflow blanks are available in the [official mold](https://github.com/nimble-giant/nimble-mold) and can be installed into a project's `.github/workflows/` via `ailloy cast --with-workflows`:
 
 - **claude-code**: GitHub Actions workflow for the Claude Code agent (responds to @claude mentions in issues and PRs)
 - **claude-code-review**: GitHub Actions workflow for automated PR reviews with Claude Code agent. Features brevity-focused formatting, collapsible sections, and comment management (updates summary, creates replies).
