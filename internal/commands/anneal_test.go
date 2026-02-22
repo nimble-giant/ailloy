@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"os"
 	"testing"
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -84,8 +85,15 @@ func TestInferSchemaFromFlux_EmptyMap(t *testing.T) {
 }
 
 func TestResolveAnnealSchema_WithFluxSchema(t *testing.T) {
-	// This is an integration-style test using the nimble-mold
-	// We test the schema resolution logic through the real mold reader
+	// This is an integration-style test using the remote nimble-mold.
+	// We chdir to a tmpDir so the foundry lock file doesn't pollute the repo.
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
 	reader := testMoldReader(t)
 
 	schema, fluxDefaults, err := resolveAnnealSchema(reader)

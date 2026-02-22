@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	dario.cat/mergo v1.0.2
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/charmbracelet/huh v0.8.0
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/goccy/go-yaml v1.19.2

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/nimble-giant/ailloy/pkg/blanks"
+	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/smelt"
 	"github.com/nimble-giant/ailloy/pkg/styles"
@@ -211,6 +212,13 @@ func writeForgeFiles(files []renderedFile, outputDir string) error {
 // resolveForgeReader creates a MoldReader from args or the embedded mold.
 func resolveForgeReader(args []string) (*blanks.MoldReader, error) {
 	if len(args) >= 1 {
+		if foundry.IsRemoteReference(args[0]) {
+			fsys, err := foundry.Resolve(args[0])
+			if err != nil {
+				return nil, fmt.Errorf("resolving remote mold: %w", err)
+			}
+			return blanks.NewMoldReader(fsys), nil
+		}
 		return blanks.NewMoldReaderFromPath(args[0])
 	}
 	if smelt.HasEmbeddedMold() {

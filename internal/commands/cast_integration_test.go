@@ -4,35 +4,25 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/nimble-giant/ailloy/pkg/blanks"
+	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
-// nimbleMoldDir returns the absolute path to the nimble-mold/ directory.
-func nimbleMoldDir(t *testing.T) string {
-	t.Helper()
-	_, filename, _, _ := runtime.Caller(0)
-	// filename = .../internal/commands/cast_integration_test.go
-	repoRoot := filepath.Join(filepath.Dir(filename), "..", "..")
-	moldDir := filepath.Join(repoRoot, "nimble-mold")
-	if _, err := os.Stat(moldDir); err != nil {
-		t.Fatalf("nimble-mold directory not found at %s: %v", moldDir, err)
-	}
-	return moldDir
-}
+// nimbleMoldRef is the remote reference used by integration tests.
+const nimbleMoldRef = "github.com/nimble-giant/nimble-mold@v0.1.10"
 
-// testMoldReader creates a MoldReader from the nimble-mold/ directory.
+// testMoldReader resolves the nimble-mold from its public repository.
 func testMoldReader(t *testing.T) *blanks.MoldReader {
 	t.Helper()
-	reader, err := blanks.NewMoldReaderFromPath(nimbleMoldDir(t))
+	fsys, err := foundry.Resolve(nimbleMoldRef)
 	if err != nil {
-		t.Fatalf("failed to create mold reader: %v", err)
+		t.Fatalf("failed to resolve remote mold: %v", err)
 	}
-	return reader
+	return blanks.NewMoldReader(fsys)
 }
 
 // testFlux loads flux defaults from the mold reader for use in tests.

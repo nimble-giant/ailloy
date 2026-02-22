@@ -71,28 +71,39 @@ The binary will be available at `./bin/ailloy`.
 
 ### Cast a Mold into a Project
 
+Molds can be resolved directly from git repositories — no local clone required:
+
 ```bash
-# Install blanks from the official mold
-ailloy cast ./nimble-mold
+# Install blanks from the official mold (resolves latest tag from GitHub)
+ailloy cast github.com/nimble-giant/nimble-mold
+
+# Pin to a specific version
+ailloy cast github.com/nimble-giant/nimble-mold@v0.1.10
+
+# Semver constraints (caret, tilde, range)
+ailloy cast github.com/nimble-giant/nimble-mold@^0.1.0
 
 # Include GitHub Actions workflow blanks
-ailloy cast ./nimble-mold --with-workflows
+ailloy cast github.com/nimble-giant/nimble-mold --with-workflows
 
 # Override flux values at install time
-ailloy cast ./nimble-mold --set project.organization=mycompany
+ailloy cast github.com/nimble-giant/nimble-mold --set project.organization=mycompany
+
+# Local mold directories still work
+ailloy cast ./my-local-mold
 ```
 
 ### Configure Flux Variables
 
 ```bash
 # Interactive wizard — reads flux.schema.yaml from a mold
-ailloy anneal ./nimble-mold -o flux-overrides.yaml
+ailloy anneal github.com/nimble-giant/nimble-mold -o flux-overrides.yaml
 
 # Scripted mode
 ailloy anneal --set project.organization=mycompany --set project.board=Engineering -o flux-overrides.yaml
 
 # Use overrides with cast
-ailloy cast ./nimble-mold -f flux-overrides.yaml
+ailloy cast github.com/nimble-giant/nimble-mold -f flux-overrides.yaml
 ```
 
 ### Working with Blanks
@@ -107,18 +118,18 @@ ailloy mold show create-issue
 
 ## Available Commands
 
-### `ailloy cast [mold-dir]`
+### `ailloy cast [mold-ref]`
 
-Install rendered blanks from a mold into the current project (alias: `install`):
+Install rendered blanks from a mold into the current project (alias: `install`). Accepts a local directory path or a remote git reference (`host/owner/repo[@version][//subpath]`):
 
 - `-g, --global`: Install into user home directory (`~/`) instead of current project
 - `--with-workflows`: Include GitHub Actions workflow blanks
 - `--set key=value`: Override flux variables (can be repeated)
 - `-f, --values file`: Layer additional flux value files (can be repeated)
 
-### `ailloy forge [mold-dir]`
+### `ailloy forge [mold-ref]`
 
-Dry-run render of mold blanks (aliases: `blank`, `template`):
+Dry-run render of mold blanks (aliases: `blank`, `template`). Accepts a local directory path or a remote git reference:
 
 - `-o, --output dir`: Write rendered files to a directory instead of stdout
 - `--set key=value`: Set flux values (can be repeated)
@@ -131,9 +142,9 @@ Manage AI command blanks:
 - `list`: Show all available blanks
 - `show <blank-name>`: Display blank content
 
-### `ailloy anneal [mold-dir]`
+### `ailloy anneal [mold-ref]`
 
-Dynamic, mold-aware wizard to configure flux variables (alias: `configure`). Reads `flux.schema.yaml` from the mold to generate type-driven prompts with optional discovery commands:
+Dynamic, mold-aware wizard to configure flux variables (alias: `configure`). Reads `flux.schema.yaml` from the mold to generate type-driven prompts with optional discovery commands. Accepts a local directory path or a remote git reference:
 
 - `-s, --set key=value`: Set flux variable in scripted mode (can be repeated)
 - `-o, --output file`: Write flux YAML to file (default: stdout)
@@ -185,7 +196,7 @@ Skills are proactive workflows that Claude Code can use automatically based on c
 
 ### Workflow Blanks
 
-Ailloy also includes GitHub Actions workflow blanks in the official mold (`nimble-mold/workflows/`). These are installed into your project's `.github/workflows/` when using `ailloy cast --with-workflows`:
+Ailloy also includes GitHub Actions workflow blanks in the [official mold](https://github.com/nimble-giant/nimble-mold). These are installed into your project's `.github/workflows/` when using `ailloy cast --with-workflows`:
 
 - **`claude-code`**: GitHub Actions workflow for the [Claude Code agent](https://github.com/anthropics/claude-code-action). Responds to `@claude` mentions in issues, PR comments, and PR reviews. Requires an `ANTHROPIC_API_KEY` secret in your repository.
 - **`claude-code-review`**: GitHub Actions workflow for automated PR reviews with the [Claude Code agent](https://github.com/anthropics/claude-code-action). Features brevity-focused formatting, collapsible sections for detailed analysis, and intelligent comment management (updates summary comments, creates reply comments). Requires an `ANTHROPIC_API_KEY` secret in your repository.
@@ -243,16 +254,16 @@ When blanks are rendered with `forge` or `cast`, flux values are resolved in thi
 
 ```bash
 # Interactive wizard — reads schema from mold, generates a flux YAML file
-ailloy anneal ./nimble-mold -o my-overrides.yaml
+ailloy anneal github.com/nimble-giant/nimble-mold -o my-overrides.yaml
 
 # Scripted mode
 ailloy anneal --set project.organization=mycompany -o my-overrides.yaml
 
 # Use overrides when casting
-ailloy cast ./nimble-mold -f my-overrides.yaml
+ailloy cast github.com/nimble-giant/nimble-mold -f my-overrides.yaml
 
 # Or override inline
-ailloy cast ./nimble-mold --set project.organization=mycompany
+ailloy cast github.com/nimble-giant/nimble-mold --set project.organization=mycompany
 ```
 
 ## Project Structure
@@ -263,13 +274,13 @@ ailloy cast ./nimble-mold --set project.organization=mycompany
   /commands          # CLI command implementations (cast, forge, smelt, etc.)
 /pkg
   /blanks            # MoldReader abstraction (reads mold directories)
+  /foundry           # SCM-native mold resolution, caching, and version management
   /github            # GitHub ProjectV2 discovery via gh API GraphQL
   /mold              # Template engine, flux loading, ingot resolution
   /plugin            # Plugin generation pipeline
   /safepath          # Safe path utilities
   /smelt             # Mold packaging (tarball/binary)
   /styles            # Terminal UI styles (lipgloss)
-/nimble-mold         # Official mold (commands, skills, workflows, flux)
 /docs                # Documentation
 ```
 
@@ -287,6 +298,7 @@ ailloy cast ./nimble-mold --set project.organization=mycompany
 - ✅ Claude Code-optimized workflow blanks
 - ✅ Automatic GitHub Project field discovery via GraphQL
 - ✅ Interactive wizard with charmbracelet/huh for guided configuration
+- ✅ SCM-native mold resolution from git repos with semver constraints and local caching
 - 🔄 Additional AI provider support (planned)
 - 🔄 Advanced workflow automation (planned)
 
