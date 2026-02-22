@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/nimble-giant/ailloy/compare/v0.1.11...v0.1.12) (2026-02-22)
+
+
+### Features
+
+* add foundry, mold get, and ingot get/add commands ([04b05a7](https://github.com/nimble-giant/ailloy/commit/04b05a716b60d01866486e99a9f9a93bf58d079c)), closes [#47](https://github.com/nimble-giant/ailloy/issues/47)
+
 ## [0.1.11](https://github.com/nimble-giant/ailloy/compare/v0.1.10...v0.1.11) (2026-02-22)
 
 
