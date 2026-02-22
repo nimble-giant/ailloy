@@ -118,6 +118,84 @@ In CI environments, use a deploy key or `GH_TOKEN`:
     GH_TOKEN: ${{ secrets.MOLD_ACCESS_TOKEN }}
 ```
 
+## Discovering Molds
+
+Search for molds published on GitHub using the `ailloy-mold` topic:
+
+```bash
+# Search for molds matching a query
+ailloy foundry search blueprint
+
+# Verb-noun ordering also works
+ailloy search foundry blueprint
+```
+
+Results include the repository name, description, and URL. The search queries the GitHub API for repositories tagged with the `ailloy-mold` topic.
+
+### Making Your Mold Discoverable
+
+To make your mold appear in search results, add the `ailloy-mold` topic to your GitHub repository:
+
+1. Go to your repository on GitHub
+2. Click the gear icon next to "About"
+3. Add `ailloy-mold` to the Topics field
+4. Save
+
+### Managing Foundry Indexes
+
+Register foundry index URLs for use by search and resolution commands:
+
+```bash
+# Register a foundry index URL
+ailloy foundry add https://github.com/nimble-giant/ailloy-foundry-index
+
+# Verb-noun ordering
+ailloy add foundry https://github.com/nimble-giant/ailloy-foundry-index
+```
+
+Registered foundries are stored in `~/.ailloy/config.yaml`.
+
+## Downloading Without Installing
+
+Download a mold or ingot to the local cache without installing it into your project. This is useful for inspecting a package before committing to it:
+
+```bash
+# Download a mold — validates mold.yaml and prints the cache path
+ailloy mold get github.com/nimble-giant/nimble-mold@v0.1.10
+ailloy get mold github.com/nimble-giant/nimble-mold@v0.1.10
+
+# Download an ingot
+ailloy ingot get github.com/my-org/my-ingot@v1.0.0
+ailloy get ingot github.com/my-org/my-ingot@v1.0.0
+```
+
+After download, the manifest (`mold.yaml` or `ingot.yaml`) is validated and the local cache path is printed so you can inspect the contents.
+
+## Adding Ingots
+
+Ingots are reusable template components that can be included in molds via the `{{ingot "name"}}` template function. Use `ingot add` to download an ingot and register it in your project:
+
+```bash
+# Download and install an ingot into .ailloy/ingots/
+ailloy ingot add github.com/my-org/my-ingot@v1.0.0
+ailloy add ingot github.com/my-org/my-ingot@v1.0.0
+```
+
+This copies the ingot files into `.ailloy/ingots/<name>/` where the template engine can resolve them during `cast` and `forge`.
+
+## Bidirectional Commands
+
+All compound commands support both noun-verb and verb-noun ordering. Both forms invoke the same handler:
+
+| Noun-Verb | Verb-Noun | Description |
+| --------- | --------- | ----------- |
+| `ailloy foundry search <query>` | `ailloy search foundry <query>` | Search for molds |
+| `ailloy foundry add <url>` | `ailloy add foundry <url>` | Register a foundry |
+| `ailloy mold get <ref>` | `ailloy get mold <ref>` | Download a mold |
+| `ailloy ingot get <ref>` | `ailloy get ingot <ref>` | Download an ingot |
+| `ailloy ingot add <ref>` | `ailloy add ingot <ref>` | Add an ingot |
+| `ailloy mold show <name>` | `ailloy show mold <name>` | Show a mold |
+
 ## Reference Format
 
 Remote mold references follow this format:
@@ -250,8 +328,13 @@ If you can `git clone` a repository, `ailloy cast` can resolve it.
 
 Remote mold references work with all mold-consuming commands:
 
-| Command  | Example                                                              |
-| -------- | -------------------------------------------------------------------- |
-| `cast`   | `ailloy cast github.com/nimble-giant/nimble-mold@v0.1.10`           |
-| `forge`  | `ailloy forge github.com/nimble-giant/nimble-mold@v0.1.10`          |
-| `anneal` | `ailloy anneal github.com/nimble-giant/nimble-mold@v0.1.10 -o ore.yaml` |
+| Command        | Example                                                              |
+| -------------- | -------------------------------------------------------------------- |
+| `cast`         | `ailloy cast github.com/nimble-giant/nimble-mold@v0.1.10`           |
+| `forge`        | `ailloy forge github.com/nimble-giant/nimble-mold@v0.1.10`          |
+| `anneal`       | `ailloy anneal github.com/nimble-giant/nimble-mold@v0.1.10 -o ore.yaml` |
+| `mold get`     | `ailloy mold get github.com/nimble-giant/nimble-mold@v0.1.10`       |
+| `ingot get`    | `ailloy ingot get github.com/my-org/my-ingot@v1.0.0`               |
+| `ingot add`    | `ailloy ingot add github.com/my-org/my-ingot@v1.0.0`               |
+| `foundry search` | `ailloy foundry search blueprint`                                 |
+| `foundry add`  | `ailloy foundry add https://github.com/nimble-giant/ailloy-foundry-index` |
