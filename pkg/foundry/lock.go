@@ -3,6 +3,7 @@ package foundry
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -68,6 +69,36 @@ func (lf *LockFile) FindEntry(source string) *LockEntry {
 		}
 	}
 	return nil
+}
+
+// FindEntryByName looks up a lock entry by name.
+func (lf *LockFile) FindEntryByName(name string) *LockEntry {
+	if lf == nil {
+		return nil
+	}
+	for i := range lf.Molds {
+		if lf.Molds[i].Name == name {
+			return &lf.Molds[i]
+		}
+	}
+	return nil
+}
+
+// ReferenceFromEntry reconstructs a Reference from a lock entry's source field.
+// The source is in the format host/owner/repo and the entry's subpath is preserved.
+// The returned reference has type Latest so it resolves to the newest available version.
+func ReferenceFromEntry(entry *LockEntry) (*Reference, error) {
+	parts := strings.SplitN(entry.Source, "/", 3)
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("invalid lock entry source %q: expected host/owner/repo", entry.Source)
+	}
+	return &Reference{
+		Host:    parts[0],
+		Owner:   parts[1],
+		Repo:    parts[2],
+		Subpath: entry.Subpath,
+		Type:    Latest,
+	}, nil
 }
 
 // UpsertEntry adds or updates a lock entry by source.
