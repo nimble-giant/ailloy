@@ -309,9 +309,38 @@ molds:
 
 ### Lock Behavior
 
-- **Locked + Latest/Constraint**: uses the locked version (delete `ailloy.lock` to re-resolve)
+- **Locked + Latest/Constraint**: uses the locked version (run `ailloy recast` to re-resolve)
 - **Locked + Exact**: uses the lock if versions match, otherwise re-resolves
 - **Branch/SHA pins**: always re-resolve (lock is updated but not consulted)
+
+### Lifecycle Commands
+
+#### Recast (alias: upgrade)
+
+Re-resolve locked dependencies to their latest available versions:
+
+```bash
+# Update all dependencies
+ailloy recast
+
+# Update a single dependency by name
+ailloy recast nimble-mold
+
+# Preview changes without applying
+ailloy recast --dry-run
+```
+
+Recast fetches the latest semver tags from each dependency's remote, compares with the currently locked version, and updates `ailloy.lock` with the new resolution. A summary of changes is printed showing old and new versions.
+
+#### Quench (alias: lock)
+
+Confirm that all dependencies are pinned to exact versions:
+
+```bash
+ailloy quench
+```
+
+Quench verifies that every entry in `ailloy.lock` has an exact version and commit SHA pinned. Subsequent `cast` operations will use only these locked versions until the lock is updated via `recast`.
 
 ## Authentication
 
@@ -336,5 +365,7 @@ Remote mold references work with all mold-consuming commands:
 | `mold get`     | `ailloy mold get github.com/nimble-giant/nimble-mold@v0.1.10`       |
 | `ingot get`    | `ailloy ingot get github.com/my-org/my-ingot@v1.0.0`               |
 | `ingot add`    | `ailloy ingot add github.com/my-org/my-ingot@v1.0.0`               |
+| `recast`       | `ailloy recast` or `ailloy recast nimble-mold --dry-run`                  |
+| `quench`       | `ailloy quench`                                                           |
 | `foundry search` | `ailloy foundry search blueprint`                                 |
 | `foundry add`  | `ailloy foundry add https://github.com/nimble-giant/ailloy-foundry-index` |
