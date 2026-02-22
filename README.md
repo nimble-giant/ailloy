@@ -141,6 +141,7 @@ Manage AI command blanks:
 
 - `list`: Show all available blanks
 - `show <blank-name>`: Display blank content
+- `get <reference>`: Download a mold to local cache without installing (validates `mold.yaml`, prints cache path)
 
 ### `ailloy anneal [mold-ref]`
 
@@ -163,6 +164,20 @@ Validate and lint a mold or ingot package (alias: `lint`):
 - Checks structural integrity, manifest fields, file references, template syntax, and flux schema consistency
 - Reports errors (blocking) and warnings (informational)
 
+### `ailloy foundry`
+
+Discover and manage mold registries. See the [Remote Molds guide](docs/foundry.md) for details:
+
+- `search <query>`: Search GitHub for molds tagged with the `ailloy-mold` topic
+- `add <url>`: Register a foundry index URL in `~/.ailloy/config.yaml`
+
+### `ailloy ingot`
+
+Manage reusable template components (ingots):
+
+- `get <reference>`: Download an ingot to the local cache without installing
+- `add <reference>`: Download and install an ingot into the project's `.ailloy/ingots/` directory
+
 ### `ailloy plugin`
 
 Generate and manage Claude Code plugins:
@@ -170,6 +185,22 @@ Generate and manage Claude Code plugins:
 - `generate`: Generate Claude Code plugin from blanks (`--mold`, `--output`, `--watch`, `--force`)
 - `update [path]`: Update existing Claude Code plugin (`--mold`, `--force`)
 - `validate [path]`: Validate Claude Code plugin structure
+
+### Bidirectional Commands
+
+All compound commands support both noun-verb and verb-noun ordering:
+
+```bash
+# These are equivalent
+ailloy foundry search blueprint    # noun-verb
+ailloy search foundry blueprint    # verb-noun
+
+ailloy mold get github.com/org/repo
+ailloy get mold github.com/org/repo
+
+ailloy ingot add github.com/org/repo
+ailloy add ingot github.com/org/repo
+```
 
 ## Blanks
 
@@ -299,6 +330,8 @@ ailloy cast github.com/nimble-giant/nimble-mold --set project.organization=mycom
 - ✅ Automatic GitHub Project field discovery via GraphQL
 - ✅ Interactive wizard with charmbracelet/huh for guided configuration
 - ✅ SCM-native mold resolution from git repos with semver constraints and local caching
+- ✅ Foundry search and discovery via GitHub topic-based registry
+- ✅ Ingot package management (get, add) with bidirectional CLI commands
 - 🔄 Additional AI provider support (planned)
 - 🔄 Advanced workflow automation (planned)
 
