@@ -2,11 +2,14 @@ package commands
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/nimble-giant/ailloy/pkg/foundry"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
 )
@@ -45,10 +48,22 @@ var showMoldSubCmd = &cobra.Command{
 	RunE:  runShowMold,
 }
 
+var getMoldCmd = &cobra.Command{
+	Use:   "get <reference>",
+	Short: "Download a mold without installing",
+	Long: `Download a mold to the local cache without installing it.
+
+The reference follows the standard format: <host>/<owner>/<repo>[@<version>][//<subpath>]
+After download, the cache path is printed and the mold manifest is validated.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runGetMold,
+}
+
 func init() {
 	rootCmd.AddCommand(moldCmd)
 	moldCmd.AddCommand(listMoldsCmd)
 	moldCmd.AddCommand(showMoldCmd)
+	moldCmd.AddCommand(getMoldCmd)
 
 	// Bidirectional: "show mold <name>" also works
 	rootCmd.AddCommand(showCmd)
@@ -301,6 +316,63 @@ func findMold(name string) (string, error) {
 	}
 
 	return "", fmt.Errorf("mold %s not found", name)
+}
+
+func runGetMold(_ *cobra.Command, args []string) error {
+	ref := args[0]
+
+	if !foundry.IsRemoteReference(ref) {
+		return fmt.Errorf("expected a remote reference (e.g. github.com/owner/repo), got %q", ref)
+	}
+
+	fmt.Println(styles.WorkingBanner("Downloading mold..."))
+	fmt.Println()
+
+	parsed, err := foundry.ParseReference(ref)
+	if err != nil {
+		return fmt.Errorf("parsing reference: %w", err)
+	}
+
+	fsys, err := foundry.Resolve(ref)
+	if err != nil {
+		return fmt.Errorf("resolving mold: %w", err)
+	}
+
+	// Validate mold.yaml exists and is parseable.
+	if _, err := fs.ReadFile(fsys, "mold.yaml"); err != nil {
+		return fmt.Errorf("mold.yaml not found in %s: %w", ref, err)
+	}
+
+	manifest, err := mold.LoadMoldFromFS(fsys, "mold.yaml")
+	if err != nil {
+		return fmt.Errorf("invalid mold manifest: %w", err)
+	}
+
+	// Print cache path.
+	cacheDir, err := foundry.CacheDir()
+	if err != nil {
+		return fmt.Errorf("determining cache directory: %w", err)
+	}
+
+	// Read lock to get resolved version for path display.
+	lock, _ := foundry.ReadLockFile(foundry.LockFileName)
+	version := "latest"
+	if entry := lock.FindEntry(parsed.CacheKey()); entry != nil {
+		version = entry.Version
+	}
+
+	cachePath := foundry.VersionDir(cacheDir, parsed, version)
+	if parsed.Subpath != "" {
+		cachePath = filepath.Join(cachePath, parsed.Subpath)
+	}
+
+	fmt.Println(styles.SuccessStyle.Render("Downloaded: ") + styles.AccentStyle.Render(manifest.Name+" "+manifest.Version))
+	if manifest.Description != "" {
+		fmt.Println(styles.SubtleStyle.Render("  " + manifest.Description))
+	}
+	fmt.Println(styles.InfoStyle.Render("Cache path: ") + styles.CodeStyle.Render(cachePath))
+
+	return nil
 }
 
 // getMoldIcon returns an appropriate icon based on mold name
