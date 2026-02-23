@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/nimble-giant/ailloy/compare/v0.1.12...v0.1.13) (2026-02-23)
+
+
+### Features
+
+* make ailloy tool-agnostic across AI coding tools ([e69b0e1](https://github.com/nimble-giant/ailloy/commit/e69b0e1a13e0228f3321959828c7abfc7850e356))
+
 ## [0.1.12](https://github.com/nimble-giant/ailloy/compare/v0.1.11...v0.1.12) (2026-02-23)
 
 
