@@ -72,7 +72,28 @@ var getIngotSubCmd = &cobra.Command{
 	RunE:  runIngotGet,
 }
 
+var newCmd = &cobra.Command{
+	Use:   "new",
+	Short: "Create new resources",
+	Long: `Create new molds and other resources.
+
+Available subcommands:
+  mold       Scaffold a new mold directory`,
+}
+
+var newMoldSubCmd = &cobra.Command{
+	Use:     "mold <name>",
+	Aliases: []string{"create"},
+	Short:   "Scaffold a new mold directory",
+	Args:    cobra.ExactArgs(1),
+	RunE:    runNewMold,
+}
+
 func init() {
+	// Flags for bidirectional "new mold" must mirror "mold new" flags.
+	newMoldSubCmd.Flags().StringVarP(&newMoldOutput, "output", "o", ".", "parent directory to create the mold in")
+	newMoldSubCmd.Flags().BoolVar(&newMoldNoAgents, "no-agents", false, "skip generating AGENTS.md")
+
 	// search <noun>
 	rootCmd.AddCommand(searchCmd)
 	searchCmd.AddCommand(searchFoundrySubCmd)
@@ -86,4 +107,8 @@ func init() {
 	rootCmd.AddCommand(getCmd)
 	getCmd.AddCommand(getMoldSubCmd)
 	getCmd.AddCommand(getIngotSubCmd)
+
+	// new <noun>
+	rootCmd.AddCommand(newCmd)
+	newCmd.AddCommand(newMoldSubCmd)
 }

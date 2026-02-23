@@ -202,6 +202,8 @@ Discovery commands run lazily during `ailloy anneal` when the user reaches the r
 
 ## Step 4: Create your blanks
 
+> **Tip:** Use `ailloy mold new <name>` to scaffold a valid mold directory with boilerplate files. This creates `mold.yaml`, `flux.yaml`, `AGENTS.md`, and sample blanks — a ready-to-edit starting point.
+
 Add command blanks to `commands/`, skill blanks to `skills/`, and workflow files to `workflows/`. The `output:` mapping in `flux.yaml` determines where they end up in the target project. Reference flux variables with Go template syntax:
 
 ```markdown
