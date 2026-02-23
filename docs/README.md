@@ -108,6 +108,7 @@ These guides teach you how to create, package, and share your own AI workflow pa
 
 ## Authoring Guides
 
+- [AGENTS.md](agents-md.md) — Tool-agnostic agent instructions in molds
 - [Flux Variables](flux.md) — Configure blanks with variables, schemas, and value layering
 - [Ingots](ingots.md) — Create and use reusable template components
 - [Packaging Molds](smelt.md) — Package molds into distributable tarballs or binaries
