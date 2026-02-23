@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-yaml"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
@@ -234,30 +235,63 @@ func castProject(reader *blanks.MoldReader) error {
 	}
 	summaryContent += styles.FoxBullet("Ready for AI-powered development! 🚀")
 
-	// Check if any AI instruction file exists and suggest creating one if not (skip for global)
+	// Check for AGENTS.md and CLAUDE.md integration (skip for global)
 	if destPrefix == "" {
-		instructionFiles := []string{"CLAUDE.md", "AGENTS.md", ".cursorrules", ".windsurfrules"}
-		hasInstructions := false
-		for _, f := range instructionFiles {
-			if _, err := os.Stat(f); err == nil {
-				hasInstructions = true
-				break
+		agentsInstalled := hasDestFile(filesToCast, "AGENTS.md")
+		_, claudeExists := os.Stat("CLAUDE.md")
+
+		switch {
+		case agentsInstalled && claudeExists == nil:
+			// AGENTS.md was installed and CLAUDE.md exists — offer to add import
+			if !claudeMDHasAgentsImport("CLAUDE.md") {
+				summaryContent += "\n\n" +
+					styles.InfoStyle.Render("💡 ") +
+					styles.CodeStyle.Render("AGENTS.md") + " installed."
 			}
-		}
-		if !hasInstructions {
+		case agentsInstalled:
+			// AGENTS.md was installed but no CLAUDE.md
 			summaryContent += "\n\n" +
 				styles.InfoStyle.Render("💡 Tip: ") +
-				"No AI instruction file detected. " +
-				"Consider adding one for your AI coding tool (e.g., " +
-				styles.CodeStyle.Render("CLAUDE.md") + ", " +
-				styles.CodeStyle.Render("AGENTS.md") + ", " +
-				styles.CodeStyle.Render(".cursorrules") + ")."
+				styles.CodeStyle.Render("AGENTS.md") + " installed. " +
+				"Add " + styles.CodeStyle.Render("@AGENTS.md") + " to your " +
+				styles.CodeStyle.Render("CLAUDE.md") + " to load it in Claude Code."
+		default:
+			// No AGENTS.md in this mold — check for any AI instruction file
+			instructionFiles := []string{"CLAUDE.md", "AGENTS.md", ".cursorrules", ".windsurfrules"}
+			hasInstructions := false
+			for _, f := range instructionFiles {
+				if _, err := os.Stat(f); err == nil {
+					hasInstructions = true
+					break
+				}
+			}
+			if !hasInstructions {
+				summaryContent += "\n\n" +
+					styles.InfoStyle.Render("💡 Tip: ") +
+					"No AI instruction file detected. " +
+					"Consider adding one for your AI coding tool (e.g., " +
+					styles.CodeStyle.Render("CLAUDE.md") + ", " +
+					styles.CodeStyle.Render("AGENTS.md") + ", " +
+					styles.CodeStyle.Render(".cursorrules") + ")."
+			}
 		}
 	}
 
 	summary := styles.SuccessBoxStyle.Render(summaryContent)
 
 	fmt.Println(summary)
+
+	// Prompt to add @AGENTS.md import to CLAUDE.md (after summary box)
+	if destPrefix == "" {
+		agentsInstalled := hasDestFile(filesToCast, "AGENTS.md")
+		if agentsInstalled {
+			if _, err := os.Stat("CLAUDE.md"); err == nil {
+				if !claudeMDHasAgentsImport("CLAUDE.md") {
+					offerAgentsImport("CLAUDE.md")
+				}
+			}
+		}
+	}
 
 	return nil
 }
@@ -286,6 +320,67 @@ func writeInstallState(dirs []string) error {
 		return err
 	}
 	return os.WriteFile(".ailloy/state.yaml", data, 0644) // #nosec G306
+}
+
+// hasDestFile checks if any resolved file targets the given destination path.
+func hasDestFile(files []mold.ResolvedFile, destPath string) bool {
+	for _, rf := range files {
+		if rf.DestPath == destPath {
+			return true
+		}
+	}
+	return false
+}
+
+// claudeMDHasAgentsImport checks if a CLAUDE.md file already contains an @AGENTS.md import.
+func claudeMDHasAgentsImport(path string) bool {
+	data, err := os.ReadFile(path) // #nosec G304 -- path is a known constant
+	if err != nil {
+		return false
+	}
+	content := strings.ToLower(string(data))
+	return strings.Contains(content, "@agents.md")
+}
+
+// offerAgentsImport prompts the user to add @AGENTS.md import to their CLAUDE.md.
+func offerAgentsImport(claudePath string) {
+	fmt.Println()
+
+	var confirm bool
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Add @AGENTS.md import to your CLAUDE.md?").
+				Description("This makes Claude Code load your AGENTS.md instructions.").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&confirm),
+		),
+	).WithTheme(ailloyTheme())
+
+	if err := form.Run(); err != nil {
+		return
+	}
+
+	if !confirm {
+		return
+	}
+
+	data, err := os.ReadFile(claudePath) // #nosec G304 -- path is a known constant
+	if err != nil {
+		fmt.Println(styles.WarningStyle.Render("⚠️  Could not read " + claudePath + ": " + err.Error()))
+		return
+	}
+
+	newContent := "@AGENTS.md\n\n" + string(data)
+	//#nosec G306 -- CLAUDE.md needs to be readable
+	if err := os.WriteFile(claudePath, []byte(newContent), 0644); err != nil {
+		fmt.Println(styles.WarningStyle.Render("⚠️  Could not update " + claudePath + ": " + err.Error()))
+		return
+	}
+
+	fmt.Println(styles.SuccessStyle.Render("✅ Added ") + styles.CodeStyle.Render("@AGENTS.md") +
+		styles.SuccessStyle.Render(" import to ") + styles.CodeStyle.Render(claudePath))
 }
 
 // copyResolvedFiles copies resolved mold files to the project, applying template
