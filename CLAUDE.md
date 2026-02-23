@@ -30,6 +30,21 @@ The following workflow blanks are available in the [official mold](https://githu
 - **claude-code**: GitHub Actions workflow for the Claude Code agent (responds to @claude mentions in issues and PRs)
 - **claude-code-review**: GitHub Actions workflow for automated PR reviews with Claude Code agent. Features brevity-focused formatting, collapsible sections, and comment management (updates summary, creates replies).
 
+## CLI Commands
+
+Key CLI commands for working with molds:
+
+- **mold new** (`mold create`): Scaffold a new mold directory with boilerplate
+- **mold list**: List available molds
+- **mold show**: Display a mold's content
+- **cast** (`install`): Install molds into a project
+- **forge** (`template`): Preview rendered output (dry run)
+- **temper** (`lint`): Validate and lint a mold or ingot package
+- **anneal** (`configure`): Configure flux variables interactively
+- **smelt** (`package`): Package a mold for distribution
+- **recast**: Re-render and update previously cast blanks
+- **quench**: Lock flux variables to prevent re-rendering
+
 ## Usage
 
 To use a command blank:

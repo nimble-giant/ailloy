@@ -65,6 +65,7 @@ func init() {
 	moldCmd.AddCommand(listMoldsCmd)
 	moldCmd.AddCommand(showMoldCmd)
 	moldCmd.AddCommand(getMoldCmd)
+	moldCmd.AddCommand(newMoldCmd)
 
 	// Bidirectional: "show mold <name>" also works
 	rootCmd.AddCommand(showCmd)
