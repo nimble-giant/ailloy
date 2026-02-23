@@ -77,6 +77,7 @@ func init() {
 	rootCmd.AddCommand(foundryCmd)
 	foundryCmd.AddCommand(foundrySearchCmd)
 	foundryCmd.AddCommand(foundryAddCmd)
+	foundryCmd.AddCommand(foundryNewCmd)
 	foundryCmd.AddCommand(foundryListCmd)
 	foundryCmd.AddCommand(foundryRemoveCmd)
 	foundryCmd.AddCommand(foundryUpdateCmd)
