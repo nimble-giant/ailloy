@@ -1,6 +1,6 @@
 # Blanks
 
-Blanks are the source files of the Ailloy compiler. They are Markdown instruction templates that live in mold directories, define Claude Code slash commands and skills, and are compiled with flux variables via `ailloy forge` (dry-run) or `ailloy cast` (install).
+Blanks are the source files of the Ailloy compiler. They are Markdown instruction templates that live in mold directories, define commands and skills for your AI coding tool, and are compiled with flux variables via `ailloy forge` (dry-run) or `ailloy cast` (install).
 
 ## Blank Types
 
@@ -8,7 +8,7 @@ Ailloy supports three types of blanks, each serving a different purpose:
 
 ### Commands
 
-Command blanks define slash commands that users invoke explicitly in Claude Code. They live in your mold's `commands/` directory and are installed to `.claude/commands/` by default.
+Command blanks define commands that users invoke explicitly in their AI coding tool. They live in your mold's `commands/` directory and are installed to the destination configured in your `flux.yaml` output mapping (e.g., `.claude/commands/` for Claude Code).
 
 ```
 my-mold/
@@ -18,11 +18,11 @@ my-mold/
     └── open-pr.md
 ```
 
-After `ailloy cast`, each file becomes a `/command` in Claude Code (e.g., `/brainstorm`, `/create-issue`).
+After `ailloy cast`, each file becomes available as a command in your AI coding tool (e.g., `/brainstorm`, `/create-issue` in Claude Code).
 
 ### Skills
 
-Skill blanks define proactive workflows that Claude Code uses automatically based on context, without requiring explicit slash command invocation. They live in your mold's `skills/` directory and are installed to `.claude/skills/` by default.
+Skill blanks define proactive workflows that your AI coding tool uses automatically based on context, without requiring explicit command invocation. They live in your mold's `skills/` directory and are installed to the destination configured in your output mapping (e.g., `.claude/skills/` for Claude Code).
 
 ```
 my-mold/
@@ -60,7 +60,7 @@ apiVersion: v1
 kind: mold
 name: my-team-mold
 version: 1.0.0
-description: "My team's Claude Code blanks"
+description: "My team's AI workflow blanks"
 author:
   name: My Team
   url: https://github.com/my-org
@@ -118,7 +118,7 @@ This renders all blanks with your flux values and prints the output — a dry ru
 ailloy cast ./my-mold
 ```
 
-This compiles and installs the rendered blanks into your project's `.claude/commands/` and `.claude/skills/` directories.
+This compiles and installs the rendered blanks into the directories defined by your `output:` mapping (e.g., `.claude/commands/` and `.claude/skills/` for Claude Code).
 
 ## Template Syntax
 
@@ -253,3 +253,51 @@ This catches template syntax errors, missing manifest fields, and broken file re
 ## Getting Started with Examples
 
 The [official mold](https://github.com/nimble-giant/nimble-mold) provides a complete reference implementation with command, skill, and workflow blanks. It's a good starting point for understanding blank structure and conventions. For a step-by-step guide to creating a full mold from scratch, see the [Packaging Molds guide](smelt.md).
+
+## Targeting Different AI Tools
+
+The `output:` mapping in `flux.yaml` determines where blanks are installed, making the same mold portable across AI coding tools. Change the output paths to target your tool of choice:
+
+### Claude Code
+
+```yaml
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+```
+
+### Cursor
+
+```yaml
+output:
+  rules: .cursor/rules
+```
+
+### Windsurf
+
+```yaml
+output:
+  rules: .windsurf/rules
+```
+
+### Generic (agents.md compatible)
+
+The [agents.md](https://agents.md) format is supported by many AI coding tools. Place instructions at the project root:
+
+```yaml
+output:
+  agents: .
+```
+
+### Multi-tool
+
+You can target multiple tools from the same mold by mapping source directories to multiple destinations:
+
+```yaml
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+  cursor-rules: .cursor/rules
+```
+
+Since `output:` lives in flux, consumers can override destination paths at install time using `-f` value files or `--set` flags. This means a single mold can serve teams using different AI coding tools.

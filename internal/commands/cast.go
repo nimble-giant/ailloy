@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goccy/go-yaml"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -43,7 +44,7 @@ func init() {
 	rootCmd.AddCommand(castCmd)
 
 	castCmd.Flags().BoolVarP(&castGlobal, "global", "g", false, "install into user home directory (~/) instead of current project")
-	castCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks (e.g. Claude Code agent)")
+	castCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks")
 	castCmd.Flags().StringArrayVar(&castSetFlags, "set", nil, "override flux variable (format: key=value, can be repeated)")
 	castCmd.Flags().StringArrayVarP(&castValFiles, "values", "f", nil, "flux value files (can be repeated, later files override earlier)")
 }
@@ -119,7 +120,7 @@ func loadCastFlux(reader *blanks.MoldReader) (map[string]any, error) {
 
 // resolveDestPrefix returns the destination directory prefix.
 // When --global is set, files are installed under ~/ instead of the current directory,
-// so mold output paths (e.g. .claude/commands) land in the user's home directory.
+// so mold output paths land in the user's home directory.
 func resolveDestPrefix() (string, error) {
 	if !castGlobal {
 		return "", nil
@@ -213,6 +214,13 @@ func castProject(reader *blanks.MoldReader) error {
 		return fmt.Errorf("failed to copy files: %w", err)
 	}
 
+	// Record where blanks were installed (non-fatal if this fails).
+	if destPrefix == "" {
+		if err := writeInstallState(dirs); err != nil {
+			log.Printf("warning: failed to write install state: %v", err)
+		}
+	}
+
 	// Success celebration
 	fmt.Println()
 	successMessage := "Project casting complete!"
@@ -226,13 +234,24 @@ func castProject(reader *blanks.MoldReader) error {
 	}
 	summaryContent += styles.FoxBullet("Ready for AI-powered development! 🚀")
 
-	// Check if CLAUDE.md exists and suggest creating one if not (skip for global)
+	// Check if any AI instruction file exists and suggest creating one if not (skip for global)
 	if destPrefix == "" {
-		if _, err := os.Stat("CLAUDE.md"); os.IsNotExist(err) {
+		instructionFiles := []string{"CLAUDE.md", "AGENTS.md", ".cursorrules", ".windsurfrules"}
+		hasInstructions := false
+		for _, f := range instructionFiles {
+			if _, err := os.Stat(f); err == nil {
+				hasInstructions = true
+				break
+			}
+		}
+		if !hasInstructions {
 			summaryContent += "\n\n" +
 				styles.InfoStyle.Render("💡 Tip: ") +
-				"No " + styles.CodeStyle.Render("CLAUDE.md") + " detected. " +
-				"Run " + styles.CodeStyle.Render("/init") + " in Claude Code to create one."
+				"No AI instruction file detected. " +
+				"Consider adding one for your AI coding tool (e.g., " +
+				styles.CodeStyle.Render("CLAUDE.md") + ", " +
+				styles.CodeStyle.Render("AGENTS.md") + ", " +
+				styles.CodeStyle.Render(".cursorrules") + ")."
 		}
 	}
 
@@ -241,6 +260,32 @@ func castProject(reader *blanks.MoldReader) error {
 	fmt.Println(summary)
 
 	return nil
+}
+
+// installState represents the .ailloy/state.yaml file that records where blanks were installed.
+type installState struct {
+	BlankDirs    []string `yaml:"blankDirs,omitempty"`
+	WorkflowDirs []string `yaml:"workflowDirs,omitempty"`
+}
+
+// writeInstallState records where blanks were installed so `mold list` can find them.
+func writeInstallState(dirs []string) error {
+	state := installState{}
+	for _, d := range dirs {
+		if strings.HasPrefix(d, ".github/") {
+			state.WorkflowDirs = append(state.WorkflowDirs, d)
+		} else {
+			state.BlankDirs = append(state.BlankDirs, d)
+		}
+	}
+	data, err := yaml.Marshal(state)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(".ailloy", 0750); err != nil { // #nosec G301
+		return err
+	}
+	return os.WriteFile(".ailloy/state.yaml", data, 0644) // #nosec G306
 }
 
 // copyResolvedFiles copies resolved mold files to the project, applying template

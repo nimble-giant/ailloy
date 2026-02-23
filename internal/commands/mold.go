@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/goccy/go-yaml"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
@@ -71,24 +72,13 @@ func init() {
 }
 
 func runListMolds(cmd *cobra.Command, args []string) error {
-	moldDirs := []string{
-		".claude/commands",      // Project commands directory (created by cast)
-		".claude/skills",        // Project skills directory (created by cast)
-		"commands",              // Legacy project commands directory
-		"blanks/claude",         // Source blanks directory
-		".ailloy/blanks/claude", // Legacy project blanks
-		filepath.Join(os.Getenv("HOME"), ".ailloy/blanks/claude"), // Global blanks
-	}
-
-	workflowDirs := []string{
-		".github/workflows", // Project workflows directory
-	}
+	moldDirs, workflowDirs := loadInstalledDirs()
 
 	// Header with inquisitive fox for exploring molds
 	header := lipgloss.JoinVertical(
 		lipgloss.Center,
 		styles.FoxArt("inquisitive"),
-		styles.HeaderStyle.Render("Available Claude Code Molds"),
+		styles.HeaderStyle.Render("Available Blanks"),
 	)
 	fmt.Println(header)
 	fmt.Println()
@@ -137,7 +127,7 @@ func runListMolds(cmd *cobra.Command, args []string) error {
 				if len(lines) > 0 && strings.HasPrefix(lines[0], "# ") {
 					description = strings.TrimPrefix(lines[0], "# ")
 				} else {
-					description = "Claude Code blank"
+					description = "Blank"
 				}
 
 				// Style the blank listing
@@ -259,16 +249,9 @@ func runShowMold(cmd *cobra.Command, args []string) error {
 }
 
 func findMold(name string) (string, error) {
-	moldDirs := []string{
-		".claude/commands",      // Project commands directory (created by cast)
-		".claude/skills",        // Project skills directory (created by cast)
-		"commands",              // Legacy project commands directory
-		"blanks/claude",         // Source blanks directory
-		".ailloy/blanks/claude", // Legacy project blanks
-		filepath.Join(os.Getenv("HOME"), ".ailloy/blanks/claude"), // Global blanks
-	}
+	blankDirs, _ := loadInstalledDirs()
 
-	for _, dir := range moldDirs {
+	for _, dir := range blankDirs {
 		if _, err := os.Stat(dir); os.IsNotExist(err) { // #nosec G703 -- CLI tool checks blank directory existence
 			continue
 		}
@@ -375,12 +358,26 @@ func runGetMold(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// loadInstalledDirs reads .ailloy/state.yaml to find where blanks are installed.
+// Falls back to empty lists when no state file exists.
+func loadInstalledDirs() (blankDirs, workflowDirs []string) {
+	data, err := os.ReadFile(".ailloy/state.yaml") // #nosec G304 -- fixed path in project directory
+	if err == nil {
+		var state installState
+		if yaml.Unmarshal(data, &state) == nil && len(state.BlankDirs) > 0 {
+			return state.BlankDirs, state.WorkflowDirs
+		}
+	}
+	// Fallback: default workflow dir only
+	return nil, []string{".github/workflows"}
+}
+
 // getMoldIcon returns an appropriate icon based on mold name
 func getMoldIcon(moldName string) string {
 	switch {
 	case strings.Contains(moldName, "brainstorm"):
 		return "💡"
-	case strings.Contains(moldName, "claude-code"):
+	case strings.Contains(moldName, "agent"):
 		return "🤖"
 	case strings.Contains(moldName, "issue"):
 		return "🎯"

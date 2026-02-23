@@ -18,7 +18,7 @@ apiVersion: v1
 kind: mold
 name: my-team-mold
 version: 1.0.0
-description: "My team's Claude Code blanks"
+description: "My team's AI workflow blanks"
 author:
   name: My Team
   url: https://github.com/my-org
