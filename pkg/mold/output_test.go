@@ -375,6 +375,44 @@ func TestResolveFiles_RootFiles_MapOutput(t *testing.T) {
 	}
 }
 
+func TestResolveFiles_RootFiles_MapOutput_AutoDiscover(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"commands/hello.md": &fstest.MapFile{Data: []byte("hello")},
+		"AGENTS.md":         &fstest.MapFile{Data: []byte("# Agent instructions")},
+	}
+
+	// Map form with only directories — AGENTS.md is NOT in the map
+	// but should be auto-discovered from the mold root.
+	output := map[string]any{
+		"commands": ".claude/commands",
+	}
+
+	resolved, err := ResolveFiles(output, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 resolved files, got %d", len(resolved))
+	}
+
+	expected := map[string]string{
+		"AGENTS.md":         "AGENTS.md",
+		"commands/hello.md": ".claude/commands/hello.md",
+	}
+
+	for _, rf := range resolved {
+		wantDest, ok := expected[rf.SrcPath]
+		if !ok {
+			t.Errorf("unexpected src path: %s", rf.SrcPath)
+			continue
+		}
+		if rf.DestPath != wantDest {
+			t.Errorf("src %s: expected dest %s, got %s", rf.SrcPath, wantDest, rf.DestPath)
+		}
+	}
+}
+
 func TestResolveFiles_ExcludesReservedDirs(t *testing.T) {
 	moldFS := fstest.MapFS{
 		"commands/hello.md": &fstest.MapFile{Data: []byte("hello")},

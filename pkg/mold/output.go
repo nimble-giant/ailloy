@@ -221,6 +221,25 @@ func parseMapOutput(m map[string]any, moldFS fs.FS) ([]dirMapping, []fileMapping
 		}
 	}
 
+	// Auto-discover root-level files not explicitly listed in the map.
+	rootFiles, err := discoverRootFiles(moldFS)
+	if err != nil {
+		return nil, nil, err
+	}
+	mapped := make(map[string]bool, len(m))
+	for k := range m {
+		mapped[k] = true
+	}
+	for _, f := range rootFiles {
+		if !mapped[f] {
+			files = append(files, fileMapping{
+				src:     f,
+				dest:    f,
+				process: true,
+			})
+		}
+	}
+
 	// Sort for deterministic output.
 	sort.Slice(dirs, func(i, j int) bool { return dirs[i].src < dirs[j].src })
 	sort.Slice(files, func(i, j int) bool { return files[i].src < files[j].src })
