@@ -229,6 +229,152 @@ func TestResolveFiles_MissingSourceDir(t *testing.T) {
 	}
 }
 
+func TestResolveFiles_RootFiles_Identity(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"commands/hello.md": &fstest.MapFile{Data: []byte("hello")},
+		"AGENTS.md":         &fstest.MapFile{Data: []byte("# Agent instructions")},
+	}
+
+	resolved, err := ResolveFiles(nil, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 resolved files, got %d", len(resolved))
+	}
+
+	expected := map[string]string{
+		"AGENTS.md":         "AGENTS.md",
+		"commands/hello.md": "commands/hello.md",
+	}
+
+	for _, rf := range resolved {
+		wantDest, ok := expected[rf.SrcPath]
+		if !ok {
+			t.Errorf("unexpected src path: %s", rf.SrcPath)
+			continue
+		}
+		if rf.DestPath != wantDest {
+			t.Errorf("src %s: expected dest %s, got %s", rf.SrcPath, wantDest, rf.DestPath)
+		}
+		if !rf.Process {
+			t.Errorf("src %s: expected Process=true", rf.SrcPath)
+		}
+	}
+}
+
+func TestResolveFiles_RootFiles_StringOutput(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"commands/hello.md": &fstest.MapFile{Data: []byte("hello")},
+		"AGENTS.md":         &fstest.MapFile{Data: []byte("# Agent instructions")},
+	}
+
+	resolved, err := ResolveFiles(".claude", moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 resolved files, got %d", len(resolved))
+	}
+
+	// Root files go to project root, not under .claude/
+	expected := map[string]string{
+		"AGENTS.md":         "AGENTS.md",
+		"commands/hello.md": ".claude/commands/hello.md",
+	}
+
+	for _, rf := range resolved {
+		wantDest, ok := expected[rf.SrcPath]
+		if !ok {
+			t.Errorf("unexpected src path: %s", rf.SrcPath)
+			continue
+		}
+		if rf.DestPath != wantDest {
+			t.Errorf("src %s: expected dest %s, got %s", rf.SrcPath, wantDest, rf.DestPath)
+		}
+		if !rf.Process {
+			t.Errorf("src %s: expected Process=true", rf.SrcPath)
+		}
+	}
+}
+
+func TestResolveFiles_RootFiles_ExcludesMetadata(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"commands/hello.md": &fstest.MapFile{Data: []byte("hello")},
+		"AGENTS.md":         &fstest.MapFile{Data: []byte("# Agent instructions")},
+		"mold.yaml":         &fstest.MapFile{Data: []byte("name: test")},
+		"flux.yaml":         &fstest.MapFile{Data: []byte("org: acme")},
+		"flux.schema.yaml":  &fstest.MapFile{Data: []byte("schema")},
+		"ingot.yaml":        &fstest.MapFile{Data: []byte("ingot")},
+		"README.md":         &fstest.MapFile{Data: []byte("# readme")},
+		"PLUGIN_SUMMARY.md": &fstest.MapFile{Data: []byte("# plugin")},
+		"LICENSE":           &fstest.MapFile{Data: []byte("MIT")},
+		".hidden":           &fstest.MapFile{Data: []byte("hidden")},
+	}
+
+	resolved, err := ResolveFiles(nil, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Only commands/hello.md and AGENTS.md should be resolved
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 resolved files, got %d: %v", len(resolved), resolved)
+	}
+
+	found := make(map[string]bool)
+	for _, rf := range resolved {
+		found[rf.SrcPath] = true
+	}
+
+	if !found["AGENTS.md"] {
+		t.Error("expected AGENTS.md to be discovered")
+	}
+	if !found["commands/hello.md"] {
+		t.Error("expected commands/hello.md to be discovered")
+	}
+}
+
+func TestResolveFiles_RootFiles_MapOutput(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"commands/hello.md": &fstest.MapFile{Data: []byte("hello")},
+		"AGENTS.md":         &fstest.MapFile{Data: []byte("# Agent instructions")},
+	}
+
+	// Map form: explicit file mapping
+	output := map[string]any{
+		"commands":  ".claude/commands",
+		"AGENTS.md": "AGENTS.md",
+	}
+
+	resolved, err := ResolveFiles(output, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 resolved files, got %d", len(resolved))
+	}
+
+	expected := map[string]string{
+		"AGENTS.md":         "AGENTS.md",
+		"commands/hello.md": ".claude/commands/hello.md",
+	}
+
+	for _, rf := range resolved {
+		wantDest, ok := expected[rf.SrcPath]
+		if !ok {
+			t.Errorf("unexpected src path: %s", rf.SrcPath)
+			continue
+		}
+		if rf.DestPath != wantDest {
+			t.Errorf("src %s: expected dest %s, got %s", rf.SrcPath, wantDest, rf.DestPath)
+		}
+	}
+}
+
 func TestResolveFiles_ExcludesReservedDirs(t *testing.T) {
 	moldFS := fstest.MapFS{
 		"commands/hello.md": &fstest.MapFile{Data: []byte("hello")},

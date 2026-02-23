@@ -14,6 +14,27 @@ var reservedDirs = map[string]bool{
 	"ingots": true,
 }
 
+// reservedRootFiles are root-level files excluded from auto-discovery
+// when output is absent or uses the string (parent) form.
+//
+// These are mold metadata files that describe the mold itself rather than
+// content to install into the target project. Files starting with "." are
+// also excluded by convention (see discoverRootFiles).
+//
+// Any root-level file NOT in this list (e.g. AGENTS.md) will be
+// auto-discovered and installed to the project root. Mold authors can
+// also use the map output form to explicitly control root file mapping
+// regardless of this list.
+var reservedRootFiles = map[string]bool{
+	"mold.yaml":         true, // mold manifest
+	"flux.yaml":         true, // flux variable defaults
+	"flux.schema.yaml":  true, // flux validation schema
+	"ingot.yaml":        true, // ingot manifest
+	"README.md":         true, // mold documentation (not project readme)
+	"PLUGIN_SUMMARY.md": true, // plugin summary metadata
+	"LICENSE":           true, // mold license file
+}
+
 // dirMapping represents a normalized directory-to-directory output mapping.
 type dirMapping struct {
 	src    string // source directory in the mold fs
@@ -31,10 +52,13 @@ type fileMapping struct {
 // to the output mapping.
 //
 // If output is nil, all top-level directories (excluding reserved names
-// like "ingots") are walked with identity mapping (src path = dest path).
+// like "ingots") and root-level files (excluding metadata like mold.yaml)
+// are walked with identity mapping (src path = dest path).
 //
 // If output is a string, it's treated as a parent directory — all top-level
-// directories are mapped under it.
+// directories are mapped under it. Root-level files are mapped to the
+// project root (not under the parent), since files like AGENTS.md are
+// project-root conventions.
 //
 // If output is a map, each entry maps a source directory or file to a
 // destination. Values can be strings (simple dest path) or maps with
@@ -52,8 +76,9 @@ func ResolveFiles(output any, moldFS fs.FS) ([]ResolvedFile, error) {
 	return resolveFromMappings(dirs, files, moldFS)
 }
 
-// resolveIdentity walks all top-level directories (excluding reserved ones)
-// and returns files with identity mapping (src = dest, process = true).
+// resolveIdentity walks all top-level directories and root-level files
+// (excluding reserved ones) and returns files with identity mapping
+// (src = dest, process = true).
 func resolveIdentity(moldFS fs.FS) ([]ResolvedFile, error) {
 	topDirs, err := discoverTopLevelDirs(moldFS)
 	if err != nil {
@@ -68,7 +93,20 @@ func resolveIdentity(moldFS fs.FS) ([]ResolvedFile, error) {
 		})
 	}
 
-	return resolveFromMappings(dirs, nil, moldFS)
+	rootFiles, err := discoverRootFiles(moldFS)
+	if err != nil {
+		return nil, err
+	}
+	var files []fileMapping
+	for _, f := range rootFiles {
+		files = append(files, fileMapping{
+			src:     f,
+			dest:    f,
+			process: true,
+		})
+	}
+
+	return resolveFromMappings(dirs, files, moldFS)
 }
 
 // discoverTopLevelDirs returns all non-reserved top-level directories in the mold.
@@ -92,6 +130,28 @@ func discoverTopLevelDirs(moldFS fs.FS) ([]string, error) {
 	return dirs, nil
 }
 
+// discoverRootFiles returns all non-reserved root-level files in the mold.
+// Metadata files (mold.yaml, flux.yaml, etc.) and dot-prefixed files are excluded.
+func discoverRootFiles(moldFS fs.FS) ([]string, error) {
+	entries, err := fs.ReadDir(moldFS, ".")
+	if err != nil {
+		return nil, fmt.Errorf("reading mold root: %w", err)
+	}
+
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if reservedRootFiles[name] || strings.HasPrefix(name, ".") {
+			continue
+		}
+		files = append(files, name)
+	}
+	return files, nil
+}
+
 // parseOutput normalizes the raw output YAML value into directory and file mappings.
 func parseOutput(raw any, moldFS fs.FS) ([]dirMapping, []fileMapping, error) {
 	switch v := raw.(type) {
@@ -105,6 +165,8 @@ func parseOutput(raw any, moldFS fs.FS) ([]dirMapping, []fileMapping, error) {
 }
 
 // parseStringOutput handles `output: .claude` — all top-level dirs go under the parent.
+// Root-level files are mapped to the project root (not under the parent), since files
+// like AGENTS.md are project-root conventions.
 func parseStringOutput(parent string, moldFS fs.FS) ([]dirMapping, []fileMapping, error) {
 	topDirs, err := discoverTopLevelDirs(moldFS)
 	if err != nil {
@@ -118,7 +180,21 @@ func parseStringOutput(parent string, moldFS fs.FS) ([]dirMapping, []fileMapping
 			target: OutputTarget{Dest: path.Join(parent, d)},
 		})
 	}
-	return dirs, nil, nil
+
+	rootFiles, err := discoverRootFiles(moldFS)
+	if err != nil {
+		return nil, nil, err
+	}
+	var files []fileMapping
+	for _, f := range rootFiles {
+		files = append(files, fileMapping{
+			src:     f,
+			dest:    f,
+			process: true,
+		})
+	}
+
+	return dirs, files, nil
 }
 
 // parseMapOutput handles the map form of output.
