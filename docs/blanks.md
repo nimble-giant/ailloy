@@ -45,9 +45,15 @@ output:
 
 Workflow blanks are only installed when using `ailloy cast --with-workflows`.
 
+### Tool-Agnostic Instructions
+
+Molds can include an `AGENTS.md` file at the root to provide tool-agnostic agent instructions that work with Claude Code, GitHub Copilot, Cursor, and other tools. See [AGENTS.md](agents-md.md) for details.
+
 ## Creating Your First Blank
 
 ### 1. Set up a mold directory
+
+The quickest way to get started is `ailloy mold new <name>`, which scaffolds a valid mold with sample blanks. Or manually:
 
 ```bash
 mkdir my-mold && cd my-mold

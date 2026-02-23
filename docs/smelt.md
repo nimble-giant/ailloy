@@ -16,6 +16,7 @@ my-mold/
 ├── mold.yaml                # Required - metadata
 ├── flux.yaml                # Optional - default values + output mappings
 ├── flux.schema.yaml         # Optional - validation rules
+├── AGENTS.md                # Optional - tool-agnostic agent instructions
 ├── commands/
 │   └── my-command.md        # Command blanks
 ├── skills/
@@ -27,6 +28,8 @@ my-mold/
         ├── ingot.yaml
         └── partial.md
 ```
+
+Root-level files like `AGENTS.md` are auto-discovered and installed to the project root during `cast`. Mold metadata files are excluded from auto-discovery — see [Reserved root files](#reserved-root-files) below.
 
 ## Step 1: Write `mold.yaml`
 
@@ -91,6 +94,32 @@ output:
 ```yaml
 # omitting output: means commands/my-cmd.md → commands/my-cmd.md
 ```
+
+### Root-level files
+
+Root-level files in the mold (e.g. `AGENTS.md`) are auto-discovered alongside directories. In the string and identity output forms, they are installed to the project root — the parent prefix only applies to directories. In the map form, root files can be mapped explicitly:
+
+```yaml
+output:
+  commands: .claude/commands
+  AGENTS.md: AGENTS.md        # explicit root file mapping
+```
+
+### Reserved root files
+
+The following root-level files are treated as mold metadata and are **not** auto-discovered. They describe the mold itself, not content to install. Files starting with `.` are also excluded.
+
+| File | Purpose |
+|------|---------|
+| `mold.yaml` | Mold manifest |
+| `flux.yaml` | Flux variable defaults |
+| `flux.schema.yaml` | Flux validation schema |
+| `ingot.yaml` | Ingot manifest |
+| `README.md` | Mold documentation (not project readme) |
+| `PLUGIN_SUMMARY.md` | Plugin summary metadata |
+| `LICENSE` | Mold license file |
+
+Any other root-level file (e.g. `AGENTS.md`) will be auto-discovered and installed. Mold authors can also use the map output form to explicitly control root file mapping regardless of this list.
 
 Since output lives in flux, consumers can override destination paths using the standard flux layering (`-f` value files or `--set` flags).
 
