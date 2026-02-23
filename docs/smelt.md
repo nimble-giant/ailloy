@@ -183,7 +183,17 @@ Use `{{ scm.cli }}` to interact with {{ scm.provider }}.
 Organization: {{ project.organization }}
 ```
 
-## Step 5: Package it
+## Step 5: Validate (optional)
+
+Before packaging, validate your mold's structure, manifests, and template syntax:
+
+```bash
+ailloy temper ./my-mold
+```
+
+This catches errors early — missing manifest fields, broken file references, and template syntax issues. See the [Validation guide](temper.md) for details.
+
+## Step 6: Package it
 
 ```bash
 ailloy smelt ./my-mold
