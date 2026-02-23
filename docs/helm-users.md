@@ -182,7 +182,7 @@ my-chart/                           my-mold/
 ```
 
 Key differences:
-- **Multiple template directories**: Ailloy organizes blanks by type (`commands/`, `skills/`, `workflows/`) instead of a single `templates/` directory
+- **Flexible directory structure**: Ailloy molds support any number of subdirectories — there's no fixed `templates/` folder. The [official mold](https://github.com/nimble-giant/nimble-mold) uses `commands/`, `skills/`, and `workflows/`, but you can organize blanks however you like and map each directory to its destination via the `output:` key
 - **YAML schema**: `flux.schema.yaml` uses YAML instead of JSON Schema
 - **Output mapping**: `flux.yaml` includes an `output:` key that maps source directories to destination paths — this replaces Helm's hardcoded output to `templates/`
 
