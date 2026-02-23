@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+// OfficialFoundryURL is the URL of the official nimble-giant foundry.
+// Molds from this foundry are marked as verified.
+const OfficialFoundryURL = "https://github.com/nimble-giant/foundry"
+
 // SearchResult represents a single search result from any source.
 type SearchResult struct {
 	Name        string
@@ -16,6 +20,7 @@ type SearchResult struct {
 	Origin      string // "index:<foundry-name>" or "github-topics"
 	Stars       int    // only for GitHub Topics results
 	URL         string // browsable URL
+	Verified    bool   // true if from the official nimble-giant foundry
 }
 
 // SearchOptions controls search behavior.
@@ -79,6 +84,7 @@ func searchIndexes(cfg *Config, query string) ([]SearchResult, error) {
 			continue // Skip indexes that aren't cached yet.
 		}
 
+		verified := IsOfficialFoundry(entry.URL)
 		for _, m := range idx.Molds {
 			if matchesMold(m, q) {
 				results = append(results, SearchResult{
@@ -88,6 +94,7 @@ func searchIndexes(cfg *Config, query string) ([]SearchResult, error) {
 					Tags:        m.Tags,
 					Origin:      "index:" + entry.Name,
 					URL:         sourceToURL(m.Source),
+					Verified:    verified,
 				})
 			}
 		}
@@ -166,6 +173,13 @@ func mergeResults(indexResults, ghResults []SearchResult) []SearchResult {
 	}
 
 	return merged
+}
+
+// IsOfficialFoundry returns true if the given URL matches the official nimble-giant foundry.
+func IsOfficialFoundry(url string) bool {
+	normalized := strings.TrimSuffix(strings.ToLower(url), "/")
+	official := strings.ToLower(OfficialFoundryURL)
+	return normalized == official
 }
 
 // sourceToURL converts a source reference to a browsable URL.

@@ -1,6 +1,7 @@
 package index
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -90,6 +91,94 @@ func TestSourceToURL(t *testing.T) {
 				t.Errorf("sourceToURL(%q) = %q, want %q", tt.source, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIsOfficialFoundry(t *testing.T) {
+	tests := []struct {
+		url  string
+		want bool
+	}{
+		{"https://github.com/nimble-giant/foundry", true},
+		{"https://github.com/nimble-giant/foundry/", true},
+		{"HTTPS://GITHUB.COM/NIMBLE-GIANT/FOUNDRY", true},
+		{"https://github.com/nimble-giant/other-repo", false},
+		{"https://gitlab.com/nimble-giant/foundry", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			got := IsOfficialFoundry(tt.url)
+			if got != tt.want {
+				t.Errorf("IsOfficialFoundry(%q) = %v, want %v", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSearchIndexes_Verified(t *testing.T) {
+	cacheDir := t.TempDir()
+
+	officialEntry := FoundryEntry{
+		Name: "official",
+		URL:  "https://github.com/nimble-giant/foundry",
+		Type: "git",
+	}
+	otherEntry := FoundryEntry{
+		Name: "community",
+		URL:  "https://github.com/someone/their-foundry",
+		Type: "git",
+	}
+
+	// Create cached indexes for both foundries.
+	for _, entry := range []FoundryEntry{officialEntry, otherEntry} {
+		cachePath := CachedIndexPath(cacheDir, &entry)
+		if err := os.MkdirAll(filepath.Dir(cachePath), 0750); err != nil {
+			t.Fatal(err)
+		}
+		content := fmt.Sprintf(`apiVersion: v1
+kind: foundry-index
+name: %s
+molds:
+  - name: test-mold
+    source: github.com/test/mold
+    description: "A test mold"
+`, entry.Name)
+		if err := os.WriteFile(cachePath, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cfg := &Config{Foundries: []FoundryEntry{officialEntry, otherEntry}}
+
+	// Simulate what searchIndexes does with a known cache dir.
+	var results []SearchResult
+	for _, entry := range cfg.Foundries {
+		idx, err := LoadCachedIndex(cacheDir, &entry)
+		if err != nil {
+			t.Fatalf("LoadCachedIndex(%s): %v", entry.Name, err)
+		}
+		verified := IsOfficialFoundry(entry.URL)
+		for _, m := range idx.Molds {
+			if matchesMold(m, "test") {
+				results = append(results, SearchResult{
+					Name:     m.Name,
+					Source:   m.Source,
+					Origin:   "index:" + entry.Name,
+					Verified: verified,
+				})
+			}
+		}
+	}
+
+	if len(results) != 2 {
+		t.Fatalf("len(results) = %d, want 2", len(results))
+	}
+	if !results[0].Verified {
+		t.Errorf("results[0] (official) Verified = false, want true")
+	}
+	if results[1].Verified {
+		t.Errorf("results[1] (community) Verified = true, want false")
 	}
 }
 
