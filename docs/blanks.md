@@ -1,72 +1,255 @@
-# Ailloy Blanks
+# Blanks
 
-Blanks are the source files of the Ailloy compiler. They are Markdown instruction templates that live in mold directories, define Claude Code slash commands, and are compiled with flux variables via `ailloy forge` (dry-run) or `ailloy cast` (install).
+Blanks are the source files of the Ailloy compiler. They are Markdown instruction templates that live in mold directories, define Claude Code slash commands and skills, and are compiled with flux variables via `ailloy forge` (dry-run) or `ailloy cast` (install).
 
-## Blank Location
+## Blank Types
 
-Blanks are stored in mold directories and loaded at runtime:
-- **Official mold**: [`github.com/nimble-giant/nimble-mold`](https://github.com/nimble-giant/nimble-mold) (resolved from git)
-- **Project output**: `.claude/commands/` (created by `ailloy cast`)
-- **Reader package**: `pkg/blanks/` (the `MoldReader` abstraction)
+Ailloy supports three types of blanks, each serving a different purpose:
 
-## Available Blanks
+### Commands
 
-### Command Blanks
+Command blanks define slash commands that users invoke explicitly in Claude Code. They live in your mold's `commands/` directory and are installed to `.claude/commands/` by default.
 
-- **`brainstorm.md`**: Analyze an idea for feasibility, scope, and value using structured brainstorming techniques
-- **`create-issue.md`**: Generate well-formatted GitHub issues with proper structure and metadata
-- **`start-issue.md`**: Fetch GitHub issue details and begin implementation workflow
-- **`open-pr.md`**: Create pull requests with structured descriptions
-- **`pr-description.md`**: Generate comprehensive PR descriptions
-- **`pr-review.md`**: Review pull requests with comprehensive feedback
-- **`pr-comments.md`**: Add structured comments to pull requests
-- **`preflight.md`**: Pre-flight checks and setup
-- **`update-pr.md`**: Update existing pull requests
-
-### Future: Agents & Hooks
-
-Blanks for specialized AI agents and workflow hooks are planned for future releases.
-
-## Blank Structure
-
-Blanks are Markdown files containing detailed instructions for Claude Code. Each blank includes:
-
-- **Purpose**: Clear explanation of what the blank accomplishes
-- **Command syntax**: How to invoke the blank in Claude Code
-- **Workflow steps**: Detailed instructions for Claude to follow
-- **Output format**: Expected structure of results
-- **Integration**: GitHub CLI commands and API usage
-
-## Usage with CLI
-
-```bash
-# List available blanks
-ailloy mold list
-
-# View a specific blank
-ailloy mold show create-issue
-
-# Preview rendered output (dry run)
-ailloy forge github.com/nimble-giant/nimble-mold
-
-# Install into current project
-ailloy cast github.com/nimble-giant/nimble-mold
+```
+my-mold/
+└── commands/
+    ├── brainstorm.md
+    ├── create-issue.md
+    └── open-pr.md
 ```
 
-## Using Blanks with Claude Code
+After `ailloy cast`, each file becomes a `/command` in Claude Code (e.g., `/brainstorm`, `/create-issue`).
 
-1. **View blank**: Use `ailloy mold show <blank-name>` to see the full instructions
-2. **Copy to Claude**: Copy the blank content into your Claude Code conversation
-3. **Follow workflow**: Claude will execute the blank's instructions
+### Skills
 
-## Blank Development
+Skill blanks define proactive workflows that Claude Code uses automatically based on context, without requiring explicit slash command invocation. They live in your mold's `skills/` directory and are installed to `.claude/skills/` by default.
 
-Blanks live in mold directories (e.g., `commands/` within a mold). To add new blanks:
+```
+my-mold/
+└── skills/
+    └── code-review-style.md
+```
 
-1. Create a new `.md` file in your mold's `commands/` directory
-2. Ensure the directory is mapped in the `output:` section of `flux.yaml`
-3. Include clear instructions for Claude Code
-4. Define workflow steps and expected outputs
-5. Test with `ailloy forge ./my-mold`
+Skills are ideal for instructions that should always be available — coding standards, review guidelines, or domain-specific knowledge.
 
-Blanks are automatically discovered by the `MoldReader` from the mold's output mapping in `flux.yaml`.
+### Workflows
+
+Workflow blanks are GitHub Actions YAML files. They live in your mold's `workflows/` directory and are installed to `.github/workflows/`. Because workflow files contain raw YAML syntax that conflicts with Go template delimiters, they are typically configured with `process: false` in the output mapping:
+
+```yaml
+output:
+  workflows:
+    dest: .github/workflows
+    process: false
+```
+
+Workflow blanks are only installed when using `ailloy cast --with-workflows`.
+
+## Creating Your First Blank
+
+### 1. Set up a mold directory
+
+```bash
+mkdir my-mold && cd my-mold
+```
+
+### 2. Write `mold.yaml`
+
+```yaml
+apiVersion: v1
+kind: mold
+name: my-team-mold
+version: 1.0.0
+description: "My team's Claude Code blanks"
+author:
+  name: My Team
+  url: https://github.com/my-org
+```
+
+### 3. Write `flux.yaml` with output mapping
+
+The `output:` key maps source directories in your mold to destination paths in the target project:
+
+```yaml
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+
+project:
+  organization: my-org
+
+scm:
+  provider: GitHub
+  cli: gh
+```
+
+### 4. Create a command blank
+
+```bash
+mkdir -p commands
+```
+
+Write `commands/deploy-checklist.md`:
+
+```markdown
+# Deploy Checklist
+
+Generate a deployment checklist for {{ project.organization }}.
+
+## Steps
+
+1. Use `{{ scm.cli }}` to check for open PRs targeting the release branch
+2. Verify all CI checks are passing
+3. List recent commits since last deploy
+4. Generate a summary of changes
+```
+
+### 5. Preview with `forge`
+
+```bash
+ailloy forge ./my-mold
+```
+
+This renders all blanks with your flux values and prints the output — a dry run that lets you verify templates before installing.
+
+### 6. Install with `cast`
+
+```bash
+ailloy cast ./my-mold
+```
+
+This compiles and installs the rendered blanks into your project's `.claude/commands/` and `.claude/skills/` directories.
+
+## Template Syntax
+
+Blanks use Go's [text/template](https://pkg.go.dev/text/template) engine with a preprocessing step that simplifies variable references.
+
+### Simple variables
+
+Use `{{ variable }}` to reference top-level flux values. The preprocessor automatically adds the Go template dot prefix, so you don't need to write `{{ .variable }}`:
+
+```markdown
+Organization: {{ project.organization }}
+CLI tool: {{ scm.cli }}
+```
+
+Both `{{ variable }}` and `{{ .variable }}` work — use whichever you prefer.
+
+### Dotted path access
+
+Nested flux values are accessed with dotted paths:
+
+```markdown
+Provider: {{ scm.provider }}
+Board: {{ project.board }}
+Status field: {{ ore.status.field_id }}
+```
+
+### Conditionals
+
+Use Go template conditionals (these require the dot prefix since they use Go template keywords):
+
+```markdown
+{{if .ore.status.enabled}}
+## Status Tracking
+
+Update the status field ({{ .ore.status.field_id }}) after each step.
+{{end}}
+```
+
+### Ranges
+
+Iterate over lists:
+
+```markdown
+{{range $key, $value := .items}}
+- {{ $key }}: {{ $value }}
+{{end}}
+```
+
+### Including ingots
+
+Use the `{{ingot "name"}}` function to include reusable template partials:
+
+```markdown
+# My Command
+
+## Standard Preamble
+{{ingot "team-preamble"}}
+
+## Command-Specific Instructions
+...
+```
+
+The ingot's content is rendered through the same template engine with the same flux context. See the [Ingots guide](ingots.md) for details on creating and managing ingots.
+
+### Preprocessor rules
+
+The preprocessor converts simple `{{variable}}` references to `{{.variable}}` before Go template parsing. It skips Go template keywords (`if`, `else`, `end`, `range`, `with`, `define`, `block`, `template`, `ingot`, `not`, `and`, `or`, `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `len`, `index`, `print`, `printf`, `println`, `call`, `nil`, `true`, `false`) so they are not dot-prefixed.
+
+### Unresolved variables
+
+Variables that cannot be resolved from the flux context produce a logged warning and resolve to empty strings. The template does not fail — this allows progressive development where not all variables need to be set immediately.
+
+## Flux Variables in Blanks
+
+Blanks reference values defined in `flux.yaml` (or overridden via `-f` files and `--set` flags). See the [Flux guide](flux.md) for full details on defining and layering values.
+
+### Value precedence
+
+When blanks are rendered, flux values are resolved in this order (lowest to highest priority):
+
+1. `mold.yaml` `flux:` schema defaults
+2. `flux.yaml` defaults
+3. `-f, --values` flux overrides (left to right)
+4. `--set` flags
+
+### Multiline values
+
+Use YAML block syntax for multiline flux values:
+
+```yaml
+api:
+  post_review: |-
+    gh api repos/:owner/:repo/pulls/<pr-number>/reviews \
+      --method POST \
+      --field body="<summary>"
+```
+
+Then reference in blanks: `{{ api.post_review }}`
+
+## Blank Discovery
+
+Blanks are automatically discovered from the mold's `output:` mapping in `flux.yaml`. The `ResolveFiles` function walks each mapped directory and collects all files:
+
+- **Map output** — each key maps a source directory to a destination
+- **String output** — all top-level directories go under the specified parent
+- **No output key** — files are placed at their source paths (identity mapping)
+
+The `ingots/` directory and hidden directories (starting with `.`) are always excluded from auto-discovery.
+
+## Testing and Previewing
+
+### Dry-run render
+
+Preview what `cast` will produce without writing any files:
+
+```bash
+ailloy forge ./my-mold
+ailloy forge ./my-mold --set project.organization=my-org
+ailloy forge ./my-mold -o /tmp/preview  # write to directory
+```
+
+### Validation
+
+Check your mold's structure, manifests, and template syntax:
+
+```bash
+ailloy temper ./my-mold
+```
+
+This catches template syntax errors, missing manifest fields, and broken file references before you distribute your mold. See the [Validation guide](temper.md) for details.
+
+## Getting Started with Examples
+
+The [official mold](https://github.com/nimble-giant/nimble-mold) provides a complete reference implementation with command, skill, and workflow blanks. It's a good starting point for understanding blank structure and conventions. For a step-by-step guide to creating a full mold from scratch, see the [Packaging Molds guide](smelt.md).

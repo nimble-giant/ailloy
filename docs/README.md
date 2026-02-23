@@ -100,10 +100,21 @@
 
 </div>
 
-This directory contains comprehensive documentation for Ailloy, the package manager for AI instructions.
+These guides teach you how to create, package, and share your own AI workflow packages with Ailloy. For a quick overview of the project, see the [main README](../README.md).
 
-## Guides
+## Getting Started
 
-- [Blanks](blanks.md) - Guide to creating and using blanks
-- [Packaging Molds](smelt.md) - Create and package custom molds with `ailloy smelt`
-- [Remote Molds](foundry.md) - Resolve molds from git repositories with semver constraints
+- [Blanks](blanks.md) — What blanks are and how to create commands, skills, and workflows
+
+## Authoring Guides
+
+- [Flux Variables](flux.md) — Configure blanks with variables, schemas, and value layering
+- [Ingots](ingots.md) — Create and use reusable template components
+- [Packaging Molds](smelt.md) — Package molds into distributable tarballs or binaries
+
+## Operations
+
+- [Remote Molds](foundry.md) — Resolve molds from git repositories with semver constraints
+- [Configuration Wizard](anneal.md) — Interactive wizard for flux variable configuration
+- [Validation](temper.md) — Lint and validate mold and ingot packages
+- [Plugins](plugin.md) — Generate Claude Code plugins from molds

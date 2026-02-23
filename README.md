@@ -204,69 +204,50 @@ ailloy add ingot github.com/org/repo
 
 ## Blanks
 
-The official mold ships with pre-built blanks for common SDLC tasks, optimized for Claude Code:
+Blanks are Markdown instruction templates that define Claude Code slash commands, skills, and GitHub Actions workflows. Each blank lives in a mold directory and is compiled with flux variables when you run `ailloy cast` or `ailloy forge`.
 
-### Available Blanks
+There are three types of blanks:
 
-- **`brainstorm`**: Analyze an idea for feasibility, scope, and value using structured brainstorming techniques
-- **`create-issue`**: Generate well-formatted GitHub issues with proper structure
-- **`start-issue`**: Fetch GitHub issue details and begin implementation
-- **`open-pr`**: Create pull requests with structured descriptions
-- **`pr-description`**: Generate comprehensive PR descriptions
-- **`pr-comments`**: Respond to PR review comments efficiently
-- **`pr-review`**: Conduct comprehensive code reviews with silent/interactive modes
-- **`preflight`**: Pre-flight checks and setup
-- **`update-pr`**: Update existing pull requests
+- **Commands** (`commands/`) — Slash commands users invoke explicitly (e.g., `/brainstorm`, `/create-issue`)
+- **Skills** (`skills/`) — Proactive workflows Claude Code uses automatically based on context
+- **Workflows** (`workflows/`) — GitHub Actions YAML files, installed with `--with-workflows`
 
-### Available Skills
+### Creating a Blank
 
-Skills are proactive workflows that Claude Code can use automatically based on context, without requiring explicit slash command invocation:
-
-- **`brainstorm`**: Structured brainstorming methodology for evaluating ideas using freewriting, cubing, and journalistic techniques
-- **`add-ailloy-blank`**: Guided workflow for creating new Ailloy blanks with proper mold structure
-
-### Workflow Blanks
-
-Ailloy also includes GitHub Actions workflow blanks in the [official mold](https://github.com/nimble-giant/nimble-mold). These are installed into your project's `.github/workflows/` when using `ailloy cast --with-workflows`:
-
-- **`claude-code`**: GitHub Actions workflow for the [Claude Code agent](https://github.com/anthropics/claude-code-action). Responds to `@claude` mentions in issues, PR comments, and PR reviews. Requires an `ANTHROPIC_API_KEY` secret in your repository.
-- **`claude-code-review`**: GitHub Actions workflow for automated PR reviews with the [Claude Code agent](https://github.com/anthropics/claude-code-action). Features brevity-focused formatting, collapsible sections for detailed analysis, and intelligent comment management (updates summary comments, creates reply comments). Requires an `ANTHROPIC_API_KEY` secret in your repository.
-
-### Using Blanks
-
-Blanks are Markdown files containing instructions for Claude Code. You can:
-
-1. View blanks: `ailloy mold show create-issue`
-2. Copy blank content into Claude Code conversations
-3. Customize blanks for your project's specific needs
-
-### Blank Structure
-
-Each blank includes:
-
-- Clear instructions for Claude Code
-- Context requirements
-- Expected output format
-- Integration with GitHub CLI commands
-
-### Blank Customization
-
-Blanks use Go's [text/template](https://pkg.go.dev/text/template) engine with dotted flux variable paths. Common variables include:
-
-- `{{ project.board }}`: Default GitHub project board name
-- `{{ project.organization }}`: GitHub organization name
-- `{{ scm.provider }}`: Source control provider (e.g., GitHub)
-- `{{ scm.cli }}`: CLI tool for SCM operations (e.g., gh)
-
-Blanks also support **conditional rendering** based on your flux configuration:
+Add a Markdown file to your mold's `commands/` or `skills/` directory. Reference flux variables with Go [text/template](https://pkg.go.dev/text/template) syntax:
 
 ```markdown
+# Deploy Checklist
+
+Generate a deployment checklist for {{ project.organization }}.
+
+1. Use `{{ scm.cli }}` to check for open PRs targeting the release branch
+2. Verify all CI checks are passing
+
 {{if .ore.status.enabled}}
-Status Field: {{ .ore.status.field_id }}
+Update the status field ({{ .ore.status.field_id }}) after each step.
 {{end}}
 ```
 
-Variables and conditionals are processed when blanks are rendered during `ailloy cast` or `ailloy forge`. See the [Packaging Molds Guide](docs/smelt.md) for full details on flux values, mold structure, and template syntax.
+### Working with Blanks
+
+```bash
+# List installed blanks
+ailloy mold list
+
+# View a specific blank
+ailloy mold show create-issue
+
+# Preview rendered output (dry run)
+ailloy forge ./my-mold
+
+# Install into current project
+ailloy cast ./my-mold
+```
+
+The [official mold](https://github.com/nimble-giant/nimble-mold) provides pre-built blanks for common SDLC tasks (issue management, PR workflows, code review) and is a good reference for blank structure and conventions.
+
+For the full guide on creating blanks, template syntax, and ingot includes, see the [Blanks guide](docs/blanks.md). For packaging and distributing molds, see the [Packaging Molds guide](docs/smelt.md).
 
 ## Configuration
 
@@ -296,6 +277,8 @@ ailloy cast github.com/nimble-giant/nimble-mold -f my-overrides.yaml
 # Or override inline
 ailloy cast github.com/nimble-giant/nimble-mold --set project.organization=mycompany
 ```
+
+For the full guide on flux variables, schemas, and value layering, see the [Flux Variables guide](docs/flux.md). For the interactive wizard, see the [Anneal guide](docs/anneal.md).
 
 ## Project Structure
 
