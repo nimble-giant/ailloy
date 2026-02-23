@@ -126,6 +126,9 @@ func runFoundrySearch(_ *cobra.Command, args []string) error {
 		}
 
 		name := styles.AccentStyle.Render(r.Name)
+		if r.Verified {
+			name += " " + styles.SuccessStyle.Render("✓ verified")
+		}
 		description := styles.SubtleStyle.Render(" - " + desc)
 		origin := styles.SubtleStyle.Render(fmt.Sprintf("  [%s]", r.Origin))
 		url := styles.SubtleStyle.Render("  " + r.URL)
@@ -211,6 +214,9 @@ func runFoundryList(_ *cobra.Command, _ []string) error {
 
 	for _, entry := range cfg.Foundries {
 		name := styles.AccentStyle.Render(entry.Name)
+		if index.IsOfficialFoundry(entry.URL) {
+			name += " " + styles.SuccessStyle.Render("✓ verified")
+		}
 		status := formatStatus(entry.Status)
 		lastUpdated := "never"
 		if !entry.LastUpdated.IsZero() {
