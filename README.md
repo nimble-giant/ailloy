@@ -33,7 +33,7 @@ Ailloy is the best way to find, create, and share AI instruction packages. Like 
 | Package | `ailloy smelt` | `helm package` | Bundle a mold into a tarball or binary |
 | Validate | `ailloy temper` | `helm lint` | Lint mold structure, manifests, and templates |
 
-Currently focused on **Claude Code** because it offers the level of customization and instruction support needed for sophisticated AI-assisted development workflows.
+Ailloy works with any AI coding tool that supports file-based instructions — Claude Code, Cursor, Windsurf, GitHub Copilot, and [many others](https://agents.md). The `output:` mapping in `flux.yaml` determines where blanks are installed, making molds portable across tools.
 
 ## Quick Start
 
@@ -180,11 +180,11 @@ Manage reusable template components (ingots):
 
 ### `ailloy plugin`
 
-Generate and manage Claude Code plugins:
+Generate and manage Claude Code plugins (currently Claude Code specific; the core pipeline is tool-agnostic):
 
-- `generate`: Generate Claude Code plugin from blanks (`--mold`, `--output`, `--watch`, `--force`)
-- `update [path]`: Update existing Claude Code plugin (`--mold`, `--force`)
-- `validate [path]`: Validate Claude Code plugin structure
+- `generate`: Generate plugin from blanks (`--mold`, `--output`, `--watch`, `--force`)
+- `update [path]`: Update existing plugin (`--mold`, `--force`)
+- `validate [path]`: Validate plugin structure
 
 ### Bidirectional Commands
 
@@ -204,12 +204,12 @@ ailloy add ingot github.com/org/repo
 
 ## Blanks
 
-Blanks are Markdown instruction templates that define Claude Code slash commands, skills, and GitHub Actions workflows. Each blank lives in a mold directory and is compiled with flux variables when you run `ailloy cast` or `ailloy forge`.
+Blanks are Markdown instruction templates that define AI coding tool commands, skills, and workflows. Each blank lives in a mold directory and is compiled with flux variables when you run `ailloy cast` or `ailloy forge`.
 
 There are three types of blanks:
 
-- **Commands** (`commands/`) — Slash commands users invoke explicitly (e.g., `/brainstorm`, `/create-issue`)
-- **Skills** (`skills/`) — Proactive workflows Claude Code uses automatically based on context
+- **Commands** (`commands/`) — Commands users invoke explicitly (e.g., `/brainstorm`, `/create-issue`)
+- **Skills** (`skills/`) — Proactive workflows your AI coding tool uses automatically based on context
 - **Workflows** (`workflows/`) — GitHub Actions YAML files, installed with `--with-workflows`
 
 ### Creating a Blank
@@ -309,7 +309,7 @@ For the full guide on flux variables, schemas, and value layering, see the [Flux
 - ✅ Mold packaging (tarball and self-contained binary)
 - ✅ Mold/ingot validation and linting
 - ✅ Claude Code plugin generation from blanks
-- ✅ Claude Code-optimized workflow blanks
+- ✅ Workflow blanks for GitHub Actions
 - ✅ Automatic GitHub Project field discovery via GraphQL
 - ✅ Interactive wizard with charmbracelet/huh for guided configuration
 - ✅ SCM-native mold resolution from git repos with semver constraints and local caching

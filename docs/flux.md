@@ -220,7 +220,32 @@ Files are placed at their source paths (identity mapping):
 # omitting output: means commands/my-cmd.md → commands/my-cmd.md
 ```
 
-Since `output:` lives in flux, consumers can override destination paths using `-f` value files or `--set` flags.
+Since `output:` lives in flux, consumers can override destination paths using `-f` value files or `--set` flags. This makes the same mold portable across different AI coding tools:
+
+```yaml
+# team-claude.yaml — for Claude Code users
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+
+# team-cursor.yaml — for Cursor users
+output:
+  rules: .cursor/rules
+
+# team-windsurf.yaml — for Windsurf users
+output:
+  rules: .windsurf/rules
+```
+
+```bash
+# Install for Claude Code (default)
+ailloy cast ./my-mold
+
+# Install for Cursor
+ailloy cast ./my-mold -f team-cursor.yaml
+```
+
+For more multi-tool targeting patterns, see [Targeting Different AI Tools](blanks.md#targeting-different-ai-tools).
 
 The `ingots/` directory and hidden directories (starting with `.`) are always excluded from output resolution.
 

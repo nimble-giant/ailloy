@@ -9,11 +9,10 @@ func TestGetMoldIcon(t *testing.T) {
 		name     string
 		expected string
 	}{
-		{"claude-code", "🤖"},
-		{"claude-code-review", "🤖"},
+		{"agent", "🤖"},
+		{"my-agent", "🤖"},
 		{"brainstorm", "💡"},
-		{"claude-code", "🤖"},
-		{"claude-code-action", "🤖"},
+		{"agent-runner", "🤖"},
 		{"create-issue", "🎯"},
 		{"start-issue", "🎯"},
 		{"pr-description", "🔄"},

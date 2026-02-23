@@ -37,16 +37,6 @@ var runtimeDeps = []dependency{
 			"windows": "winget install GitHub.cli",
 		},
 	},
-	{
-		name:        "Claude Code",
-		binary:      "claude",
-		description: "AI-powered development assistant",
-		installHelp: map[string]string{
-			"darwin":  "npm install -g @anthropic-ai/claude-code",
-			"linux":   "npm install -g @anthropic-ai/claude-code",
-			"windows": "npm install -g @anthropic-ai/claude-code",
-		},
-	},
 }
 
 // checkDependencies checks for runtime dependencies and prints styled results.
@@ -127,12 +117,6 @@ func getBinaryVersion(name string) string {
 			raw = raw[:i]
 		}
 		return "v" + raw
-	case "claude":
-		// Output format varies, just take first line
-		if i := strings.Index(raw, "\n"); i != -1 {
-			raw = raw[:i]
-		}
-		return raw
 	default:
 		if i := strings.Index(raw, "\n"); i != -1 {
 			raw = raw[:i]

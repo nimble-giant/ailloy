@@ -48,9 +48,8 @@ func TestRuntimeDeps_Defined(t *testing.T) {
 	}
 
 	expectedBinaries := map[string]bool{
-		"git":    false,
-		"gh":     false,
-		"claude": false,
+		"git": false,
+		"gh":  false,
 	}
 
 	for _, dep := range runtimeDeps {
