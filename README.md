@@ -168,8 +168,11 @@ Validate and lint a mold or ingot package (alias: `lint`):
 
 Discover and manage mold registries. See the [Remote Molds guide](docs/foundry.md) for details:
 
-- `search <query>`: Search GitHub for molds tagged with the `ailloy-mold` topic
-- `add <url>`: Register a foundry index URL in `~/.ailloy/config.yaml`
+- `search <query>`: Search registered foundry indexes and GitHub Topics for molds
+- `add <url>`: Register a foundry index (git repo or static YAML URL)
+- `list`: List all registered foundry indexes and their status
+- `remove <name|url>`: Remove a registered foundry index
+- `update`: Refresh all cached foundry indexes from their sources
 
 ### `ailloy ingot`
 
@@ -194,6 +197,9 @@ All compound commands support both noun-verb and verb-noun ordering:
 # These are equivalent
 ailloy foundry search blueprint    # noun-verb
 ailloy search foundry blueprint    # verb-noun
+
+ailloy foundry list                # noun-verb
+ailloy list foundry                # verb-noun
 
 ailloy mold get github.com/org/repo
 ailloy get mold github.com/org/repo
@@ -313,7 +319,7 @@ For the full guide on flux variables, schemas, and value layering, see the [Flux
 - ✅ Automatic GitHub Project field discovery via GraphQL
 - ✅ Interactive wizard with charmbracelet/huh for guided configuration
 - ✅ SCM-native mold resolution from git repos with semver constraints and local caching
-- ✅ Foundry search and discovery via GitHub topic-based registry
+- ✅ Foundry search and discovery via GitHub Topics and SCM-agnostic foundry indexes
 - ✅ Ingot package management (get, add) with bidirectional CLI commands
 - 🔄 Additional AI provider support (planned)
 - 🔄 Advanced workflow automation (planned)
