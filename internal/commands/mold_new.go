@@ -98,7 +98,7 @@ func runNewMold(_ *cobra.Command, args []string) error {
 		"  3. Validate with " + styles.CodeStyle.Render("ailloy temper "+moldDir) + "\n" +
 		"  4. Preview with " + styles.CodeStyle.Render("ailloy forge "+moldDir) + "\n" +
 		"  5. Install with " + styles.CodeStyle.Render("ailloy cast "+moldDir)
-	fmt.Println(nextSteps)
+	fmt.Println(styles.InfoBoxStyle.Render(nextSteps))
 
 	return nil
 }
