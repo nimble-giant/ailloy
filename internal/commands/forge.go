@@ -207,7 +207,7 @@ func writeForgeFiles(files []renderedFile, outputDir string) error {
 		if err := os.WriteFile(dest, []byte(f.content), 0644); err != nil {
 			return fmt.Errorf("writing %s: %w", f.destPath, err)
 		}
-		fmt.Println(styles.SuccessStyle.Render("wrote ") + styles.CodeStyle.Render(dest))
+		fmt.Println(styles.SuccessStyle.Render("Wrote ") + styles.CodeStyle.Render(dest))
 	}
 	return nil
 }
