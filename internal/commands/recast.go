@@ -74,13 +74,13 @@ func runRecast(_ *cobra.Command, args []string) error {
 	for _, entry := range entries {
 		ref, err := foundry.ReferenceFromEntry(&entry)
 		if err != nil {
-			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, err)
+			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("⚠️"), entry.Name, err)
 			continue
 		}
 
 		resolved, err := foundry.ResolveVersion(ref, git)
 		if err != nil {
-			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, err)
+			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("⚠️"), entry.Name, err)
 			continue
 		}
 
