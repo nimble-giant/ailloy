@@ -31,7 +31,7 @@ func SetVersionInfo(version, commit, date string) {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintln(os.Stderr, styles.ErrorStyle.Render("Error: ")+err.Error())
 		os.Exit(1)
 	}
 }
