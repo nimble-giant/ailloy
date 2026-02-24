@@ -155,6 +155,9 @@ func runForge(_ *cobra.Command, args []string) error {
 		})
 	}
 
+	fmt.Println(styles.WorkingBanner("Forging blanks..."))
+	fmt.Println()
+
 	if forgeOutputDir != "" {
 		return writeForgeFiles(files, forgeOutputDir)
 	}
