@@ -2,13 +2,43 @@
 
 Blanks are the source files of the Ailloy compiler. They are Markdown instruction templates that live in mold directories, define commands and skills for your AI coding tool, and are compiled with flux variables via `ailloy forge` (dry-run) or `ailloy cast` (install).
 
-## Blank Types
+## Mold Structure
 
-Ailloy supports three types of blanks, each serving a different purpose:
+A mold's directory layout is flexible. You can organize your blanks into whatever directories make sense for your team — the `output:` mapping in `flux.yaml` is what determines where each directory's files end up in the target project. There is no required set of directory names.
 
-### Commands
+The only constraints are:
 
-Command blanks define commands that users invoke explicitly in their AI coding tool. They live in your mold's `commands/` directory and are installed to the destination configured in your `flux.yaml` output mapping (e.g., `.claude/commands/` for Claude Code).
+- **Reserved root files** are mold metadata and are never installed: `mold.yaml`, `flux.yaml`, `flux.schema.yaml`, `ingot.yaml`, `README.md`, `PLUGIN_SUMMARY.md`, and `LICENSE`
+- **`ingots/`** is reserved for reusable template partials (see [Ingots](ingots.md))
+- **Hidden directories** (starting with `.`) are excluded from auto-discovery
+
+Everything else — directory names, nesting, file types — is up to you. A mold with `prompts/` and `guidelines/` directories is just as valid as one with `commands/` and `skills/`:
+
+```
+my-mold/
+├── mold.yaml
+├── flux.yaml
+├── prompts/
+│   ├── deploy-checklist.md
+│   └── incident-response.md
+└── guidelines/
+    └── code-style.md
+```
+
+```yaml
+# flux.yaml
+output:
+  prompts: .ai/prompts
+  guidelines: .ai/guidelines
+```
+
+### Conventions from the Official Mold
+
+The [official mold](https://github.com/nimble-giant/nimble-mold) establishes a set of conventions that many teams follow. These are patterns, not requirements:
+
+#### Commands
+
+Command blanks define commands that users invoke explicitly in their AI coding tool. In the official mold they live in a `commands/` directory and are installed to `.claude/commands/` for Claude Code.
 
 ```
 my-mold/
@@ -20,9 +50,9 @@ my-mold/
 
 After `ailloy cast`, each file becomes available as a command in your AI coding tool (e.g., `/brainstorm`, `/create-issue` in Claude Code).
 
-### Skills
+#### Skills
 
-Skill blanks define proactive workflows that your AI coding tool uses automatically based on context, without requiring explicit command invocation. They live in your mold's `skills/` directory and are installed to the destination configured in your output mapping (e.g., `.claude/skills/` for Claude Code).
+Skill blanks define proactive workflows that your AI coding tool uses automatically based on context, without requiring explicit command invocation. In the official mold they live in a `skills/` directory and are installed to `.claude/skills/`.
 
 ```
 my-mold/
@@ -32,9 +62,9 @@ my-mold/
 
 Skills are ideal for instructions that should always be available — coding standards, review guidelines, or domain-specific knowledge.
 
-### Workflows
+#### Workflows
 
-Workflow blanks are GitHub Actions YAML files. They live in your mold's `workflows/` directory and are installed to `.github/workflows/`. Because workflow files contain raw YAML syntax that conflicts with Go template delimiters, they are typically configured with `process: false` in the output mapping:
+Workflow blanks are GitHub Actions YAML files. In the official mold they live in a `workflows/` directory and are installed to `.github/workflows/`. Because workflow files contain raw YAML syntax that conflicts with Go template delimiters, they are typically configured with `process: false` in the output mapping:
 
 ```yaml
 output:
@@ -226,13 +256,13 @@ Then reference in blanks: `{{ api.post_review }}`
 
 ## Blank Discovery
 
-Blanks are automatically discovered from the mold's `output:` mapping in `flux.yaml`. The `ResolveFiles` function walks each mapped directory and collects all files:
+Blanks are automatically discovered from your mold's directory structure. The `output:` mapping in `flux.yaml` determines how directories map to destinations — your directory names are not prescribed:
 
-- **Map output** — each key maps a source directory to a destination
+- **Map output** — each key maps a source directory (whatever you named it) to a destination
 - **String output** — all top-level directories go under the specified parent
 - **No output key** — files are placed at their source paths (identity mapping)
 
-The `ingots/` directory and hidden directories (starting with `.`) are always excluded from auto-discovery.
+Non-reserved root-level files (e.g., `AGENTS.md`) are auto-discovered and installed to the project root. The `ingots/` directory, reserved root files, and hidden directories (starting with `.`) are always excluded from auto-discovery.
 
 ## Testing and Previewing
 
@@ -258,7 +288,7 @@ This catches template syntax errors, missing manifest fields, and broken file re
 
 ## Getting Started with Examples
 
-The [official mold](https://github.com/nimble-giant/nimble-mold) provides a complete reference implementation with command, skill, and workflow blanks. It's a good starting point for understanding blank structure and conventions. For a step-by-step guide to creating a full mold from scratch, see the [Packaging Molds guide](smelt.md).
+The [official mold](https://github.com/nimble-giant/nimble-mold) provides a reference implementation using the commands/skills/workflows convention. It's a good starting point, but remember that your mold's directory structure is yours to define — the `output:` mapping makes any layout work. For a step-by-step guide to creating a full mold from scratch, see the [Packaging Molds guide](smelt.md).
 
 ## Targeting Different AI Tools
 
