@@ -4,7 +4,6 @@
   "packages": {
     ".": {
       "release-type": "go",
-      "release-as": "0.6.7",
       "component": "ailloy",
       "include-component-in-tag": false,
       "initial-version": "0.1.0",
