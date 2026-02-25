@@ -107,10 +107,10 @@ func Update(release *ReleaseInfo) error {
 	defer os.Remove(tmpPath) //nolint:errcheck // best-effort cleanup
 
 	if err := download(binaryAsset.BrowserDownloadURL, tmpFile); err != nil {
-		tmpFile.Close() //nolint:errcheck
+		_ = tmpFile.Close()
 		return fmt.Errorf("downloading binary: %w", err)
 	}
-	tmpFile.Close() //nolint:errcheck
+	_ = tmpFile.Close()
 
 	// Verify checksum.
 	if checksumAsset != nil {
@@ -119,7 +119,7 @@ func Update(release *ReleaseInfo) error {
 		}
 	}
 
-	if err := os.Chmod(tmpPath, 0755); err != nil { //#nosec G302 -- executable needs 0755
+	if err := os.Chmod(tmpPath, 0755); err != nil { // #nosec G302 -- executable needs 0755
 		return fmt.Errorf("setting permissions: %w", err)
 	}
 
@@ -146,7 +146,7 @@ func fetchLatestRelease() (*ReleaseInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching latest release: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned %s", resp.Status)
@@ -198,7 +198,7 @@ func download(url string, dest *os.File) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download returned %s", resp.Status)
@@ -215,7 +215,7 @@ func verifyChecksum(filePath, assetName, checksumURL string) error {
 	if err != nil {
 		return fmt.Errorf("downloading checksums: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -242,7 +242,7 @@ func verifyChecksum(filePath, assetName, checksumURL string) error {
 	if err != nil {
 		return fmt.Errorf("opening file for checksum: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {

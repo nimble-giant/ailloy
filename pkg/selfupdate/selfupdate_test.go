@@ -21,6 +21,15 @@ func overrideLatestURL(t *testing.T, url string) {
 	t.Cleanup(func() { latestURL = orig })
 }
 
+// writeJSON is a test helper that writes a JSON response to an http.ResponseWriter.
+func writeJSON(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := fmt.Fprint(w, body); err != nil {
+		t.Errorf("writing response: %v", err)
+	}
+}
+
 // --- parseSemver ---
 
 func TestParseSemver(t *testing.T) {
@@ -131,8 +140,7 @@ func TestCheck_Outdated(t *testing.T) {
 		if r.Header.Get("Accept") != "application/vnd.github+json" {
 			t.Errorf("expected Accept header, got %q", r.Header.Get("Accept"))
 		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"tag_name":"v2.0.0","html_url":"https://github.com/test/release","assets":[]}`)
+		writeJSON(t, w, `{"tag_name":"v2.0.0","html_url":"https://github.com/test/release","assets":[]}`)
 	}))
 	defer srv.Close()
 	overrideLatestURL(t, srv.URL)
@@ -160,8 +168,7 @@ func TestCheck_Outdated(t *testing.T) {
 
 func TestCheck_UpToDate(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"tag_name":"v1.0.0","html_url":"https://github.com/test/release","assets":[]}`)
+		writeJSON(t, w, `{"tag_name":"v1.0.0","html_url":"https://github.com/test/release","assets":[]}`)
 	}))
 	defer srv.Close()
 	overrideLatestURL(t, srv.URL)
@@ -180,8 +187,7 @@ func TestCheck_UpToDate(t *testing.T) {
 
 func TestCheck_Ahead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"tag_name":"v1.0.0","html_url":"https://github.com/test/release","assets":[]}`)
+		writeJSON(t, w, `{"tag_name":"v1.0.0","html_url":"https://github.com/test/release","assets":[]}`)
 	}))
 	defer srv.Close()
 	overrideLatestURL(t, srv.URL)
@@ -200,8 +206,7 @@ func TestCheck_Ahead(t *testing.T) {
 
 func TestCheck_DevBuild(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"tag_name":"v1.0.0","html_url":"https://github.com/test/release","assets":[]}`)
+		writeJSON(t, w, `{"tag_name":"v1.0.0","html_url":"https://github.com/test/release","assets":[]}`)
 	}))
 	defer srv.Close()
 	overrideLatestURL(t, srv.URL)
@@ -233,8 +238,7 @@ func TestCheck_APIError(t *testing.T) {
 
 func TestCheck_InvalidJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{not json}`)
+		writeJSON(t, w, `{not json}`)
 	}))
 	defer srv.Close()
 	overrideLatestURL(t, srv.URL)
@@ -247,8 +251,7 @@ func TestCheck_InvalidJSON(t *testing.T) {
 
 func TestCheck_InvalidLatestTag(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"tag_name":"not-a-version","html_url":"https://github.com/test","assets":[]}`)
+		writeJSON(t, w, `{"tag_name":"not-a-version","html_url":"https://github.com/test","assets":[]}`)
 	}))
 	defer srv.Close()
 	overrideLatestURL(t, srv.URL)
@@ -264,7 +267,9 @@ func TestCheck_InvalidLatestTag(t *testing.T) {
 func TestDownload_Success(t *testing.T) {
 	content := "binary-data-here"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, content)
+		if _, err := fmt.Fprint(w, content); err != nil {
+			t.Errorf("writing response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -276,9 +281,9 @@ func TestDownload_Success(t *testing.T) {
 	if err := download(srv.URL, tmpFile); err != nil {
 		t.Fatalf("download returned error: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
-	got, err := os.ReadFile(tmpFile.Name())
+	got, err := os.ReadFile(tmpFile.Name()) // #nosec G304 -- test temp file
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +302,7 @@ func TestDownload_HTTPError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tmpFile.Close()
+	defer func() { _ = tmpFile.Close() }()
 
 	err = download(srv.URL, tmpFile)
 	if err == nil {
@@ -317,7 +322,7 @@ func TestVerifyChecksum(t *testing.T) {
 	if _, err := tmpFile.Write(content); err != nil {
 		t.Fatal(err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	h := sha256.Sum256(content)
 	expected := hex.EncodeToString(h[:])
@@ -326,7 +331,9 @@ func TestVerifyChecksum(t *testing.T) {
 	checksumBody := fmt.Sprintf("%s  %s\nabcdef1234567890  other-file\n", expected, assetName)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, checksumBody)
+		if _, err := fmt.Fprint(w, checksumBody); err != nil {
+			t.Errorf("writing response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -345,7 +352,9 @@ func TestVerifyChecksum(t *testing.T) {
 	t.Run("bad checksum fails", func(t *testing.T) {
 		badBody := fmt.Sprintf("%s  %s\n", "0000000000000000000000000000000000000000000000000000000000000000", assetName)
 		badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			fmt.Fprint(w, badBody)
+			if _, err := fmt.Fprint(w, badBody); err != nil {
+				t.Errorf("writing response: %v", err)
+			}
 		}))
 		defer badSrv.Close()
 
@@ -374,12 +383,12 @@ func TestReplaceExecutable(t *testing.T) {
 	dir := t.TempDir()
 
 	target := filepath.Join(dir, "old-binary")
-	if err := os.WriteFile(target, []byte("old"), 0755); err != nil {
+	if err := os.WriteFile(target, []byte("old"), 0600); err != nil { // #nosec G306
 		t.Fatal(err)
 	}
 
 	source := filepath.Join(dir, "new-binary")
-	if err := os.WriteFile(source, []byte("new"), 0755); err != nil {
+	if err := os.WriteFile(source, []byte("new"), 0600); err != nil { // #nosec G306
 		t.Fatal(err)
 	}
 
@@ -387,7 +396,7 @@ func TestReplaceExecutable(t *testing.T) {
 		t.Fatalf("replaceExecutable returned error: %v", err)
 	}
 
-	got, err := os.ReadFile(target)
+	got, err := os.ReadFile(target) // #nosec G304 -- test temp file
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +413,7 @@ func TestReplaceExecutable(t *testing.T) {
 func TestReplaceExecutable_MissingSource(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target")
-	if err := os.WriteFile(target, []byte("keep"), 0755); err != nil {
+	if err := os.WriteFile(target, []byte("keep"), 0600); err != nil { // #nosec G306
 		t.Fatal(err)
 	}
 
