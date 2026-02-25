@@ -18,10 +18,14 @@ import (
 const (
 	repo            = "nimble-giant/ailloy"
 	binaryName      = "ailloy"
-	latestURL       = "https://api.github.com/repos/" + repo + "/releases/latest"
+	defaultURL      = "https://api.github.com/repos/" + repo + "/releases/latest"
 	requestTimeout  = 15 * time.Second
 	downloadTimeout = 120 * time.Second
 )
+
+// latestURL is the endpoint queried for the latest release.
+// Tests override this to point at an httptest server.
+var latestURL = defaultURL
 
 // ReleaseInfo holds metadata about a GitHub release.
 type ReleaseInfo struct {
