@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.8](https://github.com/nimble-giant/ailloy/compare/v0.6.7...v0.6.8) (2026-02-25)
+
+
+### Bug Fixes
+
+* add WorkingBanner to forge command before processing ([eaea78d](https://github.com/nimble-giant/ailloy/commit/eaea78dd844f5728bea204533c994af9d668ae26)), closes [#88](https://github.com/nimble-giant/ailloy/issues/88)
+* remove release-as pin to stop v0.6.7 re-release loop ([aa27597](https://github.com/nimble-giant/ailloy/commit/aa27597da27d812de152b76a58c322cc4cbb947c))
+* replace ! warning icon with ⚠️ in recast command ([e9e63fd](https://github.com/nimble-giant/ailloy/commit/e9e63fdb3fa2de5cd55d7c663b7ccd8d72c57956)), closes [#86](https://github.com/nimble-giant/ailloy/issues/86)
+* title-case file-write confirmation in forge command ([b4b75d9](https://github.com/nimble-giant/ailloy/commit/b4b75d93f6d7510e1306c5874a917e56a44e811f)), closes [#89](https://github.com/nimble-giant/ailloy/issues/89)
+* use ErrorStyle for Execute() error output in root.go ([074fbf1](https://github.com/nimble-giant/ailloy/commit/074fbf1239af8b72b51baefd6bc91e99fd9fed23)), closes [#90](https://github.com/nimble-giant/ailloy/issues/90)
+* wrap mold new next steps output in InfoBoxStyle border ([f84de57](https://github.com/nimble-giant/ailloy/commit/f84de57311dd82efd34f26a3ddfeda59d25a75ca)), closes [#87](https://github.com/nimble-giant/ailloy/issues/87)
+
 ## [0.6.7](https://github.com/nimble-giant/ailloy/compare/v0.6.6...v0.6.7) (2026-02-24)
 
 
