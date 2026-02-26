@@ -120,40 +120,125 @@ In CI environments, use a deploy key or `GH_TOKEN`:
 
 ## Discovering Molds
 
-Search for molds published on GitHub using the `ailloy-mold` topic:
+Ailloy supports two discovery mechanisms that work together:
+
+1. **Foundry indexes** — YAML-based mold catalogs hosted as git repos or static files (SCM-agnostic)
+2. **GitHub Topics** — repositories tagged with the `ailloy-mold` topic on GitHub
+
+### Searching
 
 ```bash
-# Search for molds matching a query
+# Search across all registered indexes and GitHub Topics
 ailloy foundry search blueprint
 
 # Verb-noun ordering also works
 ailloy search foundry blueprint
+
+# Search only registered foundry indexes (skip GitHub)
+ailloy foundry search blueprint --index-only
+
+# Search only GitHub Topics (skip indexes)
+ailloy foundry search blueprint --github-only
 ```
 
-Results include the repository name, description, and URL. The search queries the GitHub API for repositories tagged with the `ailloy-mold` topic.
+Results from registered indexes appear first, followed by GitHub Topics results. Duplicates (same source) are collapsed, preferring the index entry.
 
 ### Making Your Mold Discoverable
 
-To make your mold appear in search results, add the `ailloy-mold` topic to your GitHub repository:
+To make your mold appear in GitHub Topics search results, add the `ailloy-mold` topic to your GitHub repository:
 
 1. Go to your repository on GitHub
 2. Click the gear icon next to "About"
 3. Add `ailloy-mold` to the Topics field
 4. Save
 
+To list your mold in a foundry index, submit a PR adding an entry to the index's `foundry.yaml` (see [Foundry Index Format](#foundry-index-format) below).
+
 ### Managing Foundry Indexes
 
-Register foundry index URLs for use by search and resolution commands:
+Register, list, update, and remove foundry indexes:
 
 ```bash
-# Register a foundry index URL
+# Register a foundry index (fetches and validates the index)
 ailloy foundry add https://github.com/nimble-giant/ailloy-foundry-index
 
-# Verb-noun ordering
+# List all registered foundry indexes and their status
+ailloy foundry list
+
+# Refresh all cached foundry indexes from their sources
+ailloy foundry update
+
+# Remove a registered foundry index by name or URL
+ailloy foundry remove nimble-foundry
+
+# Verb-noun ordering works for all commands
 ailloy add foundry https://github.com/nimble-giant/ailloy-foundry-index
+ailloy list foundry
+ailloy update foundry
+ailloy remove foundry nimble-foundry
 ```
 
-Registered foundries are stored in `~/.ailloy/config.yaml`.
+Registered foundries are stored in `~/.ailloy/config.yaml`. Cached indexes are stored under `~/.ailloy/cache/indexes/`.
+
+## Foundry Index Format
+
+A foundry index is a `foundry.yaml` file that catalogs available molds. It can live at the root of a git repository or be served as a static YAML file.
+
+### Schema
+
+```yaml
+apiVersion: v1
+kind: foundry-index
+name: my-foundry
+description: "My collection of molds"
+author:
+  name: My Team
+  url: https://github.com/my-org
+molds:
+  - name: workflow-mold
+    source: github.com/my-org/mold
+    description: "AI workflow blanks"
+    tags: ["workflows", "claude"]
+    version: "v1.0.0"
+```
+
+### Fields
+
+| Field | Required | Description |
+| ----- | -------- | ----------- |
+| `apiVersion` | Yes | Schema version, currently `v1` |
+| `kind` | Yes | Must be `foundry-index` |
+| `name` | Yes | Unique name for this foundry index |
+| `description` | No | Human-readable description |
+| `author.name` | No | Author or organization name |
+| `author.url` | No | Author URL |
+| `molds[].name` | Yes | Mold name |
+| `molds[].source` | Yes | Mold source reference (`host/owner/repo`) |
+| `molds[].description` | No | Short description for search results |
+| `molds[].tags` | No | Searchable tags/categories |
+| `molds[].version` | No | Latest known version (informational only) |
+
+### Hosting a Foundry Index
+
+**As a git repository** (recommended for versioned indexes):
+
+1. Create a repository with a `foundry.yaml` at the root
+2. Users register it with: `ailloy foundry add https://github.com/my-org/my-foundry-index`
+3. Updates are fetched with: `ailloy foundry update`
+
+**As a static YAML file** (for simple hosting):
+
+1. Host a `foundry.yaml` file at a stable URL
+2. Users register it with: `ailloy foundry add https://example.com/foundry.yaml`
+3. URLs ending in `.yaml` or `.yml` are automatically detected as static files
+
+### Submitting to the Official Index
+
+To add your mold to the official Ailloy foundry index:
+
+1. Fork the official index repository
+2. Add your mold entry to `foundry.yaml`
+3. Submit a pull request with a description of your mold
 
 ## Downloading Without Installing
 
@@ -191,6 +276,9 @@ All compound commands support both noun-verb and verb-noun ordering. Both forms 
 | --------- | --------- | ----------- |
 | `ailloy foundry search <query>` | `ailloy search foundry <query>` | Search for molds |
 | `ailloy foundry add <url>` | `ailloy add foundry <url>` | Register a foundry |
+| `ailloy foundry list` | `ailloy list foundry` | List registered foundries |
+| `ailloy foundry remove <name\|url>` | `ailloy remove foundry <name\|url>` | Remove a foundry |
+| `ailloy foundry update` | `ailloy update foundry` | Refresh foundry indexes |
 | `ailloy mold get <ref>` | `ailloy get mold <ref>` | Download a mold |
 | `ailloy ingot get <ref>` | `ailloy get ingot <ref>` | Download an ingot |
 | `ailloy ingot add <ref>` | `ailloy add ingot <ref>` | Add an ingot |
@@ -369,3 +457,6 @@ Remote mold references work with all mold-consuming commands:
 | `quench`       | `ailloy quench`                                                           |
 | `foundry search` | `ailloy foundry search blueprint`                                 |
 | `foundry add`  | `ailloy foundry add https://github.com/nimble-giant/ailloy-foundry-index` |
+| `foundry list` | `ailloy foundry list`                                                     |
+| `foundry remove` | `ailloy foundry remove nimble-foundry`                              |
+| `foundry update` | `ailloy foundry update`                                             |

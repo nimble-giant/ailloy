@@ -30,13 +30,13 @@ var addCmd = &cobra.Command{
 	Long: `Add foundries, ingots, and other resources.
 
 Available subcommands:
-  foundry    Register a foundry index URL
+  foundry    Register a foundry index
   ingot      Download and register an ingot`,
 }
 
 var addFoundrySubCmd = &cobra.Command{
 	Use:   "foundry <url>",
-	Short: "Register a foundry index URL",
+	Short: "Register a foundry index",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runFoundryAdd,
 }
@@ -75,10 +75,11 @@ var getIngotSubCmd = &cobra.Command{
 var newCmd = &cobra.Command{
 	Use:   "new",
 	Short: "Create new resources",
-	Long: `Create new molds and other resources.
+	Long: `Create new molds, foundries, and other resources.
 
 Available subcommands:
-  mold       Scaffold a new mold directory`,
+  mold       Scaffold a new mold directory
+  foundry    Scaffold a new foundry index`,
 }
 
 var newMoldSubCmd = &cobra.Command{
@@ -89,10 +90,67 @@ var newMoldSubCmd = &cobra.Command{
 	RunE:    runNewMold,
 }
 
+var newFoundrySubCmd = &cobra.Command{
+	Use:     "foundry <name>",
+	Aliases: []string{"create"},
+	Short:   "Scaffold a new foundry index",
+	Args:    cobra.ExactArgs(1),
+	RunE:    runNewFoundry,
+}
+
+var listCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List resources",
+	Long: `List registered resources.
+
+Available subcommands:
+  foundry    List registered foundry indexes`,
+}
+
+var listFoundrySubCmd = &cobra.Command{
+	Use:   "foundry",
+	Short: "List registered foundry indexes",
+	RunE:  runFoundryList,
+}
+
+var removeCmd = &cobra.Command{
+	Use:   "remove",
+	Short: "Remove resources",
+	Long: `Remove registered resources.
+
+Available subcommands:
+  foundry    Remove a registered foundry index`,
+}
+
+var removeFoundrySubCmd = &cobra.Command{
+	Use:   "foundry <name|url>",
+	Short: "Remove a registered foundry index",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runFoundryRemove,
+}
+
+var updateCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Update resources",
+	Long: `Update registered resources.
+
+Available subcommands:
+  foundry    Refresh cached foundry indexes`,
+}
+
+var updateFoundrySubCmd = &cobra.Command{
+	Use:   "foundry",
+	Short: "Refresh cached foundry indexes",
+	RunE:  runFoundryUpdate,
+}
+
 func init() {
 	// Flags for bidirectional "new mold" must mirror "mold new" flags.
 	newMoldSubCmd.Flags().StringVarP(&newMoldOutput, "output", "o", ".", "parent directory to create the mold in")
 	newMoldSubCmd.Flags().BoolVar(&newMoldNoAgents, "no-agents", false, "skip generating AGENTS.md")
+
+	// Flags for bidirectional "new foundry" must mirror "foundry new" flags.
+	newFoundrySubCmd.Flags().StringVarP(&newFoundryOutput, "output", "o", ".", "parent directory to create the foundry in")
 
 	// search <noun>
 	rootCmd.AddCommand(searchCmd)
@@ -111,4 +169,17 @@ func init() {
 	// new <noun>
 	rootCmd.AddCommand(newCmd)
 	newCmd.AddCommand(newMoldSubCmd)
+	newCmd.AddCommand(newFoundrySubCmd)
+
+	// list <noun>
+	rootCmd.AddCommand(listCmd)
+	listCmd.AddCommand(listFoundrySubCmd)
+
+	// remove <noun>
+	rootCmd.AddCommand(removeCmd)
+	removeCmd.AddCommand(removeFoundrySubCmd)
+
+	// update <noun>
+	rootCmd.AddCommand(updateCmd)
+	updateCmd.AddCommand(updateFoundrySubCmd)
 }
