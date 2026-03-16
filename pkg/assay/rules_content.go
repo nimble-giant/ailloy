@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
+
+const maxInt = int(math.MaxInt)
 
 var headingRegex = regexp.MustCompile(`^#{1,6}\s+`)
 
@@ -38,7 +41,9 @@ func (r *lineCountRule) Check(ctx *RuleContext) []mold.Diagnostic {
 		case int:
 			maxLines = n
 		case uint64:
-			maxLines = int(n)
+			if n <= uint64(maxInt) {
+				maxLines = int(n)
+			}
 		case float64:
 			maxLines = int(n)
 		}
