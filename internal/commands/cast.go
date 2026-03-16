@@ -373,7 +373,7 @@ func offerAgentsImport(claudePath string) {
 	}
 
 	newContent := "@AGENTS.md\n\n" + string(data)
-	//#nosec G306 -- CLAUDE.md needs to be readable
+	//#nosec G306,G703 -- claudePath is a hardcoded constant ("CLAUDE.md"), not user input
 	if err := os.WriteFile(claudePath, []byte(newContent), 0644); err != nil {
 		fmt.Println(styles.WarningStyle.Render("⚠️  Could not update " + claudePath + ": " + err.Error()))
 		return
