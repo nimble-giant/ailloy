@@ -11,9 +11,9 @@ import (
 
 var temperCmd = &cobra.Command{
 	Use:     "temper [path]",
-	Aliases: []string{"lint"},
-	Short:   "Validate and lint a mold or ingot package",
-	Long: `Validate and lint a mold or ingot package (alias: lint).
+	Aliases: []string{"validate"},
+	Short:   "Validate a mold or ingot package",
+	Long: `Validate a mold or ingot package (alias: validate).
 
 Checks structural integrity, manifest fields, file references,
 template syntax, and flux schema consistency. Reports errors
