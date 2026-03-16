@@ -232,57 +232,177 @@ func (r *emptyFileRule) Check(ctx *RuleContext) []mold.Diagnostic {
 	return diags
 }
 
-// duplicateTopicsRule warns when the same heading appears in multiple instruction files.
+// duplicateTopicsRule warns when the same heading appears in multiple files
+// with similar content, suggesting the content should be centralized.
 type duplicateTopicsRule struct{}
 
 func (r *duplicateTopicsRule) Name() string                       { return "duplicate-topics" }
 func (r *duplicateTopicsRule) DefaultSeverity() mold.DiagSeverity { return mold.SeverityWarning }
 func (r *duplicateTopicsRule) Platforms() []Platform              { return nil }
 
+// sectionEntry pairs a file path with the body content under a heading.
+type sectionEntry struct {
+	path    string
+	content string
+}
+
 func (r *duplicateTopicsRule) Check(ctx *RuleContext) []mold.Diagnostic {
-	// Map heading text -> list of files containing it
-	headings := make(map[string][]string)
+	// Map normalized heading -> list of (file, section content) pairs.
+	sections := make(map[string][]sectionEntry)
 
 	for _, f := range ctx.Files {
 		if !strings.HasSuffix(f.Path, ".md") {
 			continue
 		}
-		scanner := bufio.NewScanner(bytes.NewReader(f.Content))
-		for scanner.Scan() {
-			line := scanner.Text()
-			if headingRegex.MatchString(line) {
-				// Normalize: strip # prefix and whitespace
-				heading := strings.TrimSpace(headingRegex.ReplaceAllString(line, ""))
-				heading = strings.ToLower(heading)
-				if heading != "" {
-					headings[heading] = append(headings[heading], f.Path)
-				}
-			}
+		for heading, body := range extractSections(f.Content) {
+			sections[heading] = append(sections[heading], sectionEntry{
+				path:    f.Path,
+				content: body,
+			})
 		}
 	}
 
 	var diags []mold.Diagnostic
-	for heading, paths := range headings {
-		if len(paths) <= 1 {
+	for heading, entries := range sections {
+		if len(entries) <= 1 {
 			continue
 		}
-		// Deduplicate paths
-		unique := make(map[string]bool)
-		for _, p := range paths {
-			unique[p] = true
+		// Deduplicate by file path — a heading could repeat within one file.
+		byFile := make(map[string]string) // path -> content
+		for _, e := range entries {
+			if _, exists := byFile[e.path]; !exists {
+				byFile[e.path] = e.content
+			}
 		}
-		if len(unique) <= 1 {
+		if len(byFile) <= 1 {
 			continue
 		}
-		var fileList []string
-		for p := range unique {
-			fileList = append(fileList, p)
+
+		// Compare every pair of sections for similarity.
+		// Only warn if at least one pair has substantially similar content.
+		paths := make([]string, 0, len(byFile))
+		bodies := make([]string, 0, len(byFile))
+		for p, b := range byFile {
+			paths = append(paths, p)
+			bodies = append(bodies, b)
 		}
-		diags = append(diags, mold.Diagnostic{
-			Severity: r.DefaultSeverity(),
-			Message:  fmt.Sprintf("heading %q appears in multiple files: %s", heading, strings.Join(fileList, ", ")),
-			Rule:     r.Name(),
-		})
+
+		var similarFiles []string
+		for i := 0; i < len(bodies); i++ {
+			for j := i + 1; j < len(bodies); j++ {
+				if contentSimilarity(bodies[i], bodies[j]) >= 0.7 {
+					similarFiles = appendUnique(similarFiles, paths[i])
+					similarFiles = appendUnique(similarFiles, paths[j])
+				}
+			}
+		}
+
+		if len(similarFiles) >= 2 {
+			diags = append(diags, mold.Diagnostic{
+				Severity: r.DefaultSeverity(),
+				Message: fmt.Sprintf(
+					"heading %q has similar content in multiple files — consider centralizing: %s",
+					heading, strings.Join(similarFiles, ", ")),
+				Rule: r.Name(),
+			})
+		}
 	}
 	return diags
+}
+
+// extractSections splits markdown content into a map of normalized heading -> body text.
+// Only the content between a heading and the next heading of equal or higher level is captured.
+func extractSections(content []byte) map[string]string {
+	sections := make(map[string]string)
+	var currentHeading string
+	var currentBody strings.Builder
+
+	scanner := bufio.NewScanner(bytes.NewReader(content))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if headingRegex.MatchString(line) {
+			// Flush previous section.
+			if currentHeading != "" {
+				sections[currentHeading] = strings.TrimSpace(currentBody.String())
+			}
+			currentHeading = strings.ToLower(strings.TrimSpace(
+				headingRegex.ReplaceAllString(line, "")))
+			currentBody.Reset()
+		} else if currentHeading != "" {
+			currentBody.WriteString(line)
+			currentBody.WriteByte('\n')
+		}
+	}
+	// Flush last section.
+	if currentHeading != "" {
+		sections[currentHeading] = strings.TrimSpace(currentBody.String())
+	}
+	return sections
+}
+
+// contentSimilarity returns a 0–1 score comparing two section bodies.
+// It uses trigram (3-gram) overlap as a simple, effective measure of textual similarity.
+func contentSimilarity(a, b string) float64 {
+	a = normalizeContent(a)
+	b = normalizeContent(b)
+
+	// Empty sections are not meaningful duplicates.
+	if len(a) == 0 || len(b) == 0 {
+		return 0.0
+	}
+
+	// Treat very short content (likely just a link or one-liner) as unique
+	// unless they are identical.
+	if len(a) < 20 || len(b) < 20 {
+		if a == b {
+			return 1.0
+		}
+		return 0.0
+	}
+
+	triA := trigrams(a)
+	triB := trigrams(b)
+	if len(triA) == 0 || len(triB) == 0 {
+		return 0.0
+	}
+
+	// Jaccard similarity over trigram sets.
+	intersection := 0
+	for tri := range triA {
+		if triB[tri] {
+			intersection++
+		}
+	}
+	union := len(triA) + len(triB) - intersection
+	if union == 0 {
+		return 0.0
+	}
+	return float64(intersection) / float64(union)
+}
+
+// normalizeContent collapses whitespace and lowercases for comparison.
+func normalizeContent(s string) string {
+	fields := strings.Fields(strings.ToLower(s))
+	return strings.Join(fields, " ")
+}
+
+// trigrams returns the set of character 3-grams in s.
+func trigrams(s string) map[string]bool {
+	if len(s) < 3 {
+		return nil
+	}
+	set := make(map[string]bool, len(s)-2)
+	for i := 0; i <= len(s)-3; i++ {
+		set[s[i:i+3]] = true
+	}
+	return set
+}
+
+func appendUnique(slice []string, val string) []string {
+	for _, s := range slice {
+		if s == val {
+			return slice
+		}
+	}
+	return append(slice, val)
 }

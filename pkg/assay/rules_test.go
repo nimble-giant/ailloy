@@ -197,24 +197,44 @@ func TestEmptyFileRule(t *testing.T) {
 }
 
 func TestDuplicateTopicsRule(t *testing.T) {
+	similarContent := `Follow the conventional commit format for all messages.
+Use imperative mood in the subject line. Keep the subject under 72 characters.
+Include a body when the change is non-trivial. Reference issue numbers.`
+
 	tests := []struct {
 		name     string
 		files    []DetectedFile
 		wantDiag bool
 	}{
 		{
-			"no duplicates",
+			"different headings",
 			[]DetectedFile{
-				{Path: "CLAUDE.md", Content: []byte("# Setup\nContent")},
-				{Path: "AGENTS.md", Content: []byte("# Testing\nContent")},
+				{Path: "CLAUDE.md", Content: []byte("# Setup\nContent about setup")},
+				{Path: "AGENTS.md", Content: []byte("# Testing\nContent about testing")},
 			},
 			false,
 		},
 		{
-			"duplicate headings",
+			"same heading different content",
 			[]DetectedFile{
-				{Path: "CLAUDE.md", Content: []byte("# Setup\nContent")},
-				{Path: "AGENTS.md", Content: []byte("# Setup\nDifferent content")},
+				{Path: "CLAUDE.md", Content: []byte("# Usage\nRun the linter with `ailloy assay .` to check files.")},
+				{Path: "AGENTS.md", Content: []byte("# Usage\nInstall dependencies with `npm install` and start dev server.")},
+			},
+			false,
+		},
+		{
+			"same heading similar content should warn",
+			[]DetectedFile{
+				{Path: "CLAUDE.md", Content: []byte("# Commit Guidelines\n" + similarContent)},
+				{Path: "AGENTS.md", Content: []byte("# Commit Guidelines\n" + similarContent)},
+			},
+			true,
+		},
+		{
+			"same heading nearly identical content should warn",
+			[]DetectedFile{
+				{Path: "CLAUDE.md", Content: []byte("# Commit Guidelines\n" + similarContent)},
+				{Path: "AGENTS.md", Content: []byte("# Commit Guidelines\n" + similarContent + "\nAlso sign off commits.")},
 			},
 			true,
 		},
@@ -230,6 +250,34 @@ func TestDuplicateTopicsRule(t *testing.T) {
 			}
 			if !tt.wantDiag && len(diags) > 0 {
 				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestContentSimilarity(t *testing.T) {
+	tests := []struct {
+		name      string
+		a, b      string
+		wantAbove float64
+		wantBelow float64
+	}{
+		{"identical", "the quick brown fox jumps over the lazy dog", "the quick brown fox jumps over the lazy dog", 0.99, 1.01},
+		{"very similar", "the quick brown fox jumps over the lazy dog", "the quick brown fox leaps over the lazy dog", 0.7, 1.0},
+		{"completely different", "follow conventional commits for all messages", "install dependencies with npm and start the dev server", 0.0, 0.3},
+		{"short identical", "hello", "hello", 0.99, 1.01},
+		{"short different", "hello", "world", -0.1, 0.01},
+		{"empty", "", "", -0.1, 0.01},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score := contentSimilarity(tt.a, tt.b)
+			if score < tt.wantAbove {
+				t.Errorf("similarity %f is below expected minimum %f", score, tt.wantAbove)
+			}
+			if score > tt.wantBelow {
+				t.Errorf("similarity %f is above expected maximum %f", score, tt.wantBelow)
 			}
 		})
 	}
