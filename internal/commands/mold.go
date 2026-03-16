@@ -114,7 +114,7 @@ func runListMolds(cmd *cobra.Command, args []string) error {
 				blankName := strings.TrimSuffix(fileName, ".md")
 
 				// Try to extract the first line as description
-				content, err := os.ReadFile(path) // #nosec G304 -- CLI tool reads user blank files
+				content, err := os.ReadFile(path) // #nosec G304,G122 -- CLI tool reads user blank files
 				if err != nil {
 					errorMsg := styles.ErrorStyle.Render("❌ ") +
 						styles.AccentStyle.Render(category+"/"+blankName) +
@@ -164,7 +164,7 @@ func runListMolds(cmd *cobra.Command, args []string) error {
 				blankName := strings.TrimSuffix(fileName, ".yml")
 
 				// Extract the workflow name from the YAML
-				content, err := os.ReadFile(path) // #nosec G304 -- CLI tool reads user workflow files
+				content, err := os.ReadFile(path) // #nosec G304,G122 -- CLI tool reads user workflow files
 				if err != nil {
 					return nil
 				}
