@@ -178,6 +178,13 @@ Manage reusable template components (ingots):
 - `get <reference>`: Download an ingot to the local cache without installing
 - `add <reference>`: Download and install an ingot into the project's `.ailloy/ingots/` directory
 
+### `ailloy update`
+
+Check for and install the latest version of ailloy (aliases: `self-update`, `upgrade`):
+
+- `--check`: Only check whether a newer version is available without installing
+- Downloads the platform-specific binary, verifies the SHA256 checksum, and replaces the running executable in-place
+
 ### `ailloy plugin`
 
 Generate and manage Claude Code plugins (currently Claude Code specific; the core pipeline is tool-agnostic):
@@ -293,6 +300,7 @@ For the full guide on flux variables, schemas, and value layering, see the [Flux
   /mold              # Template engine, flux loading, ingot resolution
   /plugin            # Plugin generation pipeline
   /safepath          # Safe path utilities
+  /selfupdate        # Self-update version check and binary replacement
   /smelt             # Mold packaging (tarball/binary)
   /styles            # Terminal UI styles (lipgloss)
 /docs                # Documentation
@@ -315,6 +323,7 @@ For the full guide on flux variables, schemas, and value layering, see the [Flux
 - ✅ SCM-native mold resolution from git repos with semver constraints and local caching
 - ✅ Foundry search and discovery via GitHub topic-based registry
 - ✅ Ingot package management (get, add) with bidirectional CLI commands
+- ✅ Self-update command with SHA256 checksum verification
 - 🔄 Additional AI provider support (planned)
 - 🔄 Advanced workflow automation (planned)
 

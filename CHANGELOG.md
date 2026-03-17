@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased](https://github.com/nimble-giant/ailloy/compare/v0.6.7...HEAD)
+
+### Features
+
+* add self-update command with version check and SHA256 checksum verification
+
 ## [0.6.7](https://github.com/nimble-giant/ailloy/compare/v0.6.6...v0.6.7) (2026-02-24)
 
 

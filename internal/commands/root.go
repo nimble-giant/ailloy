@@ -11,6 +11,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// rawVersion holds the unformatted version string (e.g. "v0.6.7") for semver comparison.
+var rawVersion string
+
 var rootCmd = &cobra.Command{
 	Use:   "ailloy",
 	Short: "The package manager for AI instructions",
@@ -19,8 +22,14 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// RawVersion returns the unformatted version string set at build time.
+func RawVersion() string {
+	return rawVersion
+}
+
 // SetVersionInfo sets the version information injected via ldflags at build time.
 func SetVersionInfo(version, commit, date string) {
+	rawVersion = version
 	if commit != "unknown" && date != "unknown" {
 		rootCmd.Version = fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)
 	} else {
