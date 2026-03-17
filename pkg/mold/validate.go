@@ -153,7 +153,7 @@ func ValidateIngotFiles(i *Ingot, fsys fs.FS, base string) error {
 	return nil
 }
 
-// DiagSeverity indicates whether a diagnostic is an error (blocking) or warning (informational).
+// DiagSeverity indicates the severity level of a diagnostic finding.
 type DiagSeverity int
 
 const (
@@ -161,13 +161,30 @@ const (
 	SeverityError DiagSeverity = iota
 	// SeverityWarning is an informational issue that does not cause failure.
 	SeverityWarning
+	// SeveritySuggestion is a best-practice recommendation.
+	SeveritySuggestion
 )
+
+// String returns the lowercase name of the severity level.
+func (s DiagSeverity) String() string {
+	switch s {
+	case SeverityError:
+		return "error"
+	case SeverityWarning:
+		return "warning"
+	case SeveritySuggestion:
+		return "suggestion"
+	default:
+		return "unknown"
+	}
+}
 
 // Diagnostic represents a single validation finding with severity and location.
 type Diagnostic struct {
 	Severity DiagSeverity
 	Message  string
 	File     string // file path, if applicable
+	Rule     string // rule name that generated this diagnostic, if applicable
 }
 
 // TemperResult holds the outcome of a temper validation run.
@@ -208,6 +225,17 @@ func (r *TemperResult) Warnings() []Diagnostic {
 		}
 	}
 	return warnings
+}
+
+// Suggestions returns only suggestion-severity diagnostics.
+func (r *TemperResult) Suggestions() []Diagnostic {
+	var suggestions []Diagnostic
+	for _, d := range r.Diagnostics {
+		if d.Severity == SeveritySuggestion {
+			suggestions = append(suggestions, d)
+		}
+	}
+	return suggestions
 }
 
 // Temper validates a mold or ingot at the given filesystem root.
