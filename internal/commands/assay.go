@@ -18,7 +18,14 @@ var assayCmd = &cobra.Command{
 
 Validates rendered AI instruction files (CLAUDE.md, AGENTS.md, Cursor rules,
 Codex instructions, Copilot instructions, etc.) for structure, cross-references,
-and platform-specific schema correctness.`,
+and platform-specific schema correctness.
+
+Auto-detects platforms by file presence and applies platform-specific rules.
+Reports errors, warnings, and suggestions with three output formats (console,
+json, markdown) for terminal and CI use.
+
+Use --init to generate a starter .ailloyrc.yaml configuration file.
+Use --fail-on to control the exit code threshold for CI pipelines.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runAssay,
 }

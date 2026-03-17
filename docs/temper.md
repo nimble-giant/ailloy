@@ -1,8 +1,10 @@
 # Validation (`ailloy temper`)
 
-The `temper` command validates and lints mold and ingot packages. It checks manifest fields, file references, template syntax, and flux schema consistency — catching errors before you distribute your package.
+The `temper` command validates mold and ingot packages. It checks manifest fields, file references, template syntax, and flux schema consistency — catching errors before you distribute your package.
 
-Alias: `lint`
+Alias: `validate`
+
+> **Note:** To lint rendered AI instruction files (CLAUDE.md, AGENTS.md, Cursor rules, etc.), use [`ailloy assay`](assay.md) instead.
 
 ## Quick Start
 
@@ -14,7 +16,7 @@ ailloy temper ./my-mold
 ailloy temper ./my-ingot
 
 # Using the alias
-ailloy lint ./my-mold
+ailloy validate ./my-mold
 ```
 
 If no path is provided, the current directory is used:
