@@ -31,7 +31,8 @@ Ailloy is the best way to find, create, and share AI instruction packages. Like 
 | Preview | `ailloy forge` | `helm template` | Dry-run render of blanks with flux values |
 | Install | `ailloy cast` | `helm install` | Compile and install blanks into a project |
 | Package | `ailloy smelt` | `helm package` | Bundle a mold into a tarball or binary |
-| Validate | `ailloy temper` | `helm lint` | Lint mold structure, manifests, and templates |
+| Validate | `ailloy temper` | `helm lint` | Validate mold structure, manifests, and templates |
+| Lint | `ailloy assay` | — | Lint rendered AI instruction files against best practices |
 
 Ailloy works with any AI coding tool that supports file-based instructions — Claude Code, Cursor, Windsurf, GitHub Copilot, and [many others](https://agents.md). The `output:` mapping in `flux.yaml` determines where blanks are installed, making molds portable across tools.
 
@@ -157,9 +158,18 @@ Package a mold into a distributable format (alias: `package`):
 - `-o, --output-format`: Output format: `tar` (default) or `binary`
 - `--output dir`: Output directory (default: current directory)
 
+### `ailloy assay [path]`
+
+Lint rendered AI instruction files against best practices (alias: `lint`):
+
+- Auto-detects CLAUDE.md, AGENTS.md, Cursor rules, Copilot instructions, and more
+- Checks content quality, cross-references, and platform-specific schema validation
+- Supports `--format json|markdown` for CI, `--fail-on warning|suggestion` for exit code control
+- Configure via `.ailloyrc.yaml` — generate a starter config with `--init`
+
 ### `ailloy temper [path]`
 
-Validate and lint a mold or ingot package (alias: `lint`):
+Validate a mold or ingot package (alias: `validate`):
 
 - Checks structural integrity, manifest fields, file references, template syntax, and flux schema consistency
 - Reports errors (blocking) and warnings (informational)

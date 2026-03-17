@@ -81,14 +81,24 @@ ailloy cast ./my-mold -f team-values.yaml --set project.organization=acme
 ailloy install ./my-mold -f team-values.yaml --set project.organization=acme
 ```
 
-### Lint a package
+### Validate a package
 
 ```bash
 # Ailloy-native
 ailloy temper ./my-mold
 
 # Helm alias
-ailloy lint ./my-mold
+ailloy validate ./my-mold
+```
+
+### Lint AI instruction files
+
+```bash
+# Lint rendered instruction files (CLAUDE.md, AGENTS.md, etc.)
+ailloy assay
+
+# Using the alias
+ailloy lint
 ```
 
 ### Package a mold for distribution
@@ -213,15 +223,17 @@ helm install my-release ./my-chart --set service.port=8080
 ailloy cast ./my-mold --set project.organization=acme
 ```
 
-### Packaging and linting
+### Packaging and validation
 
 Same two-step validation-then-package workflow:
 
 ```bash
-# Helm                              # Ailloy (native)       # Ailloy (alias)
-helm lint ./my-chart                ailloy temper ./my-mold  ailloy lint ./my-mold
-helm package ./my-chart             ailloy smelt ./my-mold   ailloy package ./my-mold
+# Helm                              # Ailloy (native)         # Ailloy (alias)
+helm lint ./my-chart                ailloy temper ./my-mold    ailloy validate ./my-mold
+helm package ./my-chart             ailloy smelt ./my-mold     ailloy package ./my-mold
 ```
+
+> **Note:** `ailloy lint` now invokes `ailloy assay`, which lints rendered AI instruction files. To validate mold/ingot packages (the Helm `lint` equivalent), use `ailloy temper` or `ailloy validate`.
 
 ### Dependencies and lock files
 
@@ -341,8 +353,11 @@ ailloy cast ./my-mold             # or: ailloy install ./my-mold
 ailloy cast github.com/org/mold@v1.0.0 -f vals.yaml --set key=value
 ailloy install github.com/org/mold@v1.0.0 -f vals.yaml --set key=value
 
-# Validate
-ailloy temper ./my-mold           # or: ailloy lint ./my-mold
+# Validate mold/ingot packages
+ailloy temper ./my-mold           # or: ailloy validate ./my-mold
+
+# Lint AI instruction files
+ailloy assay                      # or: ailloy lint
 
 # Package
 ailloy smelt ./my-mold            # or: ailloy package ./my-mold
