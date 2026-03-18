@@ -183,8 +183,10 @@ func (s DiagSeverity) String() string {
 type Diagnostic struct {
 	Severity DiagSeverity
 	Message  string
-	File     string // file path, if applicable
-	Rule     string // rule name that generated this diagnostic, if applicable
+	Tip      string         // optional actionable suggestion shown below the message
+	File     string         // file path, if applicable
+	Rule     string         // rule name that generated this diagnostic, if applicable
+	FixData  map[string]any // structured data for auto-fix handlers; nil if not auto-fixable
 }
 
 // TemperResult holds the outcome of a temper validation run.

@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/nimble-giant/ailloy/pkg/assay"
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -151,10 +152,38 @@ func runAssay(_ *cobra.Command, args []string) error {
 	fmt.Println(styles.SuccessStyle.Render(fmt.Sprintf("%d error(s), %d warning(s), %d suggestion(s)",
 		errors, warnings, suggestions)))
 
-	// Handle --fix
-	if assayFix && len(result.Diagnostics) > 0 {
-		fmt.Println()
-		fmt.Println(styles.InfoStyle.Render("Auto-fix is not yet implemented for any rules."))
+	// Handle --fix: collect unknown frontmatter fields from all command-frontmatter diagnostics
+	// and add them to extra-allowed-fields in .ailloyrc.yaml.
+	if assayFix {
+		var fieldsToAllow []string
+		seen := make(map[string]bool)
+		for _, d := range result.Diagnostics {
+			if d.Rule != "command-frontmatter" || d.FixData == nil {
+				continue
+			}
+			if fields, ok := d.FixData["fields"].([]string); ok {
+				for _, f := range fields {
+					if !seen[f] {
+						seen[f] = true
+						fieldsToAllow = append(fieldsToAllow, f)
+					}
+				}
+			}
+		}
+		if len(fieldsToAllow) == 0 {
+			fmt.Println()
+			fmt.Println(styles.InfoStyle.Render("Nothing to fix automatically."))
+		} else {
+			fmt.Println()
+			added, fixErr := assay.AddAllowedFrontmatterFields(rootDir, fieldsToAllow)
+			if fixErr != nil {
+				fmt.Println(styles.ErrorStyle.Render("fix: ") + fixErr.Error())
+			} else if len(added) > 0 {
+				fmt.Println(styles.SuccessStyle.Render("Fixed: added to extra-allowed-fields: ") +
+					styles.CodeStyle.Render(strings.Join(added, ", ")))
+				fmt.Println(styles.SubtleStyle.Render("Saved to .ailloyrc.yaml — re-run lint to confirm"))
+			}
+		}
 	}
 
 	return nil

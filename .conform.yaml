@@ -23,3 +23,5 @@ policies:
           - build
           - revert
           - release
+        scopes:
+          - assay

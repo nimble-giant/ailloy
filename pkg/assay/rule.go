@@ -24,9 +24,10 @@ func AllPlatforms() []Platform {
 
 // DetectedFile represents a discovered AI instruction file.
 type DetectedFile struct {
-	Path     string
-	Platform Platform
-	Content  []byte
+	Path      string
+	Platform  Platform
+	Content   []byte
+	PluginDir string // non-empty if the file belongs to a Claude plugin directory
 }
 
 // RuleContext is passed to each rule, providing the full scan context.

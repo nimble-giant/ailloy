@@ -3,6 +3,7 @@ package assay
 import (
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/goccy/go-yaml"
 )
@@ -94,6 +95,71 @@ func DefaultConfig() *Config {
 	return &Config{}
 }
 
+// AddAllowedFrontmatterFields merges fields into command-frontmatter.options.extra-allowed-fields
+// in the project's .ailloyrc.yaml (creating the file with starter defaults if absent).
+// Returns the (possibly unchanged) set of all allowed fields after the update and a flag
+// indicating whether the file was modified.
+func AddAllowedFrontmatterFields(rootDir string, fields []string) (added []string, err error) {
+	cfgPath := filepath.Join(rootDir, ".ailloyrc.yaml")
+
+	// Load or bootstrap config
+	cfg, loadErr := LoadConfig(rootDir)
+	if loadErr != nil {
+		return nil, loadErr
+	}
+	if cfg.Rules == nil {
+		cfg.Rules = make(map[string]RuleConfig)
+	}
+
+	rc := cfg.Rules["command-frontmatter"]
+	if rc.Options == nil {
+		rc.Options = make(map[string]any)
+	}
+
+	// Merge existing + new fields, deduplicating
+	existing := make(map[string]bool)
+	if cur, ok := rc.Options["extra-allowed-fields"].([]any); ok {
+		for _, v := range cur {
+			if s, ok := v.(string); ok {
+				existing[s] = true
+			}
+		}
+	}
+	for _, f := range fields {
+		if !existing[f] {
+			existing[f] = true
+			added = append(added, f)
+		}
+	}
+	if len(added) == 0 {
+		return nil, nil // nothing new
+	}
+
+	// Rebuild sorted slice
+	merged := make([]string, 0, len(existing))
+	for k := range existing {
+		merged = append(merged, k)
+	}
+	sort.Strings(merged)
+
+	// Convert to []any for YAML marshal
+	mergedAny := make([]any, len(merged))
+	for i, v := range merged {
+		mergedAny[i] = v
+	}
+	rc.Options["extra-allowed-fields"] = mergedAny
+	cfg.Rules["command-frontmatter"] = rc
+
+	data, err := yaml.Marshal(ailloyRC{Assay: *cfg})
+	if err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(cfgPath, data, 0644); err != nil { //#nosec G306
+		return nil, err
+	}
+	return added, nil
+}
+
 // GenerateStarterConfig returns a starter .ailloyrc.yaml content.
 func GenerateStarterConfig() string {
 	return `# Ailloy configuration file
@@ -121,7 +187,13 @@ assay:
       enabled: true
     command-frontmatter:
       enabled: true
+      # options:
+      #   extra-allowed-fields: [topic, source, created, updated, tags]  # suppress warnings for custom metadata fields
     settings-schema:
+      enabled: true
+    plugin-manifest:
+      enabled: true
+    plugin-hooks:
       enabled: true
   ignore: []
     # - "vendor/**"

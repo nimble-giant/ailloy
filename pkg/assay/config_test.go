@@ -107,6 +107,92 @@ func TestGenerateStarterConfig(t *testing.T) {
 	if !contains(content, "assay:") {
 		t.Error("expected 'assay:' section in starter config")
 	}
+	if !contains(content, "plugin-manifest:") {
+		t.Error("expected 'plugin-manifest' rule in starter config")
+	}
+	if !contains(content, "plugin-hooks:") {
+		t.Error("expected 'plugin-hooks' rule in starter config")
+	}
+}
+
+func TestAddAllowedFrontmatterFields(t *testing.T) {
+	t.Run("creates config and adds fields", func(t *testing.T) {
+		dir := t.TempDir()
+		added, err := AddAllowedFrontmatterFields(dir, []string{"topic", "source", "tags"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(added) != 3 {
+			t.Errorf("expected 3 added fields, got %d: %v", len(added), added)
+		}
+
+		// Verify the config file was written and is readable.
+		cfg, err := LoadConfig(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		extras, ok := cfg.RuleOption("command-frontmatter", "extra-allowed-fields", nil).([]any)
+		if !ok || len(extras) != 3 {
+			t.Errorf("expected 3 extra-allowed-fields in saved config, got %v", extras)
+		}
+	})
+
+	t.Run("deduplicates fields already present", func(t *testing.T) {
+		dir := t.TempDir()
+		// First call
+		if _, err := AddAllowedFrontmatterFields(dir, []string{"topic", "source"}); err != nil {
+			t.Fatal(err)
+		}
+		// Second call adds one new + one duplicate
+		added, err := AddAllowedFrontmatterFields(dir, []string{"source", "tags"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(added) != 1 || added[0] != "tags" {
+			t.Errorf("expected only 'tags' to be newly added, got %v", added)
+		}
+
+		cfg, err := LoadConfig(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		extras, _ := cfg.RuleOption("command-frontmatter", "extra-allowed-fields", nil).([]any)
+		if len(extras) != 3 {
+			t.Errorf("expected 3 total fields after merge, got %d: %v", len(extras), extras)
+		}
+	})
+
+	t.Run("returns nil added when all fields already present", func(t *testing.T) {
+		dir := t.TempDir()
+		if _, err := AddAllowedFrontmatterFields(dir, []string{"topic"}); err != nil {
+			t.Fatal(err)
+		}
+		added, err := AddAllowedFrontmatterFields(dir, []string{"topic"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(added) != 0 {
+			t.Errorf("expected no new fields, got %v", added)
+		}
+	})
+
+	t.Run("fields are sorted in written config", func(t *testing.T) {
+		dir := t.TempDir()
+		if _, err := AddAllowedFrontmatterFields(dir, []string{"zzz", "aaa", "mmm"}); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := LoadConfig(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		extras, _ := cfg.RuleOption("command-frontmatter", "extra-allowed-fields", nil).([]any)
+		if len(extras) < 3 {
+			t.Fatal("expected 3 fields")
+		}
+		if extras[0].(string) != "aaa" || extras[1].(string) != "mmm" || extras[2].(string) != "zzz" {
+			t.Errorf("expected sorted fields [aaa mmm zzz], got %v", extras)
+		}
+	})
 }
 
 func contains(s, substr string) bool {

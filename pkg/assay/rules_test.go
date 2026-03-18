@@ -56,6 +56,8 @@ func TestStructureRule(t *testing.T) {
 		{"no headings", "Just plain text\nAnother line\n", true},
 		{"empty file", "", false}, // handled by emptyFileRule
 		{"h2 heading", "## Section\nContent\n", false},
+		{"heading after frontmatter", "---\ntopic: foo\ncreated: 2026-03-12\n---\n\n# Title\nContent\n", false},
+		{"no heading after frontmatter", "---\ntopic: foo\n---\n\nJust text.\n", true},
 	}
 
 	for _, tt := range tests {
@@ -98,6 +100,14 @@ func TestAgentsMDPresenceRule(t *testing.T) {
 			true,
 		},
 		{
+			"no AGENTS.md and CLAUDE.md present — smart tip",
+			[]DetectedFile{
+				{Path: "CLAUDE.md", Platform: PlatformClaude},
+				{Path: ".cursor/rules/style.md", Platform: PlatformCursor},
+			},
+			true,
+		},
+		{
 			"only generic files",
 			[]DetectedFile{
 				{Path: "AGENTS.md", Platform: PlatformGeneric},
@@ -119,6 +129,46 @@ func TestAgentsMDPresenceRule(t *testing.T) {
 			}
 		})
 	}
+
+	// When CLAUDE.md is present the tip should mention it specifically.
+	t.Run("tip mentions CLAUDE.md path", func(t *testing.T) {
+		ctx := &RuleContext{
+			Files: []DetectedFile{
+				{Path: "CLAUDE.md", Platform: PlatformClaude},
+			},
+			Config: DefaultConfig(),
+		}
+		diags := (&agentsMDPresenceRule{}).Check(ctx)
+		if len(diags) == 0 {
+			t.Fatal("expected diagnostic")
+		}
+		if diags[0].Tip == "" {
+			t.Error("expected non-empty tip")
+		}
+		if !containsSubstr(diags[0].Tip, "CLAUDE.md") {
+			t.Errorf("expected tip to mention CLAUDE.md, got: %s", diags[0].Tip)
+		}
+		if !containsSubstr(diags[0].Tip, "@AGENTS.md") {
+			t.Errorf("expected tip to mention @AGENTS.md, got: %s", diags[0].Tip)
+		}
+	})
+
+	// Without CLAUDE.md the generic tip should be used instead.
+	t.Run("generic tip without CLAUDE.md", func(t *testing.T) {
+		ctx := &RuleContext{
+			Files: []DetectedFile{
+				{Path: ".cursor/rules/style.md", Platform: PlatformCursor},
+			},
+			Config: DefaultConfig(),
+		}
+		diags := (&agentsMDPresenceRule{}).Check(ctx)
+		if len(diags) == 0 {
+			t.Fatal("expected diagnostic")
+		}
+		if containsSubstr(diags[0].Tip, "CLAUDE.md") {
+			t.Errorf("generic tip should not mention CLAUDE.md, got: %s", diags[0].Tip)
+		}
+	})
 }
 
 func TestCrossReferenceRule(t *testing.T) {
@@ -346,24 +396,30 @@ func TestAgentFrontmatterRule(t *testing.T) {
 
 func TestCommandFrontmatterRule(t *testing.T) {
 	tests := []struct {
-		name     string
-		content  string
-		wantDiag bool
+		name      string
+		content   string
+		wantDiag  bool
+		wantCount int // expected number of diagnostics (0 means unchecked)
 	}{
 		{
 			"valid frontmatter",
 			"---\nallowed-tools: [Read, Write]\nmodel: sonnet\n---\n# Command\n",
-			false,
+			false, 0,
 		},
 		{
 			"unknown field",
 			"---\nunknown-field: value\n---\n# Command\n",
-			true,
+			true, 1, // multiple unknown fields → single diagnostic
+		},
+		{
+			"multiple unknown fields collapsed",
+			"---\ntopic: foo\nsource: bar\ncreated: 2026-01-01\n---\n# Command\n",
+			true, 1, // three unknown fields → still one diagnostic
 		},
 		{
 			"no frontmatter",
 			"# Command\nJust content\n",
-			false,
+			false, 0,
 		},
 	}
 
@@ -385,7 +441,118 @@ func TestCommandFrontmatterRule(t *testing.T) {
 			if !tt.wantDiag && len(diags) > 0 {
 				t.Errorf("expected no diagnostic, got: %v", diags)
 			}
+			if tt.wantCount > 0 && len(diags) != tt.wantCount {
+				t.Errorf("expected %d diagnostic(s), got %d: %v", tt.wantCount, len(diags), diags)
+			}
 		})
+	}
+}
+
+func TestCommandFrontmatterRule_FixData(t *testing.T) {
+	ctx := &RuleContext{
+		Files: []DetectedFile{{
+			Path:     ".claude/commands/test.md",
+			Platform: PlatformClaude,
+			Content:  []byte("---\ntopic: foo\ncreated: 2026-01-01\n---\n# Cmd\n"),
+		}},
+		Config: DefaultConfig(),
+	}
+	diags := (&commandFrontmatterRule{}).Check(ctx)
+	if len(diags) == 0 {
+		t.Fatal("expected diagnostic")
+	}
+	d := diags[0]
+	if d.FixData == nil {
+		t.Fatal("expected FixData to be set")
+	}
+	fields, ok := d.FixData["fields"].([]string)
+	if !ok {
+		t.Fatalf("expected FixData[\"fields\"] to be []string, got %T", d.FixData["fields"])
+	}
+	if len(fields) != 2 {
+		t.Errorf("expected 2 unknown fields, got %d: %v", len(fields), fields)
+	}
+	// Tip should mention both --fix shortcut and manual command
+	if !containsSubstr(d.Tip, "lint --fix") {
+		t.Errorf("tip should mention 'lint --fix', got: %s", d.Tip)
+	}
+	if !containsSubstr(d.Tip, "config allow-fields") {
+		t.Errorf("tip should mention 'config allow-fields', got: %s", d.Tip)
+	}
+}
+
+func TestCommandFrontmatterRule_MultilineDescription(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		wantErr bool
+	}{
+		{
+			"single-line description — ok",
+			"---\nname: my-skill\ndescription: Does a thing.\n---\n# Skill\n",
+			false,
+		},
+		{
+			"multiline description (indented block) — error",
+			"---\nname: my-skill\ndescription:\n  Does a thing\n  spanning two lines.\n---\n# Skill\n",
+			true,
+		},
+		{
+			"multiline name — error",
+			"---\nname:\n  my-skill\ndescription: fine\n---\n# Skill\n",
+			true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:     ".claude/commands/test.md",
+					Platform: PlatformClaude,
+					Content:  []byte(c.content),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&commandFrontmatterRule{}).Check(ctx)
+			var hasErr bool
+			for _, d := range diags {
+				if d.Severity == mold.SeverityError && containsSubstr(d.Message, "single-line") {
+					hasErr = true
+				}
+			}
+			if c.wantErr && !hasErr {
+				t.Error("expected multiline error diagnostic, got none")
+			}
+			if !c.wantErr && hasErr {
+				t.Error("expected no multiline error diagnostic, got one")
+			}
+		})
+	}
+}
+
+func TestCommandFrontmatterRule_ExtraAllowedFields(t *testing.T) {
+	enabled := true
+	ctx := &RuleContext{
+		Files: []DetectedFile{{
+			Path:     ".claude/commands/test.md",
+			Platform: PlatformClaude,
+			Content:  []byte("---\ntopic: foo\nsource: bar\ntags: [a,b]\n---\n# Cmd\n"),
+		}},
+		Config: &Config{
+			Rules: map[string]RuleConfig{
+				"command-frontmatter": {
+					Enabled: &enabled,
+					Options: map[string]any{
+						"extra-allowed-fields": []any{"topic", "source", "tags"},
+					},
+				},
+			},
+		},
+	}
+	rule := &commandFrontmatterRule{}
+	diags := rule.Check(ctx)
+	if len(diags) != 0 {
+		t.Errorf("expected no diagnostics with extra-allowed-fields, got: %v", diags)
 	}
 }
 
