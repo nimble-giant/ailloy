@@ -42,6 +42,7 @@ ailloy lint
 | `settings-schema` | Error | `.claude/settings.json` has invalid JSON or unknown hook event types |
 | `plugin-manifest` | Error | `.claude-plugin/plugin.json` is invalid JSON or missing required fields (`name`, `version`, `description`) |
 | `plugin-hooks` | Error/Warning | Plugin `hooks/*.json` is invalid JSON, missing the `hooks` array, or contains hook entries without required `name`/`event` fields |
+| `description-length` | Warning | Description field exceeds 100 characters (configurable); long descriptions are truncated or ignored by AI tools |
 
 ## Claude Plugin Directory Support
 
@@ -52,10 +53,10 @@ For each plugin found, assay scans and applies rules to:
 | Subdirectory | File type | Rules applied |
 |---|---|---|
 | `.claude-plugin/plugin.json` | JSON | `plugin-manifest` |
-| `commands/**` | `.md` | `command-frontmatter`, content rules |
-| `skills/**` | `.md` | `command-frontmatter`, content rules |
+| `commands/**` | `.md` | `command-frontmatter`, `description-length`, content rules |
+| `skills/**` | `.md` | `command-frontmatter`, `description-length`, content rules |
 | `rules/**` | `.md` | content rules (`structure`, `line-count`, `empty-file`, …) |
-| `agents/**` | `.yml` / `.yaml` | `agent-frontmatter` |
+| `agents/**` | `.yml` / `.yaml` | `agent-frontmatter`, `description-length` |
 | `hooks/**` | `.json` | `plugin-hooks` |
 
 All subdirectories are scanned recursively.
@@ -172,6 +173,10 @@ assay:
       enabled: false         # suppress this suggestion
     duplicate-topics:
       enabled: true
+    description-length:
+      enabled: true
+      options:
+        max-length: 100      # override default 100
   ignore:
     - "vendor/**"
     - ".claude/rules/generated-*.md"

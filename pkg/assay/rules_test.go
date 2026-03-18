@@ -556,6 +556,103 @@ func TestCommandFrontmatterRule_ExtraAllowedFields(t *testing.T) {
 	}
 }
 
+func TestDescriptionLengthRule(t *testing.T) {
+	shortDesc := "Does things"
+	longDesc := strings.Repeat("a", 101) // 101 chars, over default 100
+
+	tests := []struct {
+		name     string
+		files    []DetectedFile
+		maxLen   int
+		wantDiag bool
+	}{
+		{
+			"short agent description",
+			[]DetectedFile{{
+				Path:     ".claude/agents/test.yml",
+				Platform: PlatformClaude,
+				Content:  []byte("name: test\ndescription: " + shortDesc + "\n"),
+			}},
+			0, false,
+		},
+		{
+			"long agent description",
+			[]DetectedFile{{
+				Path:     ".claude/agents/test.yml",
+				Platform: PlatformClaude,
+				Content:  []byte("name: test\ndescription: " + longDesc + "\n"),
+			}},
+			0, true,
+		},
+		{
+			"short command description",
+			[]DetectedFile{{
+				Path:     ".claude/commands/test.md",
+				Platform: PlatformClaude,
+				Content:  []byte("---\ndescription: " + shortDesc + "\n---\n# Cmd\n"),
+			}},
+			0, false,
+		},
+		{
+			"long command description",
+			[]DetectedFile{{
+				Path:     ".claude/commands/test.md",
+				Platform: PlatformClaude,
+				Content:  []byte("---\ndescription: " + longDesc + "\n---\n# Cmd\n"),
+			}},
+			0, true,
+		},
+		{
+			"custom max-length",
+			[]DetectedFile{{
+				Path:     ".claude/agents/test.yml",
+				Platform: PlatformClaude,
+				Content:  []byte("name: test\ndescription: " + longDesc + "\n"),
+			}},
+			200, false,
+		},
+		{
+			"no description field — no warning",
+			[]DetectedFile{{
+				Path:     ".claude/agents/test.yml",
+				Platform: PlatformClaude,
+				Content:  []byte("name: test\n"),
+			}},
+			0, false,
+		},
+		{
+			"long plugin manifest description",
+			[]DetectedFile{{
+				Path:      "plugins/my-plugin/.claude-plugin/plugin.json",
+				Platform:  PlatformClaude,
+				PluginDir: "plugins/my-plugin",
+				Content:   []byte(`{"name":"test","version":"1.0","description":"` + longDesc + `"}`),
+			}},
+			0, true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			if tt.maxLen > 0 {
+				cfg.Rules = map[string]RuleConfig{
+					"description-length": {Options: map[string]any{"max-length": tt.maxLen}},
+				}
+			}
+			ctx := &RuleContext{Files: tt.files, Config: cfg}
+			rule := &descriptionLengthRule{}
+			diags := rule.Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
 func TestSettingsSchemaRule(t *testing.T) {
 	tests := []struct {
 		name     string
