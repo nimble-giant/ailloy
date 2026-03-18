@@ -93,6 +93,34 @@ Plugin structure is valid!
   ✓ README documentation present
 ```
 
+## Linting a Plugin
+
+Use `ailloy assay` to lint a plugin's commands, agents, and manifest for correctness:
+
+```bash
+# Lint the current plugin directory
+ailloy assay
+
+# Lint a specific plugin directory
+ailloy assay ./my-plugin
+
+# Lint an entire plugin marketplace
+ailloy assay ./marketplace
+```
+
+Assay automatically recognises any directory containing a `.claude-plugin/plugin.json` manifest and applies rules to all plugin subdirectories:
+
+| Subdirectory | Rule(s) applied |
+|---|---|
+| `.claude-plugin/plugin.json` | `plugin-manifest` — required fields `name`, `version`, `description` |
+| `commands/**/*.md` | `command-frontmatter` — valid frontmatter fields only |
+| `skills/**/*.md` | `command-frontmatter` — same frontmatter schema as commands |
+| `rules/**/*.md` | content rules — structure, line-count, empty-file |
+| `agents/**/*.yml` | `agent-frontmatter` — required `name` field |
+| `hooks/**/*.json` | `plugin-hooks` — valid JSON, `hooks` array, required `name`/`event` per entry |
+
+All subdirectories are scanned recursively. When linting a marketplace with many plugins, a single `ailloy assay` pass detects and validates all of them.
+
 ## Testing a Plugin Locally
 
 After generating a plugin, test it with Claude Code:

@@ -2,6 +2,7 @@ package assay
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -80,6 +81,21 @@ func Assay(rootDir string, cfg *Config) (*AssayResult, error) {
 
 	// Also detect Claude schema files (agents, commands, settings)
 	schemaFiles := detectClaudeSchemaFilesFS(rootDir)
+
+	// Detect Claude plugin directories
+	pluginFiles := detectPluginFiles(rootDir)
+	for _, pf := range pluginFiles {
+		found := false
+		for _, f := range files {
+			if f.Path == pf.Path {
+				found = true
+				break
+			}
+		}
+		if !found {
+			files = append(files, pf)
+		}
+	}
 	for _, path := range schemaFiles {
 		// Skip if already detected
 		found := false
@@ -180,6 +196,89 @@ func detectClaudeSchemaFilesFS(rootDir string) []string {
 		}
 	}
 	return paths
+}
+
+// detectPluginFiles walks rootDir looking for Claude plugin directories
+// (identified by a .claude-plugin/plugin.json manifest) and returns all
+// relevant files (manifest, commands, agents) as DetectedFile entries with
+// PluginDir set to the plugin's root directory relative to rootDir.
+func detectPluginFiles(rootDir string) []DetectedFile {
+	var files []DetectedFile
+
+	err := filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if name == "node_modules" || name == "vendor" || name == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// Locate .claude-plugin/plugin.json to identify a plugin root
+		if d.Name() == "plugin.json" && filepath.Base(filepath.Dir(path)) == ".claude-plugin" {
+			pluginRoot := filepath.Dir(filepath.Dir(path))
+			pluginDirRel, err := filepath.Rel(rootDir, pluginRoot)
+			if err != nil {
+				return nil
+			}
+
+			// Include the manifest itself
+			manifestRel, _ := filepath.Rel(rootDir, path)
+			if content, err := os.ReadFile(path); err == nil { //#nosec G304 G122
+				files = append(files, DetectedFile{
+					Path:      manifestRel,
+					Platform:  PlatformClaude,
+					Content:   content,
+					PluginDir: pluginDirRel,
+				})
+			}
+
+			// Include all lintable plugin subdirectories
+			addPluginSubdirFiles(rootDir, pluginRoot, pluginDirRel, "commands", []string{".md"}, &files)
+			addPluginSubdirFiles(rootDir, pluginRoot, pluginDirRel, "skills", []string{".md"}, &files)
+			addPluginSubdirFiles(rootDir, pluginRoot, pluginDirRel, "rules", []string{".md"}, &files)
+			addPluginSubdirFiles(rootDir, pluginRoot, pluginDirRel, "agents", []string{".yml", ".yaml"}, &files)
+			addPluginSubdirFiles(rootDir, pluginRoot, pluginDirRel, "hooks", []string{".json"}, &files)
+		}
+		return nil
+	})
+	_ = err
+	return files
+}
+
+// addPluginSubdirFiles recursively appends files from a plugin sub-directory.
+func addPluginSubdirFiles(rootDir, pluginRoot, pluginDirRel, subdir string, exts []string, files *[]DetectedFile) {
+	subdirPath := filepath.Join(pluginRoot, subdir)
+	extSet := make(map[string]bool, len(exts))
+	for _, ext := range exts {
+		extSet[ext] = true
+	}
+
+	_ = filepath.WalkDir(subdirPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if !extSet[filepath.Ext(path)] {
+			return nil
+		}
+		rel, err := filepath.Rel(rootDir, path)
+		if err != nil {
+			return nil
+		}
+		content, err := os.ReadFile(path) //#nosec G304 G122
+		if err != nil {
+			return nil
+		}
+		*files = append(*files, DetectedFile{
+			Path:      rel,
+			Platform:  PlatformClaude,
+			Content:   content,
+			PluginDir: pluginDirRel,
+		})
+		return nil
+	})
 }
 
 // filterIgnored removes files matching any of the ignore glob patterns.

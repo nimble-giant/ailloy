@@ -15,7 +15,7 @@ import (
 
 const maxInt = int(math.MaxInt)
 
-var headingRegex = regexp.MustCompile(`^#{1,6}\s+`)
+var headingRegex = regexp.MustCompile(`(?m)^#{1,6}\s+`)
 
 func init() {
 	Register(&lineCountRule{})
@@ -105,20 +105,35 @@ func (r *agentsMDPresenceRule) Platforms() []Platform              { return nil 
 func (r *agentsMDPresenceRule) Check(ctx *RuleContext) []mold.Diagnostic {
 	hasAgentsMD := false
 	hasPlatformFiles := false
+	var claudeMDPath string
 
 	for _, f := range ctx.Files {
-		if filepath.Base(f.Path) == "AGENTS.md" {
+		base := filepath.Base(f.Path)
+		if base == "AGENTS.md" {
 			hasAgentsMD = true
 		}
 		if f.Platform != PlatformGeneric {
 			hasPlatformFiles = true
 		}
+		if base == "CLAUDE.md" && claudeMDPath == "" {
+			claudeMDPath = f.Path
+		}
 	}
 
 	if hasPlatformFiles && !hasAgentsMD {
+		var tip string
+		if claudeMDPath != "" {
+			tip = fmt.Sprintf(
+				"move shared instructions to AGENTS.md and replace the body of %s with @AGENTS.md — "+
+					"Claude Code will still import the file, and other agents will pick it up natively",
+				claudeMDPath)
+		} else {
+			tip = "create AGENTS.md with your shared AI instructions; all agents (Claude, Codex, etc.) read it natively"
+		}
 		return []mold.Diagnostic{{
 			Severity: r.DefaultSeverity(),
 			Message:  "project has platform-specific AI instruction files but no AGENTS.md; consider creating one for cross-platform compatibility",
+			Tip:      tip,
 			Rule:     r.Name(),
 		}}
 	}
@@ -303,6 +318,7 @@ func (r *duplicateTopicsRule) Check(ctx *RuleContext) []mold.Diagnostic {
 				Message: fmt.Sprintf(
 					"heading %q has similar content in multiple files — consider centralizing: %s",
 					heading, strings.Join(similarFiles, ", ")),
+				Tip:  "extract the shared content into a dedicated .md file and reference it with @path/to/file.md in each instruction file",
 				Rule: r.Name(),
 			})
 		}

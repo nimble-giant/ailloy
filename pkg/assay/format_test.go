@@ -21,14 +21,14 @@ func TestConsoleFormatter(t *testing.T) {
 	f := &ConsoleFormatter{}
 	output := f.Format(result)
 
-	if !strings.Contains(output, "ERROR:") {
-		t.Error("expected ERROR: in output")
+	if !strings.Contains(output, "ERROR") {
+		t.Error("expected ERROR in output")
 	}
-	if !strings.Contains(output, "WARNING:") {
-		t.Error("expected WARNING: in output")
+	if !strings.Contains(output, "WARN") {
+		t.Error("expected WARN in output")
 	}
-	if !strings.Contains(output, "SUGGESTION:") {
-		t.Error("expected SUGGESTION: in output")
+	if !strings.Contains(output, "HINT") {
+		t.Error("expected HINT in output")
 	}
 }
 

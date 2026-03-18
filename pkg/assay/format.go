@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 )
@@ -26,30 +27,89 @@ func NewFormatter(format string) Formatter {
 	}
 }
 
-// ConsoleFormatter renders diagnostics with styled terminal output.
+// ConsoleFormatter renders diagnostics grouped by rule with educational rationale headers.
 type ConsoleFormatter struct{}
 
+var (
+	tipStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Italic(true)
+	rationaleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#aaaaaa")).Italic(true)
+	ruleHeaderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#9b72cf")).Bold(true)
+	separatorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#444444"))
+)
+
+// diagGroup preserves insertion order while grouping diagnostics by rule.
+type diagGroup struct {
+	rule  string
+	diags []mold.Diagnostic
+}
+
 func (f *ConsoleFormatter) Format(result *AssayResult) string {
-	var b strings.Builder
-
+	// Group diagnostics by rule, preserving first-seen order.
+	var groups []diagGroup
+	index := map[string]int{}
 	for _, d := range result.Diagnostics {
-		loc := ""
-		if d.File != "" {
-			loc = styles.SubtleStyle.Render(d.File + ": ") //nolint:goconst
+		key := d.Rule
+		if key == "" {
+			key = "_"
 		}
+		if i, ok := index[key]; ok {
+			groups[i].diags = append(groups[i].diags, d)
+		} else {
+			index[key] = len(groups)
+			groups = append(groups, diagGroup{rule: key, diags: []mold.Diagnostic{d}})
+		}
+	}
 
-		switch d.Severity {
-		case mold.SeverityError:
-			b.WriteString(styles.ErrorStyle.Render("ERROR: ") + loc + d.Message)
-		case mold.SeverityWarning:
-			b.WriteString(styles.WarningStyle.Render("WARNING: ") + loc + d.Message)
-		case mold.SeveritySuggestion:
-			b.WriteString(styles.InfoStyle.Render("SUGGESTION: ") + loc + d.Message)
+	var b strings.Builder
+	for _, g := range groups {
+		// ── rule-name ──────────────────────────────────────────
+		ruleName := g.rule
+		if ruleName == "_" {
+			ruleName = "general"
+		}
+		header := ruleHeaderStyle.Render(ruleName)
+		sep := separatorStyle.Render(strings.Repeat("─", max(0, 72-len(ruleName)-4)))
+		b.WriteString("── " + header + " " + sep + "\n")
+
+		// Rationale (if defined)
+		if r := RuleRationale(g.rule); r != "" {
+			b.WriteString(rationaleStyle.Render("   "+r) + "\n")
 		}
 		b.WriteString("\n")
+
+		// Diagnostics
+		for _, d := range g.diags {
+			var badge string
+			switch d.Severity {
+			case mold.SeverityError:
+				badge = styles.ErrorStyle.Render("  ERROR  ")
+			case mold.SeverityWarning:
+				badge = styles.WarningStyle.Render("  WARN   ")
+			case mold.SeveritySuggestion:
+				badge = styles.InfoStyle.Render("  HINT   ")
+			}
+
+			if d.File != "" {
+				b.WriteString("   " + badge + "  " + styles.SubtleStyle.Render(d.File) + "\n")
+			} else {
+				b.WriteString("   " + badge + "\n")
+			}
+			b.WriteString("            " + d.Message + "\n")
+			if d.Tip != "" {
+				b.WriteString("            " + tipStyle.Render("💡 "+d.Tip) + "\n")
+			}
+			b.WriteString("\n")
+		}
 	}
 
 	return b.String()
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // JSONFormatter renders diagnostics as JSON.
@@ -58,6 +118,7 @@ type JSONFormatter struct{}
 type jsonDiagnostic struct {
 	Severity string `json:"severity"`
 	Message  string `json:"message"`
+	Tip      string `json:"tip,omitempty"`
 	File     string `json:"file,omitempty"`
 	Rule     string `json:"rule,omitempty"`
 }
@@ -76,6 +137,7 @@ func (f *JSONFormatter) Format(result *AssayResult) string {
 		out.Diagnostics = append(out.Diagnostics, jsonDiagnostic{
 			Severity: d.Severity.String(),
 			Message:  d.Message,
+			Tip:      d.Tip,
 			File:     d.File,
 			Rule:     d.Rule,
 		})
@@ -120,6 +182,9 @@ func (f *MarkdownFormatter) Format(result *AssayResult) string {
 				file = fmt.Sprintf("`%s`: ", d.File)
 			}
 			b.WriteString(fmt.Sprintf("- %s%s\n", file, d.Message))
+			if d.Tip != "" {
+				b.WriteString(fmt.Sprintf("  > 💡 %s\n", d.Tip))
+			}
 		}
 		b.WriteString("\n")
 	}
