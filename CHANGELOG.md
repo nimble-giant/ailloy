@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.6.9](https://github.com/nimble-giant/ailloy/compare/v0.6.8...v0.6.9) (2026-03-18)
+
+
+### Features
+
+* add Claude plugin directory support to assay lint ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+* **assay:** agents-md tip, ailloy config allow-fields, lint --fix ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+* **assay:** group console output by rule with educational rationale headers ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+* **assay:** structured multi-line console output with first-class tips ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+* extend plugin lint to cover skills, rules, and hooks ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+* make plugin file collection recursive for marketplace support ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+
+
+### Bug Fixes
+
+* **assay:** collapse unknown-frontmatter warnings and add extra-allowed-fields ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+* **assay:** correct CI failures in formatter test and multiline detection ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+* **assay:** detect multiline frontmatter fields that Claude Code rejects ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+* **assay:** structure rule false positive on files with frontmatter ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+* **assay:** suggest [@filepath](https://github.com/filepath) syntax in duplicate-topics diagnostic ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+* **assay:** suppress gosec G122 on existing nosec-annotated ReadFile calls ([ec38ed5](https://github.com/nimble-giant/ailloy/commit/ec38ed5118c2d7462594d42f4824f6fb88ee91cc))
+
 ## [0.6.8](https://github.com/nimble-giant/ailloy/compare/v0.6.7...v0.6.8) (2026-03-17)
 
 
