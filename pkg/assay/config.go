@@ -195,6 +195,10 @@ assay:
       enabled: true
     plugin-hooks:
       enabled: true
+    description-length:
+      enabled: true
+      options:
+        max-length: 100      # warn if description exceeds this many characters
   ignore: []
     # - "vendor/**"
     # - ".claude/rules/generated-*.md"

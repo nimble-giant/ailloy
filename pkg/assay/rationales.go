@@ -16,6 +16,7 @@ var ruleRationales = map[string]string{
 	"settings-schema":     "Unrecognized hook event types are silently skipped. A typo in an event name means your hook never fires, with no error to diagnose.",
 	"plugin-manifest":     "The plugin manifest is how Claude Code identifies, loads, and displays your plugin. Missing required fields prevent installation or cause silent failures.",
 	"plugin-hooks":        "Malformed hook definitions are silently ignored by the runtime. Hooks without name and event fields will never trigger.",
+	"description-length":  "AI tools truncate or ignore overly long descriptions. A concise description ensures your command, agent, or plugin is presented correctly in tool UIs and selection menus.",
 }
 
 // RuleRationale returns the educational rationale for a rule, or empty string if none is defined.

@@ -19,6 +19,7 @@ func init() {
 	Register(&settingsSchemaRule{})
 	Register(&pluginManifestRule{})
 	Register(&pluginHooksRule{})
+	Register(&descriptionLengthRule{})
 }
 
 // isUnderPluginSubdir returns true if path is at any depth under
@@ -355,6 +356,107 @@ func (r *pluginHooksRule) Check(ctx *RuleContext) []mold.Diagnostic {
 		}
 	}
 	return diags
+}
+
+// descriptionLengthRule warns when a description field is too long.
+type descriptionLengthRule struct{}
+
+func (r *descriptionLengthRule) Name() string                       { return "description-length" }
+func (r *descriptionLengthRule) DefaultSeverity() mold.DiagSeverity { return mold.SeverityWarning }
+func (r *descriptionLengthRule) Platforms() []Platform              { return []Platform{PlatformClaude} }
+
+const defaultMaxDescriptionLength = 100
+
+func (r *descriptionLengthRule) Check(ctx *RuleContext) []mold.Diagnostic {
+	maxLen := defaultMaxDescriptionLength
+	if v := ctx.Config.RuleOption(r.Name(), "max-length", nil); v != nil {
+		switch n := v.(type) {
+		case int:
+			maxLen = n
+		case uint64:
+			if n <= uint64(maxInt) {
+				maxLen = int(n)
+			}
+		case float64:
+			maxLen = int(n)
+		}
+	}
+
+	var diags []mold.Diagnostic
+	for _, f := range ctx.Files {
+		if f.Platform != PlatformClaude {
+			continue
+		}
+
+		var desc string
+		var matched bool
+
+		ext := filepath.Ext(f.Path)
+
+		switch {
+		// Agent YAML files
+		case (ext == ".yml" || ext == ".yaml") && r.isAgentFile(f):
+			var agent map[string]any
+			if err := yaml.Unmarshal(f.Content, &agent); err != nil {
+				continue
+			}
+			if d, ok := agent["description"].(string); ok {
+				desc = d
+				matched = true
+			}
+
+		// Command/skill markdown files with frontmatter
+		case ext == ".md" && r.isCommandOrSkillFile(f):
+			frontmatter := extractFrontmatter(f.Content)
+			if frontmatter == nil {
+				continue
+			}
+			var fm map[string]any
+			if err := yaml.Unmarshal(frontmatter, &fm); err != nil {
+				continue
+			}
+			if d, ok := fm["description"].(string); ok {
+				desc = d
+				matched = true
+			}
+
+		// Plugin manifest
+		case f.PluginDir != "" && ext == ".json" &&
+			f.Path == filepath.Join(f.PluginDir, ".claude-plugin", "plugin.json"):
+			var manifest map[string]any
+			if err := json.Unmarshal(f.Content, &manifest); err != nil {
+				continue
+			}
+			if d, ok := manifest["description"].(string); ok {
+				desc = d
+				matched = true
+			}
+		}
+
+		if matched && len(desc) > maxLen {
+			diags = append(diags, mold.Diagnostic{
+				Severity: r.DefaultSeverity(),
+				Message:  fmt.Sprintf("description is %d characters (max %d); long descriptions are truncated or ignored by AI tools", len(desc), maxLen),
+				Tip:      "keep descriptions concise — aim for a single short sentence",
+				File:     f.Path,
+				Rule:     r.Name(),
+			})
+		}
+	}
+	return diags
+}
+
+func (r *descriptionLengthRule) isAgentFile(f DetectedFile) bool {
+	dir := filepath.Dir(f.Path)
+	return dir == filepath.Join(".claude", "agents") ||
+		(f.PluginDir != "" && isUnderPluginSubdir(f.Path, f.PluginDir, "agents"))
+}
+
+func (r *descriptionLengthRule) isCommandOrSkillFile(f DetectedFile) bool {
+	dir := filepath.Dir(f.Path)
+	return dir == filepath.Join(".claude", "commands") ||
+		(f.PluginDir != "" && isUnderPluginSubdir(f.Path, f.PluginDir, "commands")) ||
+		(f.PluginDir != "" && isUnderPluginSubdir(f.Path, f.PluginDir, "skills"))
 }
 
 // isMultilineInRaw reports whether field has a block or folded value in raw YAML frontmatter.
