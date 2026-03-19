@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.10](https://github.com/nimble-giant/ailloy/compare/v0.6.9...v0.6.10) (2026-03-19)
+
+
+### Features
+
+* add 5 new skill lint rules and improve cross-platform support ([de5f5a8](https://github.com/nimble-giant/ailloy/commit/de5f5a83a7ee5a228d7a33a40e50324e60cdf7ef))
+* add description-length lint rule ([b65d605](https://github.com/nimble-giant/ailloy/commit/b65d605788d896da913ae14820f888d0a652bcc2))
+
 ## [0.6.9](https://github.com/nimble-giant/ailloy/compare/v0.6.8...v0.6.9) (2026-03-18)
 
 
