@@ -173,6 +173,9 @@ Validate a mold or ingot package (alias: `validate`):
 
 - Checks structural integrity, manifest fields, file references, template syntax, and flux schema consistency
 - Reports errors (blocking) and warnings (informational)
+- `--lint`: Also render blanks and run assay (lint) on the output — catches content issues before casting
+- `--set key=value`, `-f, --values file`: Provide flux values for rendering (same as forge/cast)
+- `--format`, `--fail-on`, `--max-lines`: Control assay output and failure threshold
 
 ### `ailloy foundry`
 

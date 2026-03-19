@@ -4,7 +4,7 @@ The `temper` command validates mold and ingot packages. It checks manifest field
 
 Alias: `validate`
 
-> **Note:** To lint rendered AI instruction files (CLAUDE.md, AGENTS.md, Cursor rules, etc.), use [`ailloy assay`](assay.md) instead.
+> **Note:** To lint rendered AI instruction files (CLAUDE.md, AGENTS.md, Cursor rules, etc.) in an already-cast project, use [`ailloy assay`](assay.md). To lint a mold's output *before* casting, use `ailloy temper --lint`.
 
 ## Quick Start
 
@@ -14,6 +14,9 @@ ailloy temper ./my-mold
 
 # Validate an ingot
 ailloy temper ./my-ingot
+
+# Validate and lint rendered output in one step
+ailloy temper --lint ./my-mold
 
 # Using the alias
 ailloy validate ./my-mold
@@ -73,24 +76,45 @@ For ingots (`ingot.yaml` present), temper checks:
 
 Currently the only warning is when flux variables are defined in both `mold.yaml` and `flux.schema.yaml` (the schema file takes precedence at runtime).
 
+## Linting Rendered Output (`--lint`)
+
+The `--lint` flag renders the mold's blanks into a temporary directory and runs [`ailloy assay`](assay.md) against the output. This catches content-level issues (line count, structure, cross-references, naming conventions) before casting — without needing a separate `cast` + `assay` step.
+
+```bash
+# Validate structure and lint rendered output
+ailloy temper --lint ./my-mold
+
+# Provide flux values for rendering (same flags as forge/cast)
+ailloy temper --lint -f my-values.yaml ./my-mold
+ailloy temper --lint --set project.organization=acme ./my-mold
+
+# Control assay output format and failure threshold
+ailloy temper --lint --format json ./my-mold
+ailloy temper --lint --fail-on warning ./my-mold
+
+# Override assay line-count threshold
+ailloy temper --lint --max-lines 200 ./my-mold
+```
+
+When `--lint` is used, temper first runs its normal structural validation. If that passes, it renders blanks using the mold's flux defaults (plus any `-f` / `--set` overrides) and runs assay on the result. Both sets of findings are reported.
+
+> **Note:** `--lint` is only supported for molds, not ingots.
+
 ## CI Integration
 
 Run `ailloy temper` in your CI pipeline to catch issues before packaging or releasing:
 
 ```yaml
 # GitHub Actions example
-- name: Validate mold
-  run: ailloy temper ./my-mold
+- name: Validate and lint mold
+  run: ailloy temper --lint ./my-mold
 ```
 
 A recommended workflow:
 
 ```bash
-# Validate structure
-ailloy temper ./my-mold
-
-# Preview rendered output
-ailloy forge ./my-mold
+# Validate structure and lint rendered output in one step
+ailloy temper --lint ./my-mold
 
 # Package for distribution
 ailloy smelt ./my-mold
@@ -107,4 +131,15 @@ Common template errors caught:
 - Invalid template function calls
 - Malformed template expressions
 
-Note: Temper checks syntax only, not whether variables resolve to values. Use `ailloy forge` with your actual flux values to verify that all variables are populated.
+Note: Temper checks syntax only, not whether variables resolve to values. Use `ailloy temper --lint` or `ailloy forge` with your actual flux values to verify that all variables are populated.
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--lint` | Render blanks and run assay (lint) on the output |
+| `--set key=value` | Set flux values for rendering (can be repeated) |
+| `-f, --values file` | Layer flux value files for rendering (can be repeated) |
+| `--format format` | Assay output format: `console` (default), `json`, `markdown` |
+| `--fail-on level` | Assay exit threshold: `error` (default), `warning`, `suggestion` |
+| `--max-lines n` | Override assay line-count threshold (default: 150) |

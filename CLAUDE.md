@@ -40,7 +40,7 @@ Key CLI commands for working with molds:
 - **cast** (`install`): Install molds into a project
 - **forge** (`template`): Preview rendered output (dry run)
 - **assay** (`lint`): Lint AI instruction files against best practices
-- **temper** (`validate`): Validate a mold or ingot package
+- **temper** (`validate`): Validate a mold or ingot package; use `--lint` to also render and lint output
 - **anneal** (`configure`): Configure flux variables interactively
 - **smelt** (`package`): Package a mold for distribution
 - **recast**: Re-render and update previously cast blanks
