@@ -163,7 +163,9 @@ func runTemperLint(moldDir string) error {
 	if err != nil {
 		return fmt.Errorf("creating temp directory: %w", err)
 	}
-	defer os.RemoveAll(tmpDir) //#nosec G104
+	defer func() {
+		_ = os.RemoveAll(tmpDir) //#nosec G104
+	}()
 
 	if err := writeRenderedFiles(resolved, reader.FS(), flux, opts, tmpDir); err != nil {
 		return err

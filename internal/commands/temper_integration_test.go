@@ -13,15 +13,10 @@ func TestIntegration_TemperLint_RendersAndLints(t *testing.T) {
 	reader := testMoldReader(t)
 	flux := testFlux(t, reader)
 
-	manifest, err := reader.LoadManifest()
+	// Load manifest to ensure it's valid (used implicitly by ResolveFiles)
+	_, err := reader.LoadManifest()
 	if err != nil {
 		t.Fatalf("failed to load manifest: %v", err)
-	}
-
-	// Validate flux against schema
-	schema, _ := reader.LoadFluxSchema()
-	if schema == nil && len(manifest.Flux) > 0 {
-		schema = manifest.Flux
 	}
 
 	// Build ingot resolver and resolve files
