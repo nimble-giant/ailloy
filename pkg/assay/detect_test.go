@@ -1,6 +1,8 @@
 package assay
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 )
@@ -102,6 +104,46 @@ func TestFindProjectRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if root == "" {
+		t.Error("expected non-empty root")
+	}
+}
+
+func TestFindProjectRoot_WorktreeGitFile(t *testing.T) {
+	// Simulate a git worktree where .git is a file, not a directory.
+	tmp := t.TempDir()
+	worktree := filepath.Join(tmp, "worktree")
+	if err := os.MkdirAll(worktree, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Create a .git file (like a worktree) instead of a .git directory
+	gitFile := filepath.Join(worktree, ".git")
+	if err := os.WriteFile(gitFile, []byte("gitdir: /some/other/path/.git/worktrees/worktree\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	root, err := FindProjectRoot(worktree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != worktree {
+		t.Errorf("expected worktree dir %q as root, got %q", worktree, root)
+	}
+}
+
+func TestFindProjectRoot_NoMarker(t *testing.T) {
+	// A directory with no .git or .claude should return itself
+	tmp := t.TempDir()
+	sub := filepath.Join(tmp, "empty-project")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	root, err := FindProjectRoot(sub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Should either return sub itself or find a parent .git — either way, not empty
 	if root == "" {
 		t.Error("expected non-empty root")
 	}

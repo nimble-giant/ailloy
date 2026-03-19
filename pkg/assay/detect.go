@@ -120,7 +120,8 @@ func detectFS(fsys fs.FS, realRoot string, platforms []Platform) ([]DetectedFile
 	return files, nil
 }
 
-// FindProjectRoot walks up from startDir looking for .git or .claude directories.
+// FindProjectRoot walks up from startDir looking for .git or .claude markers.
+// Recognizes both .git directories (normal repos) and .git files (worktrees).
 // Returns startDir if no marker is found.
 func FindProjectRoot(startDir string) (string, error) {
 	dir, err := filepath.Abs(startDir)
@@ -129,11 +130,14 @@ func FindProjectRoot(startDir string) (string, error) {
 	}
 
 	for {
-		for _, marker := range []string{".git", ".claude"} {
-			info, err := os.Stat(filepath.Join(dir, marker))
-			if err == nil && info.IsDir() {
-				return dir, nil
-			}
+		// .git can be a directory (normal repo) or a file (worktree with
+		// "gitdir: ..." content). Both indicate a project root.
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir, nil
+		}
+		// .claude directory is also a valid project root marker.
+		if info, err := os.Stat(filepath.Join(dir, ".claude")); err == nil && info.IsDir() {
+			return dir, nil
 		}
 
 		parent := filepath.Dir(dir)

@@ -33,7 +33,7 @@ ailloy lint
 | `empty-file` | Warning | Instruction file exists but has no meaningful content |
 | `duplicate-topics` | Warning | Same heading in multiple files with similar content — consider centralizing |
 
-### Schema validation rules (Claude-specific)
+### Schema validation rules
 
 | Rule | Severity | Description |
 |------|----------|-------------|
@@ -42,7 +42,19 @@ ailloy lint
 | `settings-schema` | Error | `.claude/settings.json` has invalid JSON or unknown hook event types |
 | `plugin-manifest` | Error | `.claude-plugin/plugin.json` is invalid JSON or missing required fields (`name`, `version`, `description`) |
 | `plugin-hooks` | Error/Warning | Plugin `hooks/*.json` is invalid JSON, missing the `hooks` array, or contains hook entries without required `name`/`event` fields |
-| `description-length` | Warning | Description field exceeds 100 characters (configurable); long descriptions are truncated or ignored by AI tools |
+| `description-length` | Error | Description field exceeds 100 characters (configurable); long descriptions are truncated or ignored by AI tools |
+| `description-point-of-view` | Warning | Description uses first or second person; must be [third person for reliable discovery](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#writing-effective-descriptions) |
+| `description-missing-trigger` | Suggestion | Description says what a skill does but not [when to use it](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#writing-effective-descriptions) |
+| `name-format` | Error | Name exceeds 64 characters or contains invalid characters (no leading/trailing/consecutive hyphens); must be [lowercase letters, numbers, single hyphens](https://agentskills.io/specification#name-field) |
+| `name-reserved-words` | Error | Name contains [reserved words](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#skill-structure) `anthropic` or `claude` |
+| `vague-name` | Warning | Name is [too generic](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#naming-conventions) (e.g., `helper`, `utils`, `tools`) for reliable skill discovery |
+| `skill-body-length` | Warning | Skill body exceeds 500 lines (configurable); should use [progressive disclosure](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#progressive-disclosure-patterns) |
+| `commands-deprecated` | Warning | `.claude/commands/` is [deprecated](https://platform.claude.com/docs/en/agent-sdk/slash-commands#creating-custom-slash-commands); migrate to `.claude/skills/<name>/SKILL.md` ([open spec](https://agentskills.io/specification)) |
+| `name-directory-mismatch` | Error | Skill `name` field does not match its [parent directory name](https://agentskills.io/specification#name-field) |
+| `description-max-length` | Error | Description exceeds the [platform maximum of 1024 characters](https://agentskills.io/specification#description-field); skill will fail to register |
+| `compatibility-length` | Error | `compatibility` field exceeds the [platform maximum of 500 characters](https://agentskills.io/specification#compatibility-field) |
+| `skill-token-budget` | Warning | Skill body exceeds [~5000 tokens](https://agentskills.io/specification#progressive-disclosure) (configurable); move reference material to separate files |
+| `description-imperative` | Suggestion | Description uses [declarative phrasing](https://agentskills.io/skill-creation/optimizing-descriptions#writing-effective-descriptions) ("This skill does...") instead of imperative ("Analyzes...") |
 
 ## Claude Plugin Directory Support
 
@@ -53,10 +65,10 @@ For each plugin found, assay scans and applies rules to:
 | Subdirectory | File type | Rules applied |
 |---|---|---|
 | `.claude-plugin/plugin.json` | JSON | `plugin-manifest` |
-| `commands/**` | `.md` | `command-frontmatter`, `description-length`, content rules |
-| `skills/**` | `.md` | `command-frontmatter`, `description-length`, content rules |
+| `commands/**` | `.md` | `command-frontmatter`, `commands-deprecated`, `description-length`, `description-max-length`, `description-point-of-view`, `description-missing-trigger`, `description-imperative`, `name-format`, `name-reserved-words`, `vague-name`, `compatibility-length`, content rules |
+| `skills/**` | `.md` | `command-frontmatter`, `description-length`, `description-max-length`, `description-point-of-view`, `description-missing-trigger`, `description-imperative`, `name-format`, `name-reserved-words`, `name-directory-mismatch`, `vague-name`, `skill-body-length`, `skill-token-budget`, `compatibility-length`, content rules |
 | `rules/**` | `.md` | content rules (`structure`, `line-count`, `empty-file`, …) |
-| `agents/**` | `.yml` / `.yaml` | `agent-frontmatter`, `description-length` |
+| `agents/**` | `.yml` / `.yaml` | `agent-frontmatter`, `description-length`, `description-max-length`, `description-point-of-view`, `description-missing-trigger`, `description-imperative`, `name-format`, `name-reserved-words`, `vague-name` |
 | `hooks/**` | `.json` | `plugin-hooks` |
 
 All subdirectories are scanned recursively.
@@ -66,19 +78,22 @@ All subdirectories are scanned recursively.
 ```
 my-plugin/
   .claude-plugin/
-    plugin.json          ← plugin-manifest rule
+    plugin.json              ← plugin-manifest rule
   commands/
-    create-issue.md      ← command-frontmatter rule
+    create-issue.md          ← command-frontmatter, commands-deprecated
     sub/
-      helper.md          ← also scanned recursively
+      helper.md              ← also scanned recursively
   skills/
-    brainstorm.md        ← command-frontmatter rule
+    brainstorm/
+      SKILL.md               ← schema + content rules, name-directory-mismatch
+      references/
+        guide.md             ← content rules only
   rules/
-    style.md             ← content quality rules
+    style.md                 ← content quality rules
   agents/
-    reviewer.yml         ← agent-frontmatter rule
+    reviewer.yml             ← agent-frontmatter rule
   hooks/
-    hooks.json           ← plugin-hooks rule
+    hooks.json               ← plugin-hooks rule
 ```
 
 ### Marketplace support
@@ -127,6 +142,8 @@ ailloy assay --format json
 # Markdown (for CI comments)
 ailloy assay --format markdown
 ```
+
+In console mode, file paths are clickable [OSC 8 hyperlinks](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda) that open the file in your editor. Supported by iTerm2, Ghostty, Wezterm, Windows Terminal, and most modern terminal emulators.
 
 ## CI Integration
 

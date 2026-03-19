@@ -653,6 +653,649 @@ func TestDescriptionLengthRule(t *testing.T) {
 	}
 }
 
+func TestDescriptionPointOfViewRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		desc     string
+		wantDiag bool
+	}{
+		{"third person — ok", "Processes Excel files and generates reports", false},
+		{"first person I can", "I can help you process Excel files", true},
+		{"second person you can", "You can use this to process Excel files", true},
+		{"first person I will", "I will analyze the data", true},
+		{"second person your", "Handles your document processing", true},
+		{"no description", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := "name: test\n"
+			if tt.desc != "" {
+				content += "description: " + tt.desc + "\n"
+			}
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:     ".claude/agents/test.yml",
+					Platform: PlatformClaude,
+					Content:  []byte(content),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&descriptionPointOfViewRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestDescriptionPointOfViewRule_CommandFrontmatter(t *testing.T) {
+	ctx := &RuleContext{
+		Files: []DetectedFile{{
+			Path:     ".claude/commands/test.md",
+			Platform: PlatformClaude,
+			Content:  []byte("---\nname: test\ndescription: I can help with things\n---\n# Cmd\n"),
+		}},
+		Config: DefaultConfig(),
+	}
+	diags := (&descriptionPointOfViewRule{}).Check(ctx)
+	if len(diags) == 0 {
+		t.Error("expected diagnostic for first person in command description")
+	}
+}
+
+func TestDescriptionMissingTriggerRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		desc     string
+		wantDiag bool
+	}{
+		{"has trigger — Use when", "Processes PDFs. Use when working with PDF files.", false},
+		{"has trigger — Trigger when", "Analyzes data. Trigger when user mentions spreadsheets.", false},
+		{"has trigger — Use for", "Commits code. Use for generating commit messages.", false},
+		{"has trigger — Use if", "Formats code. Use if the user asks for formatting.", false},
+		{"missing trigger", "Processes Excel files and generates reports", true},
+		{"no description", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := "name: test\n"
+			if tt.desc != "" {
+				content += "description: " + tt.desc + "\n"
+			}
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:     ".claude/agents/test.yml",
+					Platform: PlatformClaude,
+					Content:  []byte(content),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&descriptionMissingTriggerRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestNameFormatRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		skillNm  string
+		wantDiag bool
+	}{
+		{"valid lowercase", "my-skill", false},
+		{"valid with numbers", "pdf-v2", false},
+		{"uppercase letters", "My-Skill", true},
+		{"spaces", "my skill", true},
+		{"underscores", "my_skill", true},
+		{"too long", strings.Repeat("a", 65), true},
+		{"exactly 64", strings.Repeat("a", 64), false},
+		{"starts with hyphen", "-my-skill", true},
+		{"ends with hyphen", "my-skill-", true},
+		{"consecutive hyphens", "my--skill", true},
+		{"single char", "a", false},
+		{"empty name", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := ""
+			if tt.skillNm != "" {
+				content = "name: " + tt.skillNm + "\ndescription: test\n"
+			} else {
+				content = "description: test\n"
+			}
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:     ".claude/agents/test.yml",
+					Platform: PlatformClaude,
+					Content:  []byte(content),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&nameFormatRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestNameFormatRule_CommandFrontmatter(t *testing.T) {
+	ctx := &RuleContext{
+		Files: []DetectedFile{{
+			Path:     ".claude/commands/test.md",
+			Platform: PlatformClaude,
+			Content:  []byte("---\nname: My_Invalid_Name\ndescription: test\n---\n# Cmd\n"),
+		}},
+		Config: DefaultConfig(),
+	}
+	diags := (&nameFormatRule{}).Check(ctx)
+	if len(diags) == 0 {
+		t.Error("expected diagnostic for invalid command name")
+	}
+}
+
+func TestNameReservedWordsRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		skillNm  string
+		wantDiag bool
+	}{
+		{"normal name", "my-skill", false},
+		{"contains claude", "claude-helper", true},
+		{"contains anthropic", "anthropic-tools", true},
+		{"claude embedded", "my-claude-skill", true},
+		{"no name", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := ""
+			if tt.skillNm != "" {
+				content = "name: " + tt.skillNm + "\n"
+			} else {
+				content = "description: test\n"
+			}
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:     ".claude/agents/test.yml",
+					Platform: PlatformClaude,
+					Content:  []byte(content),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&nameReservedWordsRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestVagueNameRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		skillNm  string
+		wantDiag bool
+	}{
+		{"specific name", "processing-pdfs", false},
+		{"vague helper", "helper", true},
+		{"vague utils", "utils", true},
+		{"vague tools", "tools", true},
+		{"vague data", "data", true},
+		{"vague files", "files", true},
+		{"vague misc", "misc", true},
+		{"no name", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := ""
+			if tt.skillNm != "" {
+				content = "name: " + tt.skillNm + "\n"
+			} else {
+				content = "description: test\n"
+			}
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:     ".claude/agents/test.yml",
+					Platform: PlatformClaude,
+					Content:  []byte(content),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&vagueNameRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestSkillBodyLengthRule(t *testing.T) {
+	shortBody := strings.Repeat("line\n", 100)
+	longBody := strings.Repeat("line\n", 501)
+
+	tests := []struct {
+		name     string
+		content  string
+		maxLines int
+		wantDiag bool
+	}{
+		{
+			"short skill body",
+			"---\nname: my-skill\ndescription: test\n---\n" + shortBody,
+			0, false,
+		},
+		{
+			"long skill body",
+			"---\nname: my-skill\ndescription: test\n---\n" + longBody,
+			0, true,
+		},
+		{
+			"custom max-lines",
+			"---\nname: my-skill\ndescription: test\n---\n" + longBody,
+			600, false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			if tt.maxLines > 0 {
+				cfg.Rules = map[string]RuleConfig{
+					"skill-body-length": {Options: map[string]any{"max-lines": tt.maxLines}},
+				}
+			}
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:      "plugins/my-plugin/skills/big-skill/SKILL.md",
+					Platform:  PlatformClaude,
+					PluginDir: "plugins/my-plugin",
+					Content:   []byte(tt.content),
+				}},
+				Config: cfg,
+			}
+			diags := (&skillBodyLengthRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestSkillBodyLengthRule_NonSkillIgnored(t *testing.T) {
+	longBody := strings.Repeat("line\n", 501)
+	ctx := &RuleContext{
+		Files: []DetectedFile{{
+			Path:     ".claude/commands/test.md",
+			Platform: PlatformClaude,
+			Content:  []byte("---\nname: test\n---\n" + longBody),
+		}},
+		Config: DefaultConfig(),
+	}
+	diags := (&skillBodyLengthRule{}).Check(ctx)
+	if len(diags) > 0 {
+		t.Errorf("expected no diagnostic for non-skill file, got: %v", diags)
+	}
+}
+
+func TestCommandsDeprecatedRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		files    []DetectedFile
+		wantDiag bool
+		wantTip  string
+	}{
+		{
+			"standard command triggers warning",
+			[]DetectedFile{{
+				Path:     ".claude/commands/create-issue.md",
+				Platform: PlatformClaude,
+				Content:  []byte("---\nname: create-issue\ndescription: Create issues\n---\n# Create Issue\n"),
+			}},
+			true,
+			".claude/skills/create-issue/SKILL.md",
+		},
+		{
+			"plugin command triggers warning",
+			[]DetectedFile{{
+				Path:      "plugins/my-plugin/commands/helper.md",
+				Platform:  PlatformClaude,
+				PluginDir: "plugins/my-plugin",
+				Content:   []byte("---\nname: helper\n---\n# Helper\n"),
+			}},
+			true,
+			"plugins/my-plugin/skills/helper/SKILL.md",
+		},
+		{
+			"skill file does not trigger",
+			[]DetectedFile{{
+				Path:      "plugins/my-plugin/skills/brainstorm/SKILL.md",
+				Platform:  PlatformClaude,
+				PluginDir: "plugins/my-plugin",
+				Content:   []byte("---\nname: brainstorm\n---\n# Brainstorm\n"),
+			}},
+			false,
+			"",
+		},
+		{
+			"non-claude file ignored",
+			[]DetectedFile{{
+				Path:     ".claude/commands/test.md",
+				Platform: PlatformGeneric,
+				Content:  []byte("# Test\n"),
+			}},
+			false,
+			"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &RuleContext{Files: tt.files, Config: DefaultConfig()}
+			diags := (&commandsDeprecatedRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+			if tt.wantTip != "" && len(diags) > 0 {
+				if !containsSubstr(diags[0].Message, tt.wantTip) {
+					t.Errorf("expected message to contain migration path %q, got: %s", tt.wantTip, diags[0].Message)
+				}
+				if !containsSubstr(diags[0].Tip, "agentskills.io") {
+					t.Errorf("expected tip to reference agentskills.io, got: %s", diags[0].Tip)
+				}
+			}
+		})
+	}
+}
+
+func TestNameDirectoryMismatchRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		files    []DetectedFile
+		wantDiag bool
+	}{
+		{
+			"name matches directory",
+			[]DetectedFile{{
+				Path:      "plugins/my-plugin/skills/pdf-processing/SKILL.md",
+				Platform:  PlatformClaude,
+				PluginDir: "plugins/my-plugin",
+				Content:   []byte("---\nname: pdf-processing\ndescription: test\n---\n# PDF\n"),
+			}},
+			false,
+		},
+		{
+			"name does not match directory",
+			[]DetectedFile{{
+				Path:      "plugins/my-plugin/skills/pdf-tools/SKILL.md",
+				Platform:  PlatformClaude,
+				PluginDir: "plugins/my-plugin",
+				Content:   []byte("---\nname: pdf-processing\ndescription: test\n---\n# PDF\n"),
+			}},
+			true,
+		},
+		{
+			"standard skill path matches",
+			[]DetectedFile{{
+				Path:     ".claude/skills/my-skill/SKILL.md",
+				Platform: PlatformClaude,
+				Content:  []byte("---\nname: my-skill\ndescription: test\n---\n# Skill\n"),
+			}},
+			false,
+		},
+		{
+			"standard skill path mismatches",
+			[]DetectedFile{{
+				Path:     ".claude/skills/wrong-name/SKILL.md",
+				Platform: PlatformClaude,
+				Content:  []byte("---\nname: my-skill\ndescription: test\n---\n# Skill\n"),
+			}},
+			true,
+		},
+		{
+			"command file ignored",
+			[]DetectedFile{{
+				Path:     ".claude/commands/test.md",
+				Platform: PlatformClaude,
+				Content:  []byte("---\nname: different\n---\n# Cmd\n"),
+			}},
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &RuleContext{Files: tt.files, Config: DefaultConfig()}
+			diags := (&nameDirectoryMismatchRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestDescriptionMaxLengthRule(t *testing.T) {
+	shortDesc := "Does things well"
+	longDesc := strings.Repeat("a", 1025) // over 1024
+
+	tests := []struct {
+		name     string
+		desc     string
+		wantDiag bool
+	}{
+		{"under limit", shortDesc, false},
+		{"at limit", strings.Repeat("a", 1024), false},
+		{"over limit", longDesc, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:     ".claude/agents/test.yml",
+					Platform: PlatformClaude,
+					Content:  []byte("name: test\ndescription: " + tt.desc + "\n"),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&descriptionMaxLengthRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestCompatibilityLengthRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		wantDiag bool
+	}{
+		{
+			"no compatibility field",
+			"---\nname: test\ndescription: test\n---\n# Skill\n",
+			false,
+		},
+		{
+			"short compatibility",
+			"---\nname: test\ndescription: test\ncompatibility: Requires git\n---\n# Skill\n",
+			false,
+		},
+		{
+			"long compatibility",
+			"---\nname: test\ndescription: test\ncompatibility: " + strings.Repeat("a", 501) + "\n---\n# Skill\n",
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:      "plugins/my-plugin/skills/test/SKILL.md",
+					Platform:  PlatformClaude,
+					PluginDir: "plugins/my-plugin",
+					Content:   []byte(tt.content),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&compatibilityLengthRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestSkillTokenBudgetRule(t *testing.T) {
+	// 5000 tokens * 4 chars/token = 20000 chars
+	shortBody := strings.Repeat("word ", 1000) // ~5000 chars = ~1250 tokens
+	longBody := strings.Repeat("word ", 5000)  // ~25000 chars = ~6250 tokens
+
+	tests := []struct {
+		name      string
+		content   string
+		maxTokens int
+		wantDiag  bool
+	}{
+		{
+			"under budget",
+			"---\nname: my-skill\ndescription: test\n---\n" + shortBody,
+			0, false,
+		},
+		{
+			"over budget",
+			"---\nname: my-skill\ndescription: test\n---\n" + longBody,
+			0, true,
+		},
+		{
+			"custom max-tokens",
+			"---\nname: my-skill\ndescription: test\n---\n" + longBody,
+			10000, false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			if tt.maxTokens > 0 {
+				cfg.Rules = map[string]RuleConfig{
+					"skill-token-budget": {Options: map[string]any{"max-tokens": tt.maxTokens}},
+				}
+			}
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:      "plugins/my-plugin/skills/big-skill/SKILL.md",
+					Platform:  PlatformClaude,
+					PluginDir: "plugins/my-plugin",
+					Content:   []byte(tt.content),
+				}},
+				Config: cfg,
+			}
+			diags := (&skillTokenBudgetRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestSkillTokenBudgetRule_NonSkillIgnored(t *testing.T) {
+	longBody := strings.Repeat("word ", 5000)
+	ctx := &RuleContext{
+		Files: []DetectedFile{{
+			Path:     ".claude/commands/test.md",
+			Platform: PlatformClaude,
+			Content:  []byte("---\nname: test\n---\n" + longBody),
+		}},
+		Config: DefaultConfig(),
+	}
+	diags := (&skillTokenBudgetRule{}).Check(ctx)
+	if len(diags) > 0 {
+		t.Errorf("expected no diagnostic for non-skill file, got: %v", diags)
+	}
+}
+
+func TestDescriptionImperativeRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		desc     string
+		wantDiag bool
+	}{
+		{"imperative — ok", "Analyzes CSV files and generates reports", false},
+		{"trigger phrase — ok", "Use this skill when working with PDFs", false},
+		{"declarative this skill", "This skill processes Excel files", true},
+		{"declarative this tool", "This tool helps with code review", true},
+		{"declarative a skill that", "A skill that generates reports", true},
+		{"declarative a tool that", "A tool that analyzes data", true},
+		{"no description", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := "name: test\n"
+			if tt.desc != "" {
+				content += "description: " + tt.desc + "\n"
+			}
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:     ".claude/agents/test.yml",
+					Platform: PlatformClaude,
+					Content:  []byte(content),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&descriptionImperativeRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
 func TestSettingsSchemaRule(t *testing.T) {
 	tests := []struct {
 		name     string

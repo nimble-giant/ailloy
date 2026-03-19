@@ -115,7 +115,8 @@ func runAssay(_ *cobra.Command, args []string) error {
 	}
 
 	// Format and print output
-	formatter := assay.NewFormatter(assayFormat)
+	workDir, _ := os.Getwd()
+	formatter := assay.NewFormatter(assayFormat, workDir)
 	output := formatter.Format(result)
 	if output != "" {
 		fmt.Print(output)
