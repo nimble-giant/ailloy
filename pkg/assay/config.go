@@ -199,6 +199,34 @@ assay:
       enabled: true
       options:
         max-length: 100      # warn if description exceeds this many characters
+    description-point-of-view:
+      enabled: true
+    description-missing-trigger:
+      enabled: true
+    name-format:
+      enabled: true
+    name-reserved-words:
+      enabled: true
+    vague-name:
+      enabled: true
+    skill-body-length:
+      enabled: true
+      options:
+        max-lines: 500       # warn if skill body exceeds this many lines
+    commands-deprecated:
+      enabled: true
+    name-directory-mismatch:
+      enabled: true
+    description-max-length:
+      enabled: true
+    compatibility-length:
+      enabled: true
+    skill-token-budget:
+      enabled: true
+      options:
+        max-tokens: 5000     # warn if skill body exceeds this many estimated tokens
+    description-imperative:
+      enabled: true
   ignore: []
     # - "vendor/**"
     # - ".claude/rules/generated-*.md"

@@ -3,6 +3,8 @@ package assay
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -16,19 +18,23 @@ type Formatter interface {
 }
 
 // NewFormatter returns a formatter for the given format name.
-func NewFormatter(format string) Formatter {
+// workDir is used to resolve relative file paths for clickable terminal hyperlinks.
+func NewFormatter(format string, workDir string) Formatter {
 	switch format {
 	case "json":
 		return &JSONFormatter{}
 	case "markdown":
 		return &MarkdownFormatter{}
 	default:
-		return &ConsoleFormatter{}
+		return &ConsoleFormatter{WorkDir: workDir}
 	}
 }
 
 // ConsoleFormatter renders diagnostics grouped by rule with educational rationale headers.
-type ConsoleFormatter struct{}
+type ConsoleFormatter struct {
+	// WorkDir is used to resolve relative file paths into clickable file:// hyperlinks.
+	WorkDir string
+}
 
 var (
 	tipStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Italic(true)
@@ -77,8 +83,20 @@ func (f *ConsoleFormatter) Format(result *AssayResult) string {
 		}
 		b.WriteString("\n")
 
+		// Track tip positions: first and last occurrence index per tip.
+		tipFirstIdx := map[string]int{}
+		tipLastIdx := map[string]int{}
+		for i, d := range g.diags {
+			if d.Tip != "" {
+				if _, seen := tipFirstIdx[d.Tip]; !seen {
+					tipFirstIdx[d.Tip] = i
+				}
+				tipLastIdx[d.Tip] = i
+			}
+		}
+
 		// Diagnostics
-		for _, d := range g.diags {
+		for i, d := range g.diags {
 			var badge string
 			switch d.Severity {
 			case mold.SeverityError:
@@ -90,12 +108,22 @@ func (f *ConsoleFormatter) Format(result *AssayResult) string {
 			}
 
 			if d.File != "" {
-				b.WriteString("   " + badge + "  " + styles.SubtleStyle.Render(d.File) + "\n")
+				fileText := styles.SubtleStyle.Render(d.File)
+				b.WriteString("   " + badge + "  " + f.fileHyperlink(d.File, fileText) + "\n")
 			} else {
 				b.WriteString("   " + badge + "\n")
 			}
 			b.WriteString("            " + d.Message + "\n")
-			if d.Tip != "" {
+
+			// Show tip after the last finding that has it.
+			// If the tip spans multiple findings, add a blank line before it
+			// so it visually separates from the last finding and reads as
+			// applying to the whole group.
+			if d.Tip != "" && tipLastIdx[d.Tip] == i {
+				isGrouped := tipFirstIdx[d.Tip] != tipLastIdx[d.Tip]
+				if isGrouped {
+					b.WriteString("\n")
+				}
 				b.WriteString("            " + tipStyle.Render("💡 "+d.Tip) + "\n")
 			}
 			b.WriteString("\n")
@@ -110,6 +138,22 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// fileHyperlink wraps displayText in an OSC 8 terminal hyperlink pointing to a file:// URL.
+// If WorkDir is empty or the path can't be resolved, returns displayText unchanged.
+func (f *ConsoleFormatter) fileHyperlink(path, displayText string) string {
+	if f.WorkDir == "" {
+		return displayText
+	}
+	absPath := path
+	if !filepath.IsAbs(path) {
+		absPath = filepath.Join(f.WorkDir, path)
+	}
+	fileURL := "file://" + url.PathEscape(absPath)
+	// Restore path separators that PathEscape encodes
+	fileURL = strings.ReplaceAll(fileURL, "%2F", "/")
+	return fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", fileURL, displayText)
 }
 
 // JSONFormatter renders diagnostics as JSON.
