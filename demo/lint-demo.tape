@@ -47,37 +47,39 @@ Type "ailloy lint ."
 Enter
 Sleep 6s
 
-# ── Jump back to start of lint output ────────────────────────────────────────
+# ── Jump back to start of lint output (hidden — instant cut) ─────────────────
+Hide
 ScrollUp@1ms 1100
+Show
 Sleep 1s
 
-# ── Show a sample of findings (first ~5 screens of output) ───────────────────
+# ── Show a sample of findings (first ~6 screens, readable scroll pace) ────────
 
 # Banner + line-count rule header
-ScrollDown@1ms 40
-Sleep 1.2s
+ScrollDown@80ms 40
+Sleep 1s
 
 # More line-count warnings
-ScrollDown@1ms 40
-Sleep 1.2s
+ScrollDown@80ms 40
+Sleep 1s
 
 # More line-count warnings
-ScrollDown@1ms 40
-Sleep 1.2s
+ScrollDown@80ms 40
+Sleep 1s
 
 # structure / agents-md-presence / import-validation headers appear
-ScrollDown@1ms 40
-Sleep 1.2s
+ScrollDown@80ms 40
+Sleep 1s
 
 # duplicate-topics section
-ScrollDown@1ms 40
-Sleep 1.5s
+ScrollDown@80ms 40
+Sleep 1s
 
 # command-frontmatter / plugin-manifest sections
-ScrollDown@1ms 40
-Sleep 1.5s
+ScrollDown@80ms 40
+Sleep 1s
 
-# ── Jump to the end to show the final summary ─────────────────────────────────
+# ── Fast-jump to the final summary ───────────────────────────────────────────
 ScrollDown@1ms 2000
 Sleep 2s
 
