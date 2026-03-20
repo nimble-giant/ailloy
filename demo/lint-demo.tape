@@ -2,7 +2,6 @@
 # Records the `ailloy lint` command running against the official
 # Anthropic Claude plugins marketplace repository.
 
-Output demo/lint-demo.gif
 Output demo/lint-demo.mp4
 
 Require ailloy
@@ -17,7 +16,7 @@ Set WindowBarSize 36
 Set Padding 16
 Set BorderRadius 12
 Set TypingSpeed 45ms
-Set Framerate 30
+Set Framerate 24
 
 # ── Setup (hidden) ──────────────────────────────────────────────────────────
 Hide
@@ -29,68 +28,58 @@ Enter
 Sleep 200ms
 Show
 
-# ── Show version ────────────────────────────────────────────────────────────
-Type "ailloy --version"
+# ── Establish context: Anthropic Claude plugins marketplace ──────────────────
+Type "git remote get-url origin"
 Enter
-Sleep 1.5s
+Sleep 1s
 
-# ── Briefly show what we're about to lint ───────────────────────────────────
 Type "ls plugins/ | sort"
 Enter
 Sleep 2s
 
-# ── Run the lint command ─────────────────────────────────────────────────────
+# ── Show version ─────────────────────────────────────────────────────────────
+Type "ailloy --version"
+Enter
+Sleep 1s
+
+# ── Run lint and wait for it to finish ───────────────────────────────────────
 Type "ailloy lint ."
 Enter
+Sleep 6s
 
-# Let the header and first rule appear
-Sleep 2s
+# ── Jump back to start of lint output ────────────────────────────────────────
+ScrollUp@1ms 1100
+Sleep 1s
 
-# Scroll through the output as findings accumulate
-ScrollDown 8
-Sleep 600ms
-ScrollDown 8
-Sleep 600ms
-ScrollDown 10
-Sleep 600ms
-ScrollDown 10
-Sleep 600ms
-ScrollDown 12
-Sleep 600ms
-ScrollDown 12
-Sleep 600ms
-ScrollDown 15
-Sleep 600ms
-ScrollDown 15
-Sleep 600ms
-ScrollDown 20
-Sleep 600ms
-ScrollDown 20
-Sleep 600ms
-ScrollDown 25
-Sleep 600ms
-ScrollDown 25
-Sleep 800ms
-ScrollDown 30
-Sleep 800ms
-ScrollDown 30
-Sleep 800ms
-ScrollDown 40
-Sleep 800ms
-ScrollDown 40
-Sleep 1s
-ScrollDown 50
-Sleep 1s
-ScrollDown 50
-Sleep 1s
-ScrollDown 60
+# ── Show a sample of findings (first ~5 screens of output) ───────────────────
+
+# Banner + line-count rule header
+ScrollDown@1ms 40
 Sleep 1.2s
-ScrollDown 60
+
+# More line-count warnings
+ScrollDown@1ms 40
 Sleep 1.2s
-ScrollDown 80
+
+# More line-count warnings
+ScrollDown@1ms 40
+Sleep 1.2s
+
+# structure / agents-md-presence / import-validation headers appear
+ScrollDown@1ms 40
+Sleep 1.2s
+
+# duplicate-topics section
+ScrollDown@1ms 40
 Sleep 1.5s
-ScrollDown 100
+
+# command-frontmatter / plugin-manifest sections
+ScrollDown@1ms 40
+Sleep 1.5s
+
+# ── Jump to the end to show the final summary ─────────────────────────────────
+ScrollDown@1ms 2000
 Sleep 2s
 
-# Pause on the final summary
-Sleep 4s
+# ── Pause on "129 file(s) scanned, 99 error(s), 144 warning(s), 75 suggestion(s)" ──
+Sleep 5s
