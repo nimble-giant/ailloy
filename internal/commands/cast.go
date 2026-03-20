@@ -35,10 +35,12 @@ Use -g/--global to install into the user's home directory (~/) instead.`,
 }
 
 var (
-	withWorkflows bool
-	castGlobal    bool
-	castSetFlags  []string
-	castValFiles  []string
+	withWorkflows  bool
+	castGlobal     bool
+	castSetFlags   []string
+	castValFiles   []string
+	castAnneal     bool
+	castAnnealFlux map[string]any
 )
 
 func init() {
@@ -48,6 +50,7 @@ func init() {
 	castCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks")
 	castCmd.Flags().StringArrayVar(&castSetFlags, "set", nil, "override flux variable (format: key=value, can be repeated)")
 	castCmd.Flags().StringArrayVarP(&castValFiles, "values", "f", nil, "flux value files (can be repeated, later files override earlier)")
+	castCmd.Flags().BoolVar(&castAnneal, "anneal", false, "run interactive flux configuration wizard before casting")
 }
 
 func runCast(_ *cobra.Command, args []string) error {
@@ -55,7 +58,39 @@ func runCast(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	if castAnneal {
+		flux, err := runAnnealWizard(reader)
+		if err != nil {
+			return err
+		}
+		castAnnealFlux = flux
+	}
+
 	return castProject(reader)
+}
+
+// runAnnealWizard runs the interactive flux configuration wizard and returns the resulting flux map.
+func runAnnealWizard(reader *blanks.MoldReader) (map[string]any, error) {
+	schema, fluxDefaults, err := resolveAnnealSchema(reader)
+	if err != nil {
+		return nil, err
+	}
+	if len(schema) == 0 {
+		return nil, nil
+	}
+
+	wiz := newDynamicWizard(schema, fluxDefaults)
+	result, confirmed, err := wiz.run()
+	if err != nil {
+		return nil, err
+	}
+
+	if !confirmed {
+		return nil, fmt.Errorf("flux configuration cancelled")
+	}
+
+	return result, nil
 }
 
 // resolveMoldReader creates a MoldReader from args or the embedded mold.
@@ -81,7 +116,7 @@ func resolveMoldReader(args []string) (*blanks.MoldReader, error) {
 }
 
 // loadCastFlux loads layered flux values using Helm-style precedence:
-// mold flux.yaml < mold.yaml schema defaults < -f files (left to right) < --set flags
+// mold flux.yaml < mold.yaml schema defaults < --anneal wizard < -f files (left to right) < --set flags
 func loadCastFlux(reader *blanks.MoldReader) (map[string]any, error) {
 	// Layer 1: Load mold flux.yaml as base
 	fluxDefaults, err := reader.LoadFluxDefaults()
@@ -100,7 +135,12 @@ func loadCastFlux(reader *blanks.MoldReader) (map[string]any, error) {
 		flux[k] = v
 	}
 
-	// Layer 3: Layer -f files left-to-right (each overrides previous)
+	// Layer 3: Apply --anneal wizard results (overrides mold defaults, before -f files)
+	for k, v := range castAnnealFlux {
+		flux[k] = v
+	}
+
+	// Layer 4: Layer -f files left-to-right (each overrides previous)
 	if len(castValFiles) > 0 {
 		overlay, err := mold.LayerFluxFiles(castValFiles)
 		if err != nil {
@@ -111,7 +151,7 @@ func loadCastFlux(reader *blanks.MoldReader) (map[string]any, error) {
 		}
 	}
 
-	// Layer 4: Apply --set overrides (highest precedence)
+	// Layer 5: Apply --set overrides (highest precedence)
 	if err := mold.ApplySetOverrides(flux, castSetFlags); err != nil {
 		return nil, err
 	}
