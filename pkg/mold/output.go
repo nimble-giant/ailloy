@@ -33,6 +33,7 @@ var reservedRootFiles = map[string]bool{
 	"README.md":         true, // mold documentation (not project readme)
 	"PLUGIN_SUMMARY.md": true, // plugin summary metadata
 	"LICENSE":           true, // mold license file
+	".ailloyignore":     true, // ignore patterns for casting
 }
 
 // dirMapping represents a normalized directory-to-directory output mapping.
@@ -46,6 +47,25 @@ type fileMapping struct {
 	src     string // source file path in the mold fs
 	dest    string // destination file path
 	process bool
+}
+
+// resolveConfig holds configuration for ResolveFiles.
+type resolveConfig struct {
+	ignorePatterns []string
+}
+
+// ResolveOption configures the behavior of ResolveFiles.
+type ResolveOption func(*resolveConfig)
+
+// WithIgnorePatterns specifies glob patterns for source files to exclude
+// from the resolved output. Patterns follow .ailloyignore conventions:
+//   - "docs/" or "docs/**" matches a directory and everything under it
+//   - "*.example" matches any file with that extension
+//   - "CONTRIBUTING.md" matches a specific file
+func WithIgnorePatterns(patterns []string) ResolveOption {
+	return func(c *resolveConfig) {
+		c.ignorePatterns = patterns
+	}
 }
 
 // ResolveFiles walks the mold filesystem and resolves all files according
@@ -63,17 +83,39 @@ type fileMapping struct {
 // If output is a map, each entry maps a source directory or file to a
 // destination. Values can be strings (simple dest path) or maps with
 // "dest" and optional "process" fields.
-func ResolveFiles(output any, moldFS fs.FS) ([]ResolvedFile, error) {
+//
+// Use WithIgnorePatterns to exclude specific files or directories from
+// the resolved output. This is typically loaded via LoadIgnorePatterns.
+func ResolveFiles(output any, moldFS fs.FS, opts ...ResolveOption) ([]ResolvedFile, error) {
+	cfg := resolveConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	var resolved []ResolvedFile
+	var err error
+
 	if output == nil {
-		return resolveIdentity(moldFS)
+		resolved, err = resolveIdentity(moldFS)
+	} else {
+		var dirs []dirMapping
+		var files []fileMapping
+		dirs, files, err = parseOutput(output, moldFS)
+		if err != nil {
+			return nil, fmt.Errorf("parsing output mapping: %w", err)
+		}
+		resolved, err = resolveFromMappings(dirs, files, moldFS)
 	}
 
-	dirs, files, err := parseOutput(output, moldFS)
 	if err != nil {
-		return nil, fmt.Errorf("parsing output mapping: %w", err)
+		return nil, err
 	}
 
-	return resolveFromMappings(dirs, files, moldFS)
+	if len(cfg.ignorePatterns) > 0 {
+		resolved = filterIgnored(resolved, cfg.ignorePatterns)
+	}
+
+	return resolved, nil
 }
 
 // resolveIdentity walks all top-level directories and root-level files
