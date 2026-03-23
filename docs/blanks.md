@@ -8,9 +8,10 @@ A mold's directory layout is flexible. You can organize your blanks into whateve
 
 The only constraints are:
 
-- **Reserved root files** are mold metadata and are never installed: `mold.yaml`, `flux.yaml`, `flux.schema.yaml`, `ingot.yaml`, `README.md`, `PLUGIN_SUMMARY.md`, and `LICENSE`
+- **Reserved root files** are mold metadata and are never installed: `mold.yaml`, `flux.yaml`, `flux.schema.yaml`, `ingot.yaml`, `README.md`, `PLUGIN_SUMMARY.md`, `LICENSE`, and `.ailloyignore`
 - **`ingots/`** is reserved for reusable template partials (see [Ingots](ingots.md))
 - **Hidden directories** (starting with `.`) are excluded from auto-discovery
+- **Ignored files** specified via `.ailloyignore` or `mold.yaml` `ignore:` are excluded (see [Ignoring Files](#ignoring-files))
 
 Everything else — directory names, nesting, file types — is up to you. A mold with `prompts/` and `guidelines/` directories is just as valid as one with `commands/` and `skills/`:
 
@@ -263,6 +264,63 @@ Blanks are automatically discovered from your mold's directory structure. The `o
 - **No output key** — files are placed at their source paths (identity mapping)
 
 Non-reserved root-level files (e.g., `AGENTS.md`) are auto-discovered and installed to the project root. The `ingots/` directory, reserved root files, and hidden directories (starting with `.`) are always excluded from auto-discovery.
+
+## Ignoring Files
+
+Molds often contain files that are useful within the mold repository — documentation, examples, contributor guides — but should not be cast into the target project. You can exclude files using `.ailloyignore` or the `ignore` field in `mold.yaml`. Both approaches work with `ailloy cast` and `ailloy forge`. Ignored files are still included when packaging with `ailloy smelt`.
+
+### `.ailloyignore` file
+
+Place a `.ailloyignore` file at the mold root with glob patterns for files and directories to exclude:
+
+```
+# Mold documentation - not for target projects
+docs/
+examples/
+
+# Specific files
+CONTRIBUTING.md
+*.example
+```
+
+This follows the familiar `.gitignore` convention. Empty lines and lines starting with `#` are comments.
+
+### `ignore` field in `mold.yaml`
+
+Add an `ignore` key to your mold manifest:
+
+```yaml
+apiVersion: v1
+kind: mold
+name: my-mold
+version: 1.0.0
+ignore:
+  - docs/
+  - examples/
+  - CONTRIBUTING.md
+```
+
+### Pattern syntax
+
+| Pattern | Matches |
+|---------|---------|
+| `docs/` | Everything under the `docs/` directory |
+| `docs/**` | Same as `docs/` |
+| `CONTRIBUTING.md` | A specific file by name |
+| `*.example` | Any file ending in `.example` at any level |
+| `docs/*.md` | Files matching the glob against their full path |
+
+### Combining both sources
+
+When both `.ailloyignore` and `mold.yaml` `ignore:` are present, patterns from both sources are merged. Use `.ailloyignore` for simple, visible exclusions and `mold.yaml` `ignore:` for programmatic or manifest-driven control.
+
+### Effect on operations
+
+| Operation | Ignore applied? |
+|-----------|----------------|
+| `ailloy cast` | Yes — ignored files are not installed |
+| `ailloy forge` | Yes — ignored files are not rendered |
+| `ailloy smelt` | No — all files are included in the package |
 
 ## Testing and Previewing
 

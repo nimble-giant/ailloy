@@ -126,8 +126,16 @@ func runForge(_ *cobra.Command, args []string) error {
 	resolver := buildIngotResolver(flux)
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
+	// Load ignore patterns from .ailloyignore and mold.yaml.
+	ignorePatterns := mold.LoadIgnorePatterns(reader.FS(), manifest)
+
+	var resolveOpts []mold.ResolveOption
+	if len(ignorePatterns) > 0 {
+		resolveOpts = append(resolveOpts, mold.WithIgnorePatterns(ignorePatterns))
+	}
+
 	// Resolve all output files from the flux.
-	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS(), resolveOpts...)
 	if err != nil {
 		return fmt.Errorf("resolving output files: %w", err)
 	}

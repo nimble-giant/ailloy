@@ -85,6 +85,7 @@ type Mold struct {
 	Requires     Requires     `yaml:"requires,omitempty"`
 	Flux         []FluxVar    `yaml:"flux,omitempty"`
 	Dependencies []Dependency `yaml:"dependencies,omitempty"`
+	Ignore       []string     `yaml:"ignore,omitempty"`
 }
 
 // LoadMold reads and parses a mold.yaml file from the given path.

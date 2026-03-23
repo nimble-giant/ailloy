@@ -169,7 +169,15 @@ func castProject(reader *blanks.MoldReader) error {
 		flux = make(map[string]any)
 	}
 
-	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	// Load ignore patterns from .ailloyignore and mold.yaml.
+	ignorePatterns := mold.LoadIgnorePatterns(reader.FS(), manifest)
+
+	var resolveOpts []mold.ResolveOption
+	if len(ignorePatterns) > 0 {
+		resolveOpts = append(resolveOpts, mold.WithIgnorePatterns(ignorePatterns))
+	}
+
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS(), resolveOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to resolve output files: %w", err)
 	}
