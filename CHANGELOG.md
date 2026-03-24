@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.11](https://github.com/nimble-giant/ailloy/compare/v0.6.10...v0.6.11) (2026-03-24)
+
+
+### Features
+
+* implement file ignoring mechanism with .ailloyignore support ([c75098d](https://github.com/nimble-giant/ailloy/commit/c75098dd720f05ce82634f877aaf71661278c99d))
+
 ## [0.6.10](https://github.com/nimble-giant/ailloy/compare/v0.6.9...v0.6.10) (2026-03-19)
 
 
