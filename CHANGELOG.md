@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.12](https://github.com/nimble-giant/ailloy/compare/v0.6.11...v0.6.12) (2026-03-24)
+
+
+### Features
+
+* add 'has' function to template engine ([0a25383](https://github.com/nimble-giant/ailloy/commit/0a2538384c2082342a812b243d3e7e0abc846b36))
+
 ## [0.6.11](https://github.com/nimble-giant/ailloy/compare/v0.6.10...v0.6.11) (2026-03-24)
 
 
