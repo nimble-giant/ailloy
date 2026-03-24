@@ -530,6 +530,72 @@ func TestProcessTemplate_WithoutIngotResolver(t *testing.T) {
 	}
 }
 
+// --- has function tests ---
+
+func TestProcessTemplate_HasFunctionStringSlice(t *testing.T) {
+	content := `{{if has "claude" .agent.targets}}yes{{else}}no{{end}}`
+	flux := map[string]any{
+		"agent": map[string]any{
+			"targets": []string{"claude", "gemini"},
+		},
+	}
+	result, err := ProcessTemplate(content, flux)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "yes" {
+		t.Errorf("expected 'yes', got %q", result)
+	}
+}
+
+func TestProcessTemplate_HasFunctionMissing(t *testing.T) {
+	content := `{{if has "openai" .agent.targets}}yes{{else}}no{{end}}`
+	flux := map[string]any{
+		"agent": map[string]any{
+			"targets": []string{"claude", "gemini"},
+		},
+	}
+	result, err := ProcessTemplate(content, flux)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "no" {
+		t.Errorf("expected 'no', got %q", result)
+	}
+}
+
+func TestProcessTemplate_HasFunctionAnySlice(t *testing.T) {
+	content := `{{if has "claude" .agent.targets}}yes{{else}}no{{end}}`
+	flux := map[string]any{
+		"agent": map[string]any{
+			"targets": []any{"claude", "gemini"},
+		},
+	}
+	result, err := ProcessTemplate(content, flux)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "yes" {
+		t.Errorf("expected 'yes', got %q", result)
+	}
+}
+
+func TestProcessTemplate_HasFunctionEmptySlice(t *testing.T) {
+	content := `{{if has "claude" .agent.targets}}yes{{else}}no{{end}}`
+	flux := map[string]any{
+		"agent": map[string]any{
+			"targets": []string{},
+		},
+	}
+	result, err := ProcessTemplate(content, flux)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "no" {
+		t.Errorf("expected 'no', got %q", result)
+	}
+}
+
 // --- Error handling tests ---
 
 func TestProcessTemplate_InvalidTemplateSyntax(t *testing.T) {
