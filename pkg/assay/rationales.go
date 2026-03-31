@@ -29,6 +29,7 @@ var ruleRationales = map[string]string{
 	"compatibility-length":        "The compatibility field has a platform limit of 500 characters. Exceeding it causes registration failure. See: https://agentskills.io/specification#compatibility-field",
 	"skill-token-budget":          "Skills should keep their SKILL.md body under 5000 tokens to avoid consuming excessive context. Move reference material to separate files. See: https://agentskills.io/specification#progressive-disclosure",
 	"description-imperative":      "Descriptions using declarative phrasing ('This skill does...') trigger less reliably than imperative phrasing ('Use this skill when...'). See: https://agentskills.io/skill-creation/optimizing-descriptions#writing-effective-descriptions",
+	"context-usage":               "Every @import expands inline, consuming context window budget that could be used for code, conversation, and tool results. Progressive context disclosure — loading instructions on-demand via skills and reference files — keeps overhead low and improves model performance. See: https://agentskills.io/specification#progressive-disclosure",
 }
 
 // RuleRationale returns the educational rationale for a rule, or empty string if none is defined.

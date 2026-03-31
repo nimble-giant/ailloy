@@ -38,6 +38,7 @@ var (
 	assayFailOn   string
 	assayInit     bool
 	assayMaxLines int
+	assayVerbose  bool
 )
 
 func init() {
@@ -48,6 +49,7 @@ func init() {
 	assayCmd.Flags().StringVar(&assayFailOn, "fail-on", "error", "exit non-zero on: error, warning, suggestion")
 	assayCmd.Flags().BoolVar(&assayInit, "init", false, "generate a starter .ailloyrc.yaml config file")
 	assayCmd.Flags().IntVar(&assayMaxLines, "max-lines", 0, "override line-count threshold (default: 150)")
+	assayCmd.Flags().BoolVarP(&assayVerbose, "verbose", "v", false, "show per-file context usage stats even when within thresholds")
 }
 
 func runAssay(_ *cobra.Command, args []string) error {
@@ -107,6 +109,8 @@ func runAssay(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	result.Verbose = assayVerbose
 
 	// Handle no files found
 	if result.FilesScanned == 0 {

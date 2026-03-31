@@ -32,6 +32,7 @@ ailloy lint
 | `import-validation` | Error | `@path/to/file` reference does not resolve to an existing file |
 | `empty-file` | Warning | Instruction file exists but has no meaningful content |
 | `duplicate-topics` | Warning | Same heading in multiple files with similar content — consider centralizing |
+| `context-usage` | Warning/Error | Total expanded context (including recursive `@` imports) exceeds percentage-based thresholds of the model context window (default: warn at 10%, error at 25% of 200K); checks both individual files and per-plugin/project rollup totals; promotes [progressive context disclosure](https://agentskills.io/specification#progressive-disclosure) |
 
 ### Schema validation rules
 
@@ -200,6 +201,34 @@ assay:
   platforms:
     - claude
     - cursor               # only lint these platforms
+```
+
+Context usage thresholds are percentage-based, tied to the **effective** context window (total minus system prompt overhead). The effective window is auto-detected per platform:
+
+| Platform | Total Window | System Overhead | Effective Window |
+|----------|-------------|-----------------|-----------------|
+| Claude | 200K | ~16K | 184K |
+| Cursor | 128K | ~15K | 113K |
+| Codex | 200K | ~10K | 190K |
+| Copilot | 128K | ~10K | 118K |
+
+Token estimates use **~3.5 characters per token**, which is conservative for mixed markdown+code content (errs toward earlier warnings).
+
+```yaml
+# .ailloyrc.yaml
+assay:
+  rules:
+    context-usage:
+      options:
+        # context-window: 184000  # override auto-detected effective window
+        warn-pct: 10              # warn when instructions exceed 10% of effective context
+        error-pct: 25             # error when instructions exceed 25% of effective context
+```
+
+Use `--verbose` (or `-v`) to see per-file context usage detail even when within thresholds:
+
+```bash
+ailloy assay --verbose
 ```
 
 CLI flags override config values:

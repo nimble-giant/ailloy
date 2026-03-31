@@ -30,11 +30,23 @@ type DetectedFile struct {
 	PluginDir string // non-empty if the file belongs to a Claude plugin directory
 }
 
+// FileContextStat holds the estimated context window usage for a single instruction file.
+type FileContextStat struct {
+	File            string // relative file path
+	EstimatedTokens int    // estimated token count after expanding all @imports
+	ImportCount     int    // number of resolved @imports (transitive)
+	PluginDir       string // non-empty if the file belongs to a plugin
+}
+
 // RuleContext is passed to each rule, providing the full scan context.
 type RuleContext struct {
 	RootDir string
 	Files   []DetectedFile
 	Config  *Config
+
+	// ContextStats is populated by the context-usage rule with per-file token estimates.
+	ContextStats  []FileContextStat
+	ContextWindow int // context window size in tokens, set by context-usage rule
 }
 
 // Rule is the interface every lint rule implements.

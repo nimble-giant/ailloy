@@ -897,7 +897,17 @@ func (r *skillTokenBudgetRule) DefaultSeverity() mold.DiagSeverity { return mold
 func (r *skillTokenBudgetRule) Platforms() []Platform              { return []Platform{PlatformClaude} }
 
 const defaultMaxSkillTokens = 5000
-const estimatedCharsPerToken = 4
+
+// estimatedCharsPerToken is the average number of characters per token for
+// mixed markdown+code content. Community measurements across BPE tokenizers
+// (Claude, tiktoken) show ~3.5-4.0 chars/token for this content type.
+// We use 3.5 to err on the conservative side (earlier warnings).
+const estimatedCharsPerToken = 3.5
+
+// charsToTokens converts a character count to an estimated token count.
+func charsToTokens(chars int) int {
+	return int(float64(chars) / estimatedCharsPerToken)
+}
 
 func (r *skillTokenBudgetRule) Check(ctx *RuleContext) []mold.Diagnostic {
 	maxTokens := defaultMaxSkillTokens
@@ -936,7 +946,7 @@ func (r *skillTokenBudgetRule) Check(ctx *RuleContext) []mold.Diagnostic {
 			}
 		}
 
-		estimatedTokens := len(body) / estimatedCharsPerToken
+		estimatedTokens := charsToTokens(len(body))
 		if estimatedTokens > maxTokens {
 			diags = append(diags, mold.Diagnostic{
 				Severity: r.DefaultSeverity(),

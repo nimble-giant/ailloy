@@ -11,9 +11,12 @@ import (
 
 // AssayResult holds the outcome of an assay run.
 type AssayResult struct {
-	Diagnostics  []mold.Diagnostic
-	FilesScanned int
-	Platforms    []Platform
+	Diagnostics   []mold.Diagnostic
+	FilesScanned  int
+	Platforms     []Platform
+	ContextStats  []FileContextStat
+	ContextWindow int  // context window size in tokens used for threshold calculations
+	Verbose       bool // when true, formatters show all context stats even without threshold breaches
 }
 
 // HasErrors returns true if any diagnostic is an error.
@@ -45,6 +48,16 @@ func (r *AssayResult) Suggestions() []mold.Diagnostic {
 func (r *AssayResult) HasFailures(failOn mold.DiagSeverity) bool {
 	for _, d := range r.Diagnostics {
 		if d.Severity <= failOn {
+			return true
+		}
+	}
+	return false
+}
+
+// HasContextFindings returns true if any diagnostic from the context-usage rule exists.
+func (r *AssayResult) HasContextFindings() bool {
+	for _, d := range r.Diagnostics {
+		if d.Rule == "context-usage" {
 			return true
 		}
 	}
@@ -170,6 +183,11 @@ func Assay(rootDir string, cfg *Config) (*AssayResult, error) {
 		result.Diagnostics = append(result.Diagnostics, diags...)
 	}
 
+	result.ContextStats = ctx.ContextStats
+	result.ContextWindow = ctx.ContextWindow
+	if result.ContextWindow == 0 {
+		result.ContextWindow = defaultContextWindow(PlatformClaude)
+	}
 	return result, nil
 }
 

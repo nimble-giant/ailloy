@@ -25,6 +25,7 @@ func init() {
 	Register(&importValidationRule{})
 	Register(&emptyFileRule{})
 	Register(&duplicateTopicsRule{})
+	Register(&contextUsageRule{})
 }
 
 // lineCountRule warns when an instruction file exceeds a line threshold.
@@ -188,37 +189,54 @@ func (r *importValidationRule) Platforms() []Platform              { return []Pl
 
 var importRefRegex = regexp.MustCompile(`(?m)^@(\S+)`)
 
+// resolveImportRef resolves an @ reference to an absolute file path.
+// It first tries relative to the file's directory, then from the project root.
+// Returns the resolved path and true if found, or ("", false) if not.
+func resolveImportRef(ref, fileDir, rootDir string) (string, bool) {
+	// Try relative to the file's directory
+	refPath := filepath.Join(rootDir, fileDir, ref)
+	if _, err := os.Stat(refPath); err == nil {
+		return refPath, true
+	}
+	// Try from project root
+	rootPath := filepath.Join(rootDir, ref)
+	if _, err := os.Stat(rootPath); err == nil {
+		return rootPath, true
+	}
+	return "", false
+}
+
+// extractImportRefs returns all @ references found in content.
+func extractImportRefs(content []byte) []string {
+	var refs []string
+	scanner := bufio.NewScanner(bytes.NewReader(content))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "@") {
+			continue
+		}
+		matches := importRefRegex.FindStringSubmatch(line)
+		if len(matches) >= 2 {
+			refs = append(refs, matches[1])
+		}
+	}
+	return refs
+}
+
 func (r *importValidationRule) Check(ctx *RuleContext) []mold.Diagnostic {
 	var diags []mold.Diagnostic
 	for _, f := range ctx.Files {
 		if f.Platform != PlatformClaude {
 			continue
 		}
-		scanner := bufio.NewScanner(bytes.NewReader(f.Content))
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if !strings.HasPrefix(line, "@") {
-				continue
-			}
-			matches := importRefRegex.FindStringSubmatch(line)
-			if len(matches) < 2 {
-				continue
-			}
-			ref := matches[1]
-			// Resolve relative to the file's directory
-			refDir := filepath.Dir(f.Path)
-			refPath := filepath.Join(ctx.RootDir, refDir, ref)
-			if _, err := os.Stat(refPath); err != nil {
-				// Also try from project root
-				rootPath := filepath.Join(ctx.RootDir, ref)
-				if _, err := os.Stat(rootPath); err != nil {
-					diags = append(diags, mold.Diagnostic{
-						Severity: r.DefaultSeverity(),
-						Message:  fmt.Sprintf("import @%s does not resolve to an existing file", ref),
-						File:     f.Path,
-						Rule:     r.Name(),
-					})
-				}
+		for _, ref := range extractImportRefs(f.Content) {
+			if _, ok := resolveImportRef(ref, filepath.Dir(f.Path), ctx.RootDir); !ok {
+				diags = append(diags, mold.Diagnostic{
+					Severity: r.DefaultSeverity(),
+					Message:  fmt.Sprintf("import @%s does not resolve to an existing file", ref),
+					File:     f.Path,
+					Rule:     r.Name(),
+				})
 			}
 		}
 	}
@@ -421,4 +439,313 @@ func appendUnique(slice []string, val string) []string {
 		}
 	}
 	return append(slice, val)
+}
+
+// contextUsageRule warns when the total expanded context of an instruction file
+// (including all recursive @ imports) exceeds token thresholds.
+type contextUsageRule struct{}
+
+func (r *contextUsageRule) Name() string                       { return "context-usage" }
+func (r *contextUsageRule) DefaultSeverity() mold.DiagSeverity { return mold.SeverityWarning }
+func (r *contextUsageRule) Platforms() []Platform              { return []Platform{PlatformClaude} }
+
+const (
+	// defaultContextWarnPct is the percentage of the effective context window
+	// at which a warning is emitted (10%).
+	defaultContextWarnPct = 10
+
+	// defaultContextErrorPct is the percentage of the effective context window
+	// at which an error is emitted (25%).
+	defaultContextErrorPct = 25
+)
+
+// effectiveContextWindows maps each platform to its effective context window
+// in tokens — the total model context minus estimated system prompt overhead.
+//
+//	Platform     Total    Overhead   Effective
+//	Claude       200K     ~16K       184K
+//	Cursor       128K     ~15K       113K
+//	Codex        200K     ~10K       190K
+//	Copilot      128K     ~10K       118K
+//	Generic      200K     ~16K       184K  (conservative default)
+var effectiveContextWindows = map[Platform]int{
+	PlatformClaude:  184000,
+	PlatformCursor:  113000,
+	PlatformCodex:   190000,
+	PlatformCopilot: 118000,
+	PlatformGeneric: 184000,
+}
+
+// defaultContextWindow returns the effective context window for a platform.
+func defaultContextWindow(platform Platform) int {
+	if w, ok := effectiveContextWindows[platform]; ok {
+		return w
+	}
+	return effectiveContextWindows[PlatformGeneric]
+}
+
+// contextThresholds resolves warn/error token thresholds from config.
+// Supports both percentage-based (warn-pct, error-pct, context-window) and
+// legacy absolute (warn-tokens, error-tokens) options.
+// The platform determines the default effective context window if not overridden.
+func (r *contextUsageRule) contextThresholds(cfg *Config, platform Platform) (contextWindow, warnTokens, errorTokens int) {
+	contextWindow = defaultContextWindow(platform)
+	warnPct := defaultContextWarnPct
+	errorPct := defaultContextErrorPct
+
+	if v := cfg.RuleOption(r.Name(), "context-window", nil); v != nil {
+		contextWindow = toInt(v, contextWindow)
+	}
+	if v := cfg.RuleOption(r.Name(), "warn-pct", nil); v != nil {
+		warnPct = toInt(v, warnPct)
+	}
+	if v := cfg.RuleOption(r.Name(), "error-pct", nil); v != nil {
+		errorPct = toInt(v, errorPct)
+	}
+
+	warnTokens = contextWindow * warnPct / 100
+	errorTokens = contextWindow * errorPct / 100
+
+	// Legacy overrides: explicit token counts take precedence
+	if v := cfg.RuleOption(r.Name(), "warn-tokens", nil); v != nil {
+		warnTokens = toInt(v, warnTokens)
+	}
+	if v := cfg.RuleOption(r.Name(), "error-tokens", nil); v != nil {
+		errorTokens = toInt(v, errorTokens)
+	}
+
+	return contextWindow, warnTokens, errorTokens
+}
+
+// toInt converts a config value to int, returning fallback on failure.
+func toInt(v any, fallback int) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case uint64:
+		if n <= uint64(maxInt) {
+			return int(n)
+		}
+	case float64:
+		return int(n)
+	}
+	return fallback
+}
+
+// pctOf returns the percentage of tokens relative to the context window.
+func pctOf(tokens, contextWindow int) float64 {
+	if contextWindow == 0 {
+		return 0
+	}
+	return float64(tokens) * 100 / float64(contextWindow)
+}
+
+func (r *contextUsageRule) Check(ctx *RuleContext) []mold.Diagnostic {
+	// Determine the primary platform for threshold calculation.
+	// Use the first detected platform, defaulting to Claude.
+	platform := PlatformClaude
+	for _, f := range ctx.Files {
+		if f.Platform != PlatformGeneric {
+			platform = f.Platform
+			break
+		}
+	}
+	contextWindow, warnTokens, errorTokens := r.contextThresholds(ctx.Config, platform)
+	ctx.ContextWindow = contextWindow
+
+	tip := "replace @imports with markdown links [name](path/to/file.md) so the model reads files on-demand instead of expanding them upfront, or move @imports into skills that are only loaded when invoked — see https://agentskills.io/specification#progressive-disclosure"
+
+	var diags []mold.Diagnostic
+	for _, f := range ctx.Files {
+		if f.Platform != PlatformClaude {
+			continue
+		}
+		// Only measure .md instruction files, not .json or .yaml configs
+		if !strings.HasSuffix(f.Path, ".md") {
+			continue
+		}
+
+		visited := make(map[string]bool)
+		var cycles []string
+		var importCount int
+
+		totalChars := expandedCharCount(f.Content, f.Path, ctx.RootDir, visited, &cycles, &importCount)
+		estimatedTokens := charsToTokens(totalChars)
+
+		// Always record context stats for output
+		ctx.ContextStats = append(ctx.ContextStats, FileContextStat{
+			File:            f.Path,
+			EstimatedTokens: estimatedTokens,
+			ImportCount:     importCount,
+			PluginDir:       f.PluginDir,
+		})
+
+		// Report circular references
+		for _, cycle := range cycles {
+			diags = append(diags, mold.Diagnostic{
+				Severity: mold.SeverityWarning,
+				Message:  fmt.Sprintf("circular @import detected: %s", cycle),
+				Tip:      "circular imports cause infinite expansion; restructure to form a DAG",
+				File:     f.Path,
+				Rule:     r.Name(),
+			})
+		}
+
+		pct := pctOf(estimatedTokens, contextWindow)
+		if estimatedTokens > errorTokens || estimatedTokens > warnTokens {
+			// Build import breakdown for the tip
+			fileTip := tip
+			refs := extractImportRefs(f.Content)
+			if len(refs) > 0 {
+				var parts []string
+				for _, ref := range refs {
+					resolvedPath, ok := resolveImportRef(ref, filepath.Dir(f.Path), ctx.RootDir)
+					if ok {
+						info, err := os.Stat(resolvedPath)
+						if err == nil {
+							refTokens := charsToTokens(int(info.Size()))
+							refPct := pctOf(refTokens, contextWindow)
+							parts = append(parts, fmt.Sprintf("@%s (~%d tokens, %.1f%%)", ref, refTokens, refPct))
+						} else {
+							parts = append(parts, "@"+ref)
+						}
+					} else {
+						parts = append(parts, "@"+ref+" (unresolved)")
+					}
+				}
+				fileTip = fmt.Sprintf("heavy imports: %s\nreplace these @imports with markdown links [name](path/to/file.md) so the model reads them on-demand, or move them into skills — see https://agentskills.io/specification#progressive-disclosure", strings.Join(parts, ", "))
+			}
+
+			sev := r.DefaultSeverity()
+			msg := fmt.Sprintf("file expands to ~%d tokens (%.1f%% of %dK context) across %d @import(s)", estimatedTokens, pct, contextWindow/1000, importCount)
+			if estimatedTokens > errorTokens {
+				sev = mold.SeverityError
+				msg += "; instructions consume a significant portion of the context window"
+			}
+			diags = append(diags, mold.Diagnostic{
+				Severity: sev,
+				Message:  msg,
+				Tip:      fileTip,
+				File:     f.Path,
+				Rule:     r.Name(),
+			})
+		}
+	}
+
+	// Rollup threshold checking: per-plugin and project-level totals
+	diags = append(diags, r.checkRollupThresholds(ctx.ContextStats, contextWindow, warnTokens, errorTokens, tip)...)
+
+	return diags
+}
+
+// checkRollupThresholds emits diagnostics when per-plugin or project-level
+// totals exceed thresholds, even if no individual file does.
+func (r *contextUsageRule) checkRollupThresholds(stats []FileContextStat, contextWindow, warnTokens, errorTokens int, tip string) []mold.Diagnostic {
+	type group struct {
+		tokens int
+		files  int
+	}
+	groups := map[string]*group{} // key: pluginDir or "" for project
+	var order []string
+
+	for _, cs := range stats {
+		key := cs.PluginDir
+		if _, seen := groups[key]; !seen {
+			groups[key] = &group{}
+			order = append(order, key)
+		}
+		groups[key].tokens += cs.EstimatedTokens
+		groups[key].files++
+	}
+
+	var diags []mold.Diagnostic
+	for _, key := range order {
+		g := groups[key]
+		// Skip groups with only 1 file — already checked per-file above
+		if g.files <= 1 {
+			continue
+		}
+
+		pct := pctOf(g.tokens, contextWindow)
+		label := "project instructions"
+		if key != "" {
+			label = fmt.Sprintf("plugin %s", key)
+		}
+
+		// Use the plugin dir or "project" as the file field so badges show the name
+		fileField := key
+		if fileField == "" {
+			fileField = "project"
+		}
+
+		if g.tokens > errorTokens {
+			diags = append(diags, mold.Diagnostic{
+				Severity: mold.SeverityError,
+				Message:  fmt.Sprintf("%s total ~%d tokens (%.1f%% of %dK context) across %d file(s); combined instructions consume a significant portion of the context window", label, g.tokens, pct, contextWindow/1000, g.files),
+				Tip:      tip,
+				File:     fileField,
+				Rule:     r.Name(),
+			})
+		} else if g.tokens > warnTokens {
+			diags = append(diags, mold.Diagnostic{
+				Severity: r.DefaultSeverity(),
+				Message:  fmt.Sprintf("%s total ~%d tokens (%.1f%% of %dK context) across %d file(s)", label, g.tokens, pct, contextWindow/1000, g.files),
+				Tip:      tip,
+				File:     fileField,
+				Rule:     r.Name(),
+			})
+		}
+	}
+	return diags
+}
+
+// expandedCharCount returns the total character count of content including
+// all recursively expanded @ references. visited tracks seen absolute paths
+// to prevent infinite loops. cycles collects descriptions of any circular
+// references found. importCount tracks the number of resolved imports.
+func expandedCharCount(content []byte, filePath, rootDir string, visited map[string]bool, cycles *[]string, importCount *int) int {
+	// Mark this file as visited using its absolute path
+	absPath := filePath
+	if !filepath.IsAbs(filePath) {
+		absPath = filepath.Join(rootDir, filePath)
+	}
+	absPath = filepath.Clean(absPath)
+
+	if visited[absPath] {
+		return 0 // already counted
+	}
+	visited[absPath] = true
+
+	total := len(content)
+	fileDir := filepath.Dir(filePath)
+
+	for _, ref := range extractImportRefs(content) {
+		resolvedPath, ok := resolveImportRef(ref, fileDir, rootDir)
+		if !ok {
+			continue // unresolvable refs handled by import-validation rule
+		}
+
+		resolvedAbs := filepath.Clean(resolvedPath)
+		if visited[resolvedAbs] {
+			// Circular reference — record it but don't recurse
+			*cycles = append(*cycles, fmt.Sprintf("%s → @%s", filepath.Base(filePath), ref))
+			continue
+		}
+
+		*importCount++
+		refContent, err := os.ReadFile(resolvedPath) //#nosec G304
+		if err != nil {
+			continue
+		}
+
+		// Compute the relative path for the referenced file for recursive resolution
+		relPath, err := filepath.Rel(rootDir, resolvedPath)
+		if err != nil {
+			relPath = resolvedPath
+		}
+
+		total += expandedCharCount(refContent, relPath, rootDir, visited, cycles, importCount)
+	}
+
+	return total
 }
