@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -97,7 +98,19 @@ func ProcessTemplate(content string, flux map[string]any, opts ...TemplateOption
 
 	data := BuildTemplateData(flux)
 
-	funcMap := template.FuncMap{}
+	funcMap := template.FuncMap{
+		"has": func(value any, slice any) bool {
+			switch s := slice.(type) {
+			case []any:
+				return slices.Contains(s, value)
+			case []string:
+				if v, ok := value.(string); ok {
+					return slices.Contains(s, v)
+				}
+			}
+			return false
+		},
+	}
 	if cfg.ingotResolver != nil {
 		funcMap["ingot"] = cfg.ingotResolver.Resolve
 	}

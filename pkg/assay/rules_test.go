@@ -1,6 +1,8 @@
 package assay
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -1338,5 +1340,415 @@ func TestSettingsSchemaRule(t *testing.T) {
 				t.Errorf("expected no diagnostic, got: %v", diags)
 			}
 		})
+	}
+}
+
+func TestContextUsageRule(t *testing.T) {
+	// Helper to create a temp dir with files and return a RuleContext
+	setup := func(t *testing.T, files map[string]string, cfg *Config) (*RuleContext, string) {
+		t.Helper()
+		dir := t.TempDir()
+		var detected []DetectedFile
+		for name, content := range files {
+			path := filepath.Join(dir, name)
+			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+				t.Fatal(err)
+			}
+			// Only add CLAUDE.md as a detected file — others are referenced
+			if name == "CLAUDE.md" {
+				detected = append(detected, DetectedFile{
+					Path:     name,
+					Platform: PlatformClaude,
+					Content:  []byte(content),
+				})
+			}
+		}
+		if cfg == nil {
+			cfg = DefaultConfig()
+		}
+		return &RuleContext{RootDir: dir, Files: detected, Config: cfg}, dir
+	}
+
+	t.Run("small file no imports", func(t *testing.T) {
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": "# Instructions\nBe helpful.\n",
+		}, nil)
+		diags := (&contextUsageRule{}).Check(ctx)
+		if len(diags) > 0 {
+			t.Errorf("expected no diagnostic, got: %v", diags)
+		}
+	})
+
+	t.Run("stats always populated", func(t *testing.T) {
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": "# Instructions\nBe helpful.\n",
+		}, nil)
+		(&contextUsageRule{}).Check(ctx)
+		if len(ctx.ContextStats) != 1 {
+			t.Fatalf("expected 1 context stat, got %d", len(ctx.ContextStats))
+		}
+		stat := ctx.ContextStats[0]
+		if stat.File != "CLAUDE.md" {
+			t.Errorf("expected file CLAUDE.md, got %s", stat.File)
+		}
+		if stat.EstimatedTokens <= 0 {
+			t.Errorf("expected positive token estimate, got %d", stat.EstimatedTokens)
+		}
+	})
+
+	t.Run("stats with imports", func(t *testing.T) {
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": "# Instructions\n@shared.md\n",
+			"shared.md": strings.Repeat("word ", 2000),
+		}, nil)
+		(&contextUsageRule{}).Check(ctx)
+		if len(ctx.ContextStats) != 1 {
+			t.Fatalf("expected 1 context stat, got %d", len(ctx.ContextStats))
+		}
+		stat := ctx.ContextStats[0]
+		if stat.ImportCount != 1 {
+			t.Errorf("expected 1 import, got %d", stat.ImportCount)
+		}
+	})
+
+	t.Run("below warning threshold", func(t *testing.T) {
+		// ~10K chars = ~2500 tokens, well under 15K default
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": "# Instructions\n@shared.md\n",
+			"shared.md": strings.Repeat("word ", 2000), // ~10K chars
+		}, nil)
+		diags := (&contextUsageRule{}).Check(ctx)
+		if len(diags) > 0 {
+			t.Errorf("expected no diagnostic, got: %v", diags)
+		}
+	})
+
+	t.Run("above warning threshold", func(t *testing.T) {
+		// Default warn = 10% of 200K = 20K tokens. ~100K chars = ~25K tokens, above warn.
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": "# Instructions\n@shared.md\n",
+			"shared.md": strings.Repeat("word ", 20000), // ~100K chars = ~25K tokens
+		}, nil)
+		diags := (&contextUsageRule{}).Check(ctx)
+		warnCount := 0
+		for _, d := range diags {
+			if d.Severity == mold.SeverityWarning && strings.Contains(d.Message, "% of") {
+				warnCount++
+				// Verify import breakdown in tip
+				if !strings.Contains(d.Tip, "@shared.md") {
+					t.Errorf("expected tip to list @shared.md import, got: %s", d.Tip)
+				}
+			}
+		}
+		if warnCount != 1 {
+			t.Errorf("expected 1 warning diagnostic, got %d; diags: %v", warnCount, diags)
+		}
+	})
+
+	t.Run("import breakdown lists multiple imports", func(t *testing.T) {
+		// Two imports that together exceed the warn threshold
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": "@a.md\n@b.md\n",
+			"a.md":      strings.Repeat("a", 50000), // ~12.5K tokens
+			"b.md":      strings.Repeat("b", 50000), // ~12.5K tokens
+		}, nil)
+		diags := (&contextUsageRule{}).Check(ctx)
+		for _, d := range diags {
+			if d.Severity == mold.SeverityWarning && strings.Contains(d.Message, "% of") {
+				if !strings.Contains(d.Tip, "@a.md") || !strings.Contains(d.Tip, "@b.md") {
+					t.Errorf("expected tip to list both @a.md and @b.md, got: %s", d.Tip)
+				}
+				// Verify token counts appear for each import
+				if !strings.Contains(d.Tip, "tokens") {
+					t.Errorf("expected tip to include token counts, got: %s", d.Tip)
+				}
+			}
+		}
+	})
+
+	t.Run("above error threshold", func(t *testing.T) {
+		// Default error = 25% of 200K = 50K tokens. ~240K chars = ~60K tokens, above error.
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": "# Instructions\n@big.md\n",
+			"big.md":    strings.Repeat("word ", 48000), // ~240K chars = ~60K tokens
+		}, nil)
+		diags := (&contextUsageRule{}).Check(ctx)
+		errCount := 0
+		for _, d := range diags {
+			if d.Severity == mold.SeverityError && strings.Contains(d.Message, "% of") {
+				errCount++
+			}
+		}
+		if errCount != 1 {
+			t.Errorf("expected 1 error diagnostic, got %d; diags: %v", errCount, diags)
+		}
+	})
+
+	t.Run("custom thresholds via pct", func(t *testing.T) {
+		// 100K chars / 3.5 = ~28.5K tokens; custom warn at 20% of 184K = ~36.8K should not trigger
+		cfg := DefaultConfig()
+		cfg.Rules = map[string]RuleConfig{
+			"context-usage": {Options: map[string]any{"warn-pct": 20, "error-pct": 40}},
+		}
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": "# Instructions\n@shared.md\n",
+			"shared.md": strings.Repeat("word ", 20000), // ~100K chars = ~28.5K tokens
+		}, cfg)
+		diags := (&contextUsageRule{}).Check(ctx)
+		for _, d := range diags {
+			if d.Severity <= mold.SeverityWarning && strings.Contains(d.Message, "% of") {
+				t.Errorf("expected no threshold diagnostic with custom config, got: %v", d)
+			}
+		}
+	})
+
+	t.Run("custom thresholds via absolute tokens", func(t *testing.T) {
+		// Legacy: absolute token overrides take precedence
+		cfg := DefaultConfig()
+		cfg.Rules = map[string]RuleConfig{
+			"context-usage": {Options: map[string]any{"warn-tokens": 30000, "error-tokens": 100000}},
+		}
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": "# Instructions\n@shared.md\n",
+			"shared.md": strings.Repeat("word ", 20000), // ~25K tokens, under 30K warn
+		}, cfg)
+		diags := (&contextUsageRule{}).Check(ctx)
+		for _, d := range diags {
+			if d.Severity <= mold.SeverityWarning && strings.Contains(d.Message, "% of") {
+				t.Errorf("expected no threshold diagnostic with custom absolute config, got: %v", d)
+			}
+		}
+	})
+
+	t.Run("non-claude file skipped", func(t *testing.T) {
+		dir := t.TempDir()
+		ctx := &RuleContext{
+			RootDir: dir,
+			Files: []DetectedFile{{
+				Path:     ".cursorrules",
+				Platform: PlatformCursor,
+				Content:  []byte(strings.Repeat("word ", 48000)),
+			}},
+			Config: DefaultConfig(),
+		}
+		diags := (&contextUsageRule{}).Check(ctx)
+		if len(diags) > 0 {
+			t.Errorf("expected no diagnostic for non-Claude file, got: %v", diags)
+		}
+	})
+
+	t.Run("unresolvable ref skipped", func(t *testing.T) {
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": "# Instructions\n@nonexistent.md\n",
+		}, nil)
+		diags := (&contextUsageRule{}).Check(ctx)
+		if len(diags) > 0 {
+			t.Errorf("expected no diagnostic for unresolvable ref, got: %v", diags)
+		}
+	})
+
+	t.Run("transitive imports", func(t *testing.T) {
+		// A -> B -> C, each ~30K chars = total ~90K chars = ~22500 tokens > 20K warn (10% of 200K)
+		ctx, _ := setup(t, map[string]string{
+			"CLAUDE.md": strings.Repeat("x", 30000) + "\n@b.md\n",
+			"b.md":      strings.Repeat("y", 30000) + "\n@c.md\n",
+			"c.md":      strings.Repeat("z", 30000),
+		}, nil)
+		diags := (&contextUsageRule{}).Check(ctx)
+		warnCount := 0
+		for _, d := range diags {
+			if d.Severity == mold.SeverityWarning && strings.Contains(d.Message, "% of") {
+				warnCount++
+			}
+		}
+		if warnCount != 1 {
+			t.Errorf("expected 1 warning diagnostic for transitive imports, got %d; diags: %v", warnCount, diags)
+		}
+	})
+}
+
+func TestContextUsageRule_CircularReference(t *testing.T) {
+	dir := t.TempDir()
+	// A imports B, B imports A
+	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("# Instructions\n@b.md\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.md"), []byte("# Shared\n@CLAUDE.md\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := &RuleContext{
+		RootDir: dir,
+		Files: []DetectedFile{{
+			Path:     "CLAUDE.md",
+			Platform: PlatformClaude,
+			Content:  []byte("# Instructions\n@b.md\n"),
+		}},
+		Config: DefaultConfig(),
+	}
+
+	diags := (&contextUsageRule{}).Check(ctx)
+	cycleFound := false
+	for _, d := range diags {
+		if strings.Contains(d.Message, "circular") {
+			cycleFound = true
+		}
+	}
+	if !cycleFound {
+		t.Error("expected circular reference diagnostic, got none")
+	}
+}
+
+func TestContextUsageRule_SharedImportCountedOnce(t *testing.T) {
+	dir := t.TempDir()
+	// CLAUDE.md imports b.md and c.md; both import shared.md
+	// shared.md is large enough that counting it twice would cross a threshold
+	sharedContent := strings.Repeat("s", 50000) // ~12500 tokens
+	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("@b.md\n@c.md\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.md"), []byte("@shared.md\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "c.md"), []byte("@shared.md\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "shared.md"), []byte(sharedContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := &RuleContext{
+		RootDir: dir,
+		Files: []DetectedFile{{
+			Path:     "CLAUDE.md",
+			Platform: PlatformClaude,
+			Content:  []byte("@b.md\n@c.md\n"),
+		}},
+		Config: DefaultConfig(),
+	}
+
+	diags := (&contextUsageRule{}).Check(ctx)
+	// Total should be ~50K chars / 4 = ~12500 tokens (shared counted once)
+	// This is under the 20K warning threshold (10% of 200K), so no threshold diagnostic expected
+	for _, d := range diags {
+		if strings.Contains(d.Message, "% of") {
+			t.Errorf("shared import should be counted once; expected no threshold diagnostic, got: %v", d)
+		}
+	}
+}
+
+func TestContextUsageRule_SkipsNonMDFiles(t *testing.T) {
+	ctx := &RuleContext{
+		RootDir: t.TempDir(),
+		Files: []DetectedFile{
+			{Path: ".claude/settings.json", Platform: PlatformClaude, Content: []byte(`{"key": "value"}`)},
+			{Path: ".claude/agents/default.yaml", Platform: PlatformClaude, Content: []byte("name: default\n")},
+		},
+		Config: DefaultConfig(),
+	}
+	(&contextUsageRule{}).Check(ctx)
+	if len(ctx.ContextStats) != 0 {
+		t.Errorf("expected 0 context stats for non-.md files, got %d", len(ctx.ContextStats))
+	}
+}
+
+func TestContextUsageRule_PluginDirPropagated(t *testing.T) {
+	dir := t.TempDir()
+	content := "# Plugin instructions\nBe helpful.\n"
+	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := &RuleContext{
+		RootDir: dir,
+		Files: []DetectedFile{
+			{Path: "CLAUDE.md", Platform: PlatformClaude, Content: []byte(content), PluginDir: "plugins/my-plugin"},
+		},
+		Config: DefaultConfig(),
+	}
+	(&contextUsageRule{}).Check(ctx)
+	if len(ctx.ContextStats) != 1 {
+		t.Fatalf("expected 1 context stat, got %d", len(ctx.ContextStats))
+	}
+	if ctx.ContextStats[0].PluginDir != "plugins/my-plugin" {
+		t.Errorf("expected PluginDir 'plugins/my-plugin', got %q", ctx.ContextStats[0].PluginDir)
+	}
+}
+
+func TestContextSummary(t *testing.T) {
+	stats := []FileContextStat{
+		{File: "CLAUDE.md", EstimatedTokens: 500, PluginDir: ""},
+		{File: ".claude/commands/foo.md", EstimatedTokens: 200, PluginDir: ""},
+		{File: "plugins/a/.claude-plugin/commands/bar.md", EstimatedTokens: 300, PluginDir: "plugins/a"},
+		{File: "plugins/a/.claude-plugin/commands/baz.md", EstimatedTokens: 100, PluginDir: "plugins/a"},
+		{File: "plugins/b/.claude-plugin/commands/qux.md", EstimatedTokens: 400, PluginDir: "plugins/b"},
+	}
+
+	groups, total := contextSummary(stats)
+
+	if total != 1500 {
+		t.Errorf("expected total 1500, got %d", total)
+	}
+	if len(groups) != 3 {
+		t.Fatalf("expected 3 groups (project + 2 plugins), got %d", len(groups))
+	}
+	// project group
+	if groups[0].Name != "project" || groups[0].EstimatedTokens != 700 || groups[0].FileCount != 2 {
+		t.Errorf("unexpected project group: %+v", groups[0])
+	}
+	// plugin a
+	if groups[1].Name != "plugins/a" || groups[1].EstimatedTokens != 400 || groups[1].FileCount != 2 {
+		t.Errorf("unexpected plugin a group: %+v", groups[1])
+	}
+	// plugin b
+	if groups[2].Name != "plugins/b" || groups[2].EstimatedTokens != 400 || groups[2].FileCount != 1 {
+		t.Errorf("unexpected plugin b group: %+v", groups[2])
+	}
+}
+
+func TestContextUsageRule_RollupThresholds(t *testing.T) {
+	dir := t.TempDir()
+	// 3 plugin files, each ~8K tokens individually (under 20K warn),
+	// but plugin total = ~24K which exceeds the 20K warn threshold.
+	for _, name := range []string{"a.md", "b.md", "c.md"} {
+		content := strings.Repeat("x", 32000) // 32K chars / 4 = 8K tokens each
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ctx := &RuleContext{
+		RootDir: dir,
+		Files: []DetectedFile{
+			{Path: "a.md", Platform: PlatformClaude, Content: []byte(strings.Repeat("x", 32000)), PluginDir: "plugins/big"},
+			{Path: "b.md", Platform: PlatformClaude, Content: []byte(strings.Repeat("x", 32000)), PluginDir: "plugins/big"},
+			{Path: "c.md", Platform: PlatformClaude, Content: []byte(strings.Repeat("x", 32000)), PluginDir: "plugins/big"},
+		},
+		Config: DefaultConfig(),
+	}
+	diags := (&contextUsageRule{}).Check(ctx)
+
+	// No individual file should trigger (each ~8K tokens)
+	for _, d := range diags {
+		if d.File != "" && strings.Contains(d.Message, "file expands") {
+			t.Errorf("expected no per-file threshold diagnostic, got: %v", d)
+		}
+	}
+
+	// But the plugin rollup should trigger a warning (~24K > 20K)
+	rollupFound := false
+	for _, d := range diags {
+		if strings.Contains(d.Message, "plugin plugins/big total") {
+			rollupFound = true
+			if d.Severity != mold.SeverityWarning {
+				t.Errorf("expected warning severity for rollup, got %v", d.Severity)
+			}
+		}
+	}
+	if !rollupFound {
+		t.Errorf("expected rollup threshold warning for plugin, got none; diags: %v", diags)
 	}
 }

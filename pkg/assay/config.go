@@ -227,6 +227,15 @@ assay:
         max-tokens: 5000     # warn if skill body exceeds this many estimated tokens
     description-imperative:
       enabled: true
+    context-usage:
+      enabled: true
+      options:
+        # context-window: 184000  # effective context window in tokens (auto-detected per platform)
+        #                         # Claude: 184K, Cursor: 113K, Codex: 190K, Copilot: 118K
+        warn-pct: 10              # warn when instructions exceed this % of effective context window
+        error-pct: 25             # error when instructions exceed this % of effective context window
+        # warn-tokens: 18400     # optional: override with absolute token count
+        # error-tokens: 46000    # optional: override with absolute token count
   ignore: []
     # - "vendor/**"
     # - ".claude/rules/generated-*.md"

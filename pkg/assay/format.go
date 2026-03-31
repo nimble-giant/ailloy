@@ -30,6 +30,53 @@ func NewFormatter(format string, workDir string) Formatter {
 	}
 }
 
+// contextGroupStat holds rollup token stats for a plugin or project group.
+type contextGroupStat struct {
+	Name            string
+	EstimatedTokens int
+	FileCount       int
+}
+
+// contextSummary computes rollup totals from per-file stats.
+// Returns per-plugin groups (if any plugins exist) and the overall total.
+func contextSummary(stats []FileContextStat) (groups []contextGroupStat, total int) {
+	pluginTokens := map[string]int{} // pluginDir -> tokens
+	pluginFiles := map[string]int{}  // pluginDir -> file count
+	var pluginOrder []string
+	projectTokens := 0
+	projectFiles := 0
+
+	for _, cs := range stats {
+		total += cs.EstimatedTokens
+		if cs.PluginDir != "" {
+			if _, seen := pluginTokens[cs.PluginDir]; !seen {
+				pluginOrder = append(pluginOrder, cs.PluginDir)
+			}
+			pluginTokens[cs.PluginDir] += cs.EstimatedTokens
+			pluginFiles[cs.PluginDir]++
+		} else {
+			projectTokens += cs.EstimatedTokens
+			projectFiles++
+		}
+	}
+
+	if projectFiles > 0 {
+		groups = append(groups, contextGroupStat{
+			Name:            "project",
+			EstimatedTokens: projectTokens,
+			FileCount:       projectFiles,
+		})
+	}
+	for _, pd := range pluginOrder {
+		groups = append(groups, contextGroupStat{
+			Name:            pd,
+			EstimatedTokens: pluginTokens[pd],
+			FileCount:       pluginFiles[pd],
+		})
+	}
+	return groups, total
+}
+
 // ConsoleFormatter renders diagnostics grouped by rule with educational rationale headers.
 type ConsoleFormatter struct {
 	// WorkDir is used to resolve relative file paths into clickable file:// hyperlinks.
@@ -128,9 +175,66 @@ func (f *ConsoleFormatter) Format(result *AssayResult) string {
 			}
 			b.WriteString("\n")
 		}
+
+		// Context usage summary: appended after context-usage diagnostics
+		if g.rule == "context-usage" && len(result.ContextStats) > 0 {
+			f.writeContextSummary(&b, result)
+		}
+	}
+
+	// If there are context stats but no context-usage diagnostics were generated
+	// (all files within thresholds), render the summary section standalone.
+	if len(result.ContextStats) > 0 && !result.HasContextFindings() {
+		ruleName := "context-usage"
+		header := ruleHeaderStyle.Render(ruleName)
+		sep := separatorStyle.Render(strings.Repeat("─", max(0, 72-len(ruleName)-4)))
+		b.WriteString("── " + header + " " + sep + "\n")
+		if r := RuleRationale(ruleName); r != "" {
+			b.WriteString(rationaleStyle.Render("   "+r) + "\n")
+		}
+		b.WriteString("\n")
+		f.writeContextSummary(&b, result)
 	}
 
 	return b.String()
+}
+
+// writeContextSummary appends the context usage rollup summary after context-usage diagnostics.
+// With --verbose, it also includes per-file detail for files that didn't trigger diagnostics.
+func (f *ConsoleFormatter) writeContextSummary(b *strings.Builder, result *AssayResult) {
+	summary, total := contextSummary(result.ContextStats)
+
+	// Per-file detail: only with --verbose
+	if result.Verbose {
+		for _, cs := range result.ContextStats {
+			pct := float64(cs.EstimatedTokens) * 100 / float64(result.ContextWindow)
+			var label string
+			if cs.ImportCount == 0 {
+				label = fmt.Sprintf("~%d tokens (%.1f%%)", cs.EstimatedTokens, pct)
+			} else {
+				label = fmt.Sprintf("~%d tokens (%.1f%%, %d @import(s))", cs.EstimatedTokens, pct, cs.ImportCount)
+			}
+			fileText := styles.SubtleStyle.Render(cs.File)
+			b.WriteString("   " + f.fileHyperlink(cs.File, fileText) + "  " + label + "\n")
+		}
+		b.WriteString("\n")
+	}
+
+	// Rollup summary: show per-group breakdown when plugins exist
+	if len(summary) > 1 || (len(summary) == 1 && summary[0].Name != "project") {
+		for _, g := range summary {
+			name := g.Name
+			if name == "project" {
+				name = "project root"
+			}
+			pct := float64(g.EstimatedTokens) * 100 / float64(result.ContextWindow)
+			fmt.Fprintf(b, "   %s  ~%d tokens (%.1f%%, %d file(s))\n",
+				styles.SubtleStyle.Render(name), g.EstimatedTokens, pct, g.FileCount)
+		}
+	}
+	totalPct := float64(total) * 100 / float64(result.ContextWindow)
+	fmt.Fprintf(b, "   %s  ~%d tokens (%.1f%% of %dK context window)\n\n",
+		ruleHeaderStyle.Render("total context"), total, totalPct, result.ContextWindow/1000)
 }
 
 func max(a, b int) int {
@@ -167,9 +271,26 @@ type jsonDiagnostic struct {
 	Rule     string `json:"rule,omitempty"`
 }
 
+type jsonContextStat struct {
+	File            string `json:"file"`
+	EstimatedTokens int    `json:"estimated_tokens"`
+	ImportCount     int    `json:"import_count"`
+	PluginDir       string `json:"plugin_dir,omitempty"`
+}
+
+type jsonContextGroup struct {
+	Name            string `json:"name"`
+	EstimatedTokens int    `json:"estimated_tokens"`
+	FileCount       int    `json:"file_count"`
+}
+
 type jsonOutput struct {
-	FilesScanned int              `json:"files_scanned"`
-	Diagnostics  []jsonDiagnostic `json:"diagnostics"`
+	FilesScanned   int                `json:"files_scanned"`
+	Diagnostics    []jsonDiagnostic   `json:"diagnostics"`
+	ContextWindow  int                `json:"context_window,omitempty"`
+	ContextStats   []jsonContextStat  `json:"context_stats,omitempty"`
+	ContextSummary []jsonContextGroup `json:"context_summary,omitempty"`
+	TotalTokens    int                `json:"total_estimated_tokens,omitempty"`
 }
 
 func (f *JSONFormatter) Format(result *AssayResult) string {
@@ -185,6 +306,20 @@ func (f *JSONFormatter) Format(result *AssayResult) string {
 			File:     d.File,
 			Rule:     d.Rule,
 		})
+	}
+	if len(result.ContextStats) > 0 {
+		out.ContextWindow = result.ContextWindow
+		hasFindings := result.HasContextFindings()
+		if result.Verbose || hasFindings {
+			for _, cs := range result.ContextStats {
+				out.ContextStats = append(out.ContextStats, jsonContextStat(cs))
+			}
+		}
+		summary, total := contextSummary(result.ContextStats)
+		out.TotalTokens = total
+		for _, g := range summary {
+			out.ContextSummary = append(out.ContextSummary, jsonContextGroup(g))
+		}
 	}
 	data, _ := json.MarshalIndent(out, "", "  ")
 	return string(data) + "\n"
@@ -231,6 +366,40 @@ func (f *MarkdownFormatter) Format(result *AssayResult) string {
 			}
 		}
 		b.WriteString("\n")
+	}
+
+	if len(result.ContextStats) > 0 {
+		hasFindings := result.HasContextFindings()
+		summary, total := contextSummary(result.ContextStats)
+
+		b.WriteString("## :bar_chart: Context Usage\n\n")
+
+		if result.Verbose || hasFindings {
+			b.WriteString("| File | Est. Tokens | % of Context | @imports |\n")
+			b.WriteString("|------|-------------|--------------|----------|\n")
+			for _, cs := range result.ContextStats {
+				pct := float64(cs.EstimatedTokens) * 100 / float64(result.ContextWindow)
+				b.WriteString(fmt.Sprintf("| `%s` | ~%d | %.1f%% | %d |\n", cs.File, cs.EstimatedTokens, pct, cs.ImportCount))
+			}
+			b.WriteString("\n")
+		}
+
+		if len(summary) > 1 || (len(summary) == 1 && summary[0].Name != "project") {
+			b.WriteString("| Group | Est. Tokens | % of Context | Files |\n")
+			b.WriteString("|-------|-------------|--------------|-------|\n")
+			for _, g := range summary {
+				name := g.Name
+				if name == "project" {
+					name = "project root"
+				}
+				pct := float64(g.EstimatedTokens) * 100 / float64(result.ContextWindow)
+				b.WriteString(fmt.Sprintf("| %s | ~%d | %.1f%% | %d |\n", name, g.EstimatedTokens, pct, g.FileCount))
+			}
+			b.WriteString("\n")
+		}
+
+		totalPct := float64(total) * 100 / float64(result.ContextWindow)
+		b.WriteString(fmt.Sprintf("**Total estimated context:** ~%d tokens (%.1f%% of %dK context window)\n\n", total, totalPct, result.ContextWindow/1000))
 	}
 
 	return b.String()
