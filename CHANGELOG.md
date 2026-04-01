@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.13](https://github.com/nimble-giant/ailloy/compare/v0.6.12...v0.6.13) (2026-04-01)
+
+
+### Features
+
+* add context-usage lint rule with token estimation and rollups ([0110c58](https://github.com/nimble-giant/ailloy/commit/0110c58bc560de6c9493afded6a74607ec6ca75f))
+
 ## [0.6.12](https://github.com/nimble-giant/ailloy/compare/v0.6.11...v0.6.12) (2026-03-24)
 
 
