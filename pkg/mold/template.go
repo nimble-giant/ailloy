@@ -36,6 +36,7 @@ var goTemplateKeywords = map[string]bool{
 	"println": true, "call": true,
 	"eq": true, "ne": true, "lt": true, "le": true, "gt": true, "ge": true,
 	"ingot": true,
+	"has":   true,
 }
 
 // TemplateOption configures optional behaviour for ProcessTemplate.
@@ -72,6 +73,25 @@ func preProcessTemplate(content string) string {
 	})
 }
 
+// baseFuncMap returns the template function map shared by ProcessTemplate and
+// template validation (Temper). Keeping it in one place ensures that the
+// validator accepts every function the renderer does.
+func baseFuncMap() template.FuncMap {
+	return template.FuncMap{
+		"has": func(value any, slice any) bool {
+			switch s := slice.(type) {
+			case []any:
+				return slices.Contains(s, value)
+			case []string:
+				if v, ok := value.(string); ok {
+					return slices.Contains(s, v)
+				}
+			}
+			return false
+		},
+	}
+}
+
 // ProcessTemplate renders a template string using Go's text/template engine.
 //
 // It supports:
@@ -98,19 +118,7 @@ func ProcessTemplate(content string, flux map[string]any, opts ...TemplateOption
 
 	data := BuildTemplateData(flux)
 
-	funcMap := template.FuncMap{
-		"has": func(value any, slice any) bool {
-			switch s := slice.(type) {
-			case []any:
-				return slices.Contains(s, value)
-			case []string:
-				if v, ok := value.(string); ok {
-					return slices.Contains(s, v)
-				}
-			}
-			return false
-		},
-	}
+	funcMap := baseFuncMap()
 	if cfg.ingotResolver != nil {
 		funcMap["ingot"] = cfg.ingotResolver.Resolve
 	}
