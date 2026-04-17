@@ -7,40 +7,63 @@ import (
 	"time"
 )
 
+// ResolveOption configures optional behaviour for Resolve.
+type ResolveOption func(*resolveConfig)
+
+type resolveConfig struct {
+	skipLock bool
+}
+
+// WithoutLock disables reading and writing the ailloy.lock file during resolution.
+// Use this for global installs where a project-local lock file is not appropriate.
+func WithoutLock() ResolveOption {
+	return func(c *resolveConfig) {
+		c.skipLock = true
+	}
+}
+
 // Resolve is the main entry point for SCM-native mold resolution.
 // It parses a raw reference, checks the lock file, resolves the version
 // from remote tags, fetches/caches the mold, updates the lock, and returns
 // an fs.FS rooted at the mold directory.
-func Resolve(rawRef string) (fs.FS, error) {
+func Resolve(rawRef string, opts ...ResolveOption) (fs.FS, error) {
 	ref, err := ParseReference(rawRef)
 	if err != nil {
 		return nil, fmt.Errorf("parsing reference: %w", err)
 	}
 
 	git := DefaultGitRunner()
-	return ResolveWith(ref, git)
+	return ResolveWith(ref, git, opts...)
 }
 
 // ResolveWith is like Resolve but accepts an injectable GitRunner (for testing).
-func ResolveWith(ref *Reference, git GitRunner) (fs.FS, error) {
-	// Read existing lock file.
-	lock, err := ReadLockFile(LockFileName)
-	if err != nil {
-		log.Printf("warning: reading lock file: %v", err)
+func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, error) {
+	var cfg resolveConfig
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 
-	// Check lock for a pinned version.
+	// Read existing lock file.
 	var resolved *ResolvedVersion
-	if entry := lock.FindEntry(ref.CacheKey()); entry != nil && ref.Type != Branch && ref.Type != SHA {
-		// Use locked version if it satisfies the reference.
-		if lockedSatisfies(ref, entry) {
-			resolved = &ResolvedVersion{Tag: entry.Version, Commit: entry.Commit}
-			log.Printf("using locked version %s@%s", ref.CacheKey(), entry.Version)
+	if !cfg.skipLock {
+		lock, err := ReadLockFile(LockFileName)
+		if err != nil {
+			log.Printf("warning: reading lock file: %v", err)
+		}
+
+		// Check lock for a pinned version.
+		if entry := lock.FindEntry(ref.CacheKey()); entry != nil && ref.Type != Branch && ref.Type != SHA {
+			// Use locked version if it satisfies the reference.
+			if lockedSatisfies(ref, entry) {
+				resolved = &ResolvedVersion{Tag: entry.Version, Commit: entry.Commit}
+				log.Printf("using locked version %s@%s", ref.CacheKey(), entry.Version)
+			}
 		}
 	}
 
 	// Resolve version from remote if not locked.
 	if resolved == nil {
+		var err error
 		resolved, err = ResolveVersion(ref, git)
 		if err != nil {
 			return nil, fmt.Errorf("resolving version: %w", err)
@@ -59,8 +82,10 @@ func ResolveWith(ref *Reference, git GitRunner) (fs.FS, error) {
 	}
 
 	// Update lock file.
-	if err := updateLock(ref, resolved); err != nil {
-		log.Printf("warning: updating lock file: %v", err)
+	if !cfg.skipLock {
+		if err := updateLock(ref, resolved); err != nil {
+			log.Printf("warning: updating lock file: %v", err)
+		}
 	}
 
 	return fsys, nil

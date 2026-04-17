@@ -62,7 +62,11 @@ func runCast(_ *cobra.Command, args []string) error {
 func resolveMoldReader(args []string) (*blanks.MoldReader, error) {
 	if len(args) >= 1 {
 		if foundry.IsRemoteReference(args[0]) {
-			fsys, err := foundry.Resolve(args[0])
+			var resolveOpts []foundry.ResolveOption
+			if castGlobal {
+				resolveOpts = append(resolveOpts, foundry.WithoutLock())
+			}
+			fsys, err := foundry.Resolve(args[0], resolveOpts...)
 			if err != nil {
 				return nil, fmt.Errorf("resolving remote mold: %w", err)
 			}
