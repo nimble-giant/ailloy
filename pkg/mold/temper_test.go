@@ -212,6 +212,26 @@ version: 1.0.0
 	}
 }
 
+func TestTemper_HasFunctionInTemplate(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+`)},
+		"commands/has.md": &fstest.MapFile{Data: []byte(`{{- if has "claude" .agent.targets -}}yes{{- end -}}`)},
+	}
+
+	result := Temper(fsys)
+
+	if result.HasErrors() {
+		for _, d := range result.Errors() {
+			t.Errorf("unexpected error: %s: %s", d.File, d.Message)
+		}
+	}
+}
+
 func TestTemper_FluxSchemaValidation(t *testing.T) {
 	fsys := fstest.MapFS{
 		"mold.yaml": &fstest.MapFile{Data: []byte(`
