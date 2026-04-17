@@ -455,7 +455,11 @@ func validateTemplates(fsys fs.FS, result *TemperResult) {
 		}
 
 		content := preProcessTemplate(string(data))
-		if _, parseErr := template.New(path).Funcs(baseFuncMap()).Option("missingkey=zero").Parse(content); parseErr != nil {
+		funcMap := baseFuncMap()
+		// Register a no-op ingot stub so validation accepts {{ingot "name"}}
+		// even without a resolver. The real resolver is only available at render time.
+		funcMap["ingot"] = func(name string) string { return "" }
+		if _, parseErr := template.New(path).Funcs(funcMap).Option("missingkey=zero").Parse(content); parseErr != nil {
 			result.Diagnostics = append(result.Diagnostics, Diagnostic{
 				Severity: SeverityError,
 				Message:  fmt.Sprintf("template syntax error: %v", parseErr),
