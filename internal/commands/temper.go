@@ -24,9 +24,9 @@ Checks structural integrity, manifest fields, file references,
 template syntax, and flux schema consistency. Reports errors
 (blocking) and warnings (informational).
 
-Use --lint to also render blanks and run assay (lint) on the output.
-This catches content-level issues (line count, structure, cross-references)
-before casting, without needing a separate cast + assay step.`,
+Use --assay (or its alias --lint) to also render blanks and run assay on
+the output. This catches content-level issues (line count, structure,
+cross-references) before casting, without needing a separate cast + assay step.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runTemper,
 }
@@ -43,7 +43,9 @@ var (
 func init() {
 	rootCmd.AddCommand(temperCmd)
 
-	temperCmd.Flags().BoolVar(&temperLint, "lint", false, "render blanks and run assay (lint) on the output")
+	temperCmd.Flags().BoolVar(&temperLint, "assay", false, "render blanks and run assay (lint) on the output")
+	temperCmd.Flags().BoolVar(&temperLint, "lint", false, "alias for --assay")
+	_ = temperCmd.Flags().MarkHidden("lint")
 	temperCmd.Flags().StringArrayVar(&temperSetValues, "set", nil, "set flux values for rendering (key=value)")
 	temperCmd.Flags().StringArrayVarP(&temperValFiles, "values", "f", nil, "flux value files for rendering (can be repeated)")
 	temperCmd.Flags().StringVar(&temperFormat, "format", "console", "assay output format: console, json, markdown")
@@ -106,7 +108,7 @@ func runTemper(_ *cobra.Command, args []string) error {
 	if temperLint {
 		if result.ManifestKind != "mold" {
 			fmt.Println()
-			fmt.Println(styles.InfoStyle.Render("--lint is only supported for molds, skipping."))
+			fmt.Println(styles.InfoStyle.Render("--assay is only supported for molds, skipping."))
 			return nil
 		}
 
@@ -262,7 +264,7 @@ func runAssayOnDir(dir string) error {
 	if result.HasFailures(failOnSeverity) {
 		fmt.Println(styles.ErrorStyle.Render(fmt.Sprintf("%d error(s), %d warning(s), %d suggestion(s)",
 			errs, warns, suggestions)))
-		return fmt.Errorf("temper --lint: assay findings exceed --%s threshold", temperFailOn)
+		return fmt.Errorf("temper --assay: assay findings exceed --%s threshold", temperFailOn)
 	}
 
 	fmt.Println(styles.SuccessStyle.Render(fmt.Sprintf("%d error(s), %d warning(s), %d suggestion(s)",
