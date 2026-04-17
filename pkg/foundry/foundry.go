@@ -63,11 +63,11 @@ func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, e
 
 	// Resolve version from remote if not locked.
 	if resolved == nil {
-		var err error
-		resolved, err = ResolveVersion(ref, git)
-		if err != nil {
-			return nil, fmt.Errorf("resolving version: %w", err)
+		v, resolveErr := ResolveVersion(ref, git)
+		if resolveErr != nil {
+			return nil, fmt.Errorf("resolving version: %w", resolveErr)
 		}
+		resolved = v
 	}
 
 	// Fetch (clone/cache).
