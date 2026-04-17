@@ -1,7 +1,10 @@
 package foundry
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLockedSatisfies(t *testing.T) {
@@ -61,5 +64,56 @@ func TestLockedSatisfies(t *testing.T) {
 				t.Errorf("lockedSatisfies() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestWithoutLock_SkipsLockFileIO(t *testing.T) {
+	// Set up: chdir to a temp dir so any lock file write would land here.
+	dir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	// Pre-create a lock file that would match our reference.
+	// Without WithoutLock, ResolveWith would read this and use the locked version.
+	lock := &LockFile{
+		APIVersion: "v1",
+		Molds: []LockEntry{{
+			Name:      "test-mold",
+			Source:    "github.com/test/mold",
+			Version:   "v0.0.1",
+			Commit:    "oldcommit",
+			Timestamp: time.Now().UTC(),
+		}},
+	}
+	if err := WriteLockFile(LockFileName, lock); err != nil {
+		t.Fatal(err)
+	}
+
+	// Record the lock file's mod time before the resolve call.
+	infoBefore, err := os.Stat(filepath.Join(dir, LockFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify WithoutLock sets skipLock on the config.
+	var cfg resolveConfig
+	WithoutLock()(&cfg)
+	if !cfg.skipLock {
+		t.Fatal("WithoutLock should set skipLock to true")
+	}
+
+	// Verify the lock file was not modified (updateLock was not called).
+	infoAfter, err := os.Stat(filepath.Join(dir, LockFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if infoBefore.ModTime() != infoAfter.ModTime() {
+		t.Error("lock file was modified despite WithoutLock being set")
 	}
 }

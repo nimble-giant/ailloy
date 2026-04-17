@@ -232,6 +232,26 @@ version: 1.0.0
 	}
 }
 
+func TestTemper_IngotFunctionInTemplate(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+`)},
+		"commands/inc.md": &fstest.MapFile{Data: []byte(`{{ingot "header"}}`)},
+	}
+
+	result := Temper(fsys)
+
+	if result.HasErrors() {
+		for _, d := range result.Errors() {
+			t.Errorf("unexpected error: %s: %s", d.File, d.Message)
+		}
+	}
+}
+
 func TestTemper_FluxSchemaValidation(t *testing.T) {
 	fsys := fstest.MapFS{
 		"mold.yaml": &fstest.MapFile{Data: []byte(`
