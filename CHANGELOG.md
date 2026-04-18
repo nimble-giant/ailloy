@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.14](https://github.com/nimble-giant/ailloy/compare/v0.6.13...v0.6.14) (2026-04-18)
+
+
+### Features
+
+* add --lint flag to temper command for assay linting ([6a44463](https://github.com/nimble-giant/ailloy/commit/6a444630236ffe4a710548e0be75854b3d8bf699))
+* add 'has' template function ([a47fc61](https://github.com/nimble-giant/ailloy/commit/a47fc612136dcc638763b8c9809faa388daa0d4c))
+* implements option to skip lock file resolution ([cda41e4](https://github.com/nimble-giant/ailloy/commit/cda41e41a7e947b2b5047f5a12d3c704f18b7285))
+
+
+### Bug Fixes
+
+* address lint issues in temper --lint implementation ([ee18fb1](https://github.com/nimble-giant/ailloy/commit/ee18fb1c0fa0731ae0e60a9273e64c413cff450d))
+
 ## [0.6.13](https://github.com/nimble-giant/ailloy/compare/v0.6.12...v0.6.13) (2026-04-01)
 
 
