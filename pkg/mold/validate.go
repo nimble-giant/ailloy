@@ -308,8 +308,9 @@ func temperMold(fsys fs.FS, result *TemperResult) {
 	// Validate flux schema consistency
 	temperFluxSchema(fsys, m.Flux, result)
 
-	// Validate template syntax for all .md files
-	validateTemplates(fsys, result)
+	// Validate template syntax only for output-manifest files
+	outputFiles := resolveOutputPaths(flux["output"], fsys)
+	validateTemplates(fsys, outputFiles, result)
 }
 
 // temperIngot validates an ingot package.
@@ -351,8 +352,12 @@ func temperIngot(fsys fs.FS, result *TemperResult) {
 		}
 	}
 
-	// Validate template syntax for all .md files
-	validateTemplates(fsys, result)
+	// Validate template syntax only for ingot files
+	ingotPaths := make(map[string]bool, len(i.Files))
+	for _, f := range i.Files {
+		ingotPaths[f] = true
+	}
+	validateTemplates(fsys, ingotPaths, result)
 }
 
 // temperFluxSchema checks flux declarations for consistency.
@@ -427,8 +432,23 @@ func temperFluxSchema(fsys fs.FS, manifestFlux []FluxVar, result *TemperResult) 
 	}
 }
 
-// validateTemplates parses all .md files through Go text/template to catch syntax errors.
-func validateTemplates(fsys fs.FS, result *TemperResult) {
+// validateTemplates parses .md files through Go text/template to catch syntax errors.
+// When allowedPaths is non-nil, only files in that set are validated.
+// resolveOutputPaths returns the set of source paths from the output manifest.
+// If output is nil (identity mode), all .md files are considered in scope.
+func resolveOutputPaths(output any, fsys fs.FS) map[string]bool {
+	resolved, err := ResolveFiles(output, fsys)
+	if err != nil {
+		return nil // nil means "validate all" as fallback
+	}
+	paths := make(map[string]bool, len(resolved))
+	for _, rf := range resolved {
+		paths[rf.SrcPath] = true
+	}
+	return paths
+}
+
+func validateTemplates(fsys fs.FS, allowedPaths map[string]bool, result *TemperResult) {
 	_ = fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -441,6 +461,10 @@ func validateTemplates(fsys fs.FS, result *TemperResult) {
 		}
 		// Skip manifest files
 		if path == "mold.yaml" || path == "ingot.yaml" {
+			return nil
+		}
+		// If allowedPaths is set, only validate files in scope
+		if allowedPaths != nil && !allowedPaths[path] {
 			return nil
 		}
 
