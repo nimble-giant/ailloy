@@ -331,7 +331,7 @@ type MarkdownFormatter struct{}
 func (f *MarkdownFormatter) Format(result *AssayResult) string {
 	var b strings.Builder
 
-	b.WriteString(fmt.Sprintf("# Assay Results\n\n**Files scanned:** %d\n\n", result.FilesScanned))
+	fmt.Fprintf(&b, "# Assay Results\n\n**Files scanned:** %d\n\n", result.FilesScanned)
 
 	groups := map[mold.DiagSeverity][]mold.Diagnostic{
 		mold.SeverityError:      result.Errors(),
@@ -354,15 +354,15 @@ func (f *MarkdownFormatter) Format(result *AssayResult) string {
 		if len(diags) == 0 {
 			continue
 		}
-		b.WriteString(fmt.Sprintf("## %s %s (%d)\n\n", l.emoji, l.title, len(diags)))
+		fmt.Fprintf(&b, "## %s %s (%d)\n\n", l.emoji, l.title, len(diags))
 		for _, d := range diags {
 			file := ""
 			if d.File != "" {
 				file = fmt.Sprintf("`%s`: ", d.File)
 			}
-			b.WriteString(fmt.Sprintf("- %s%s\n", file, d.Message))
+			fmt.Fprintf(&b, "- %s%s\n", file, d.Message)
 			if d.Tip != "" {
-				b.WriteString(fmt.Sprintf("  > 💡 %s\n", d.Tip))
+				fmt.Fprintf(&b, "  > 💡 %s\n", d.Tip)
 			}
 		}
 		b.WriteString("\n")
@@ -379,7 +379,7 @@ func (f *MarkdownFormatter) Format(result *AssayResult) string {
 			b.WriteString("|------|-------------|--------------|----------|\n")
 			for _, cs := range result.ContextStats {
 				pct := float64(cs.EstimatedTokens) * 100 / float64(result.ContextWindow)
-				b.WriteString(fmt.Sprintf("| `%s` | ~%d | %.1f%% | %d |\n", cs.File, cs.EstimatedTokens, pct, cs.ImportCount))
+				fmt.Fprintf(&b, "| `%s` | ~%d | %.1f%% | %d |\n", cs.File, cs.EstimatedTokens, pct, cs.ImportCount)
 			}
 			b.WriteString("\n")
 		}
@@ -393,13 +393,13 @@ func (f *MarkdownFormatter) Format(result *AssayResult) string {
 					name = "project root"
 				}
 				pct := float64(g.EstimatedTokens) * 100 / float64(result.ContextWindow)
-				b.WriteString(fmt.Sprintf("| %s | ~%d | %.1f%% | %d |\n", name, g.EstimatedTokens, pct, g.FileCount))
+				fmt.Fprintf(&b, "| %s | ~%d | %.1f%% | %d |\n", name, g.EstimatedTokens, pct, g.FileCount)
 			}
 			b.WriteString("\n")
 		}
 
 		totalPct := float64(total) * 100 / float64(result.ContextWindow)
-		b.WriteString(fmt.Sprintf("**Total estimated context:** ~%d tokens (%.1f%% of %dK context window)\n\n", total, totalPct, result.ContextWindow/1000))
+		fmt.Fprintf(&b, "**Total estimated context:** ~%d tokens (%.1f%% of %dK context window)\n\n", total, totalPct, result.ContextWindow/1000)
 	}
 
 	return b.String()

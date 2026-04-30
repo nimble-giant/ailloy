@@ -39,8 +39,8 @@ func (t *Transformer) Transform(tmpl BlankInfo) ([]byte, error) {
 	var output bytes.Buffer
 
 	// Write command header
-	output.WriteString(fmt.Sprintf("# %s\n", tmpl.Name))
-	output.WriteString(fmt.Sprintf("description: %s\n\n", t.extractShortDescription(sections)))
+	fmt.Fprintf(&output, "# %s\n", tmpl.Name)
+	fmt.Fprintf(&output, "description: %s\n\n", t.extractShortDescription(sections))
 
 	// Add invocation syntax if present
 	if syntax := sections["invocation"]; syntax != "" {
@@ -263,12 +263,12 @@ func (t *Transformer) transformInstructions(instructions string) string {
 		if numberedStepPattern.MatchString(line) {
 			// Extract the step content
 			stepContent := stepPrefixPattern.ReplaceAllString(line, "")
-			output.WriteString(fmt.Sprintf("%d. %s\n", stepNumber, stepContent))
+			fmt.Fprintf(&output, "%d. %s\n", stepNumber, stepContent)
 			stepNumber++
 		} else if strings.HasPrefix(line, "- ") && !strings.Contains(strings.ToLower(line), "example") {
 			// Convert bullet points to numbered steps
 			stepContent := strings.TrimPrefix(line, "- ")
-			output.WriteString(fmt.Sprintf("%d. %s\n", stepNumber, stepContent))
+			fmt.Fprintf(&output, "%d. %s\n", stepNumber, stepContent)
 			stepNumber++
 		}
 	}
