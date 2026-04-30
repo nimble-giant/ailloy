@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.15](https://github.com/nimble-giant/ailloy/compare/v0.6.14...v0.6.15) (2026-04-30)
+
+
+### Bug Fixes
+
+* **assay:** resolve staticcheck QF1012 issues surfaced by golangci-lint upgrade ([1ba792c](https://github.com/nimble-giant/ailloy/commit/1ba792c28d37c3bf66add90528881526d81e1a86))
+* enhance foundry resolution and mold templates ([fa57ade](https://github.com/nimble-giant/ailloy/commit/fa57adeee3076ea56c709aff983c04ffe9beb76c))
+
 ## [0.6.14](https://github.com/nimble-giant/ailloy/compare/v0.6.13...v0.6.14) (2026-04-18)
 
 
