@@ -359,6 +359,32 @@ output:
 	}
 }
 
+func TestTemper_SkipsNonOutputMarkdown(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+`)},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`
+output:
+  commands: .claude/commands
+`)},
+		"commands/good.md": &fstest.MapFile{Data: []byte("# Good\n{{if .foo}}yes{{end}}")},
+		"docs/plan.md":     &fstest.MapFile{Data: []byte("Example: {{.broken")},
+		"README.md":        &fstest.MapFile{Data: []byte("See {{.broken")},
+	}
+
+	result := Temper(fsys)
+
+	for _, d := range result.Errors() {
+		if d.File == "docs/plan.md" || d.File == "README.md" {
+			t.Errorf("should not validate non-output file %s: %s", d.File, d.Message)
+		}
+	}
+}
+
 func TestTemperResult_ErrorsAndWarnings(t *testing.T) {
 	r := &TemperResult{
 		Diagnostics: []Diagnostic{
