@@ -298,7 +298,7 @@ func extractDescription(content []byte) string {
 func (g *Generator) buildREADME() string {
 	var cmdList strings.Builder
 	for _, tmpl := range g.commands {
-		cmdList.WriteString(fmt.Sprintf("| `/%s:%s` | %s |\n", g.Config.Name, tmpl.Name, tmpl.Description))
+		fmt.Fprintf(&cmdList, "| `/%s:%s` | %s |\n", g.Config.Name, tmpl.Name, tmpl.Description)
 	}
 
 	readme := `# 🧠 Ailloy Plugin for Claude Code
