@@ -153,7 +153,7 @@ func runTemperLint(moldDir string) error {
 	}
 
 	// Build ingot resolver and render files
-	resolver := buildIngotResolver(flux)
+	resolver := buildIngotResolver(flux, reader.Root())
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
 	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())

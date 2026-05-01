@@ -103,7 +103,7 @@ func runRecast(_ *cobra.Command, args []string) error {
 			fetcher, fErr := foundry.NewFetcher(git)
 			if fErr == nil {
 				// Fetch the new version into cache.
-				_, _ = fetcher.Fetch(ref, resolved)
+				_, _, _ = fetcher.Fetch(ref, resolved)
 			}
 
 			lock.UpsertEntry(foundry.LockEntry{

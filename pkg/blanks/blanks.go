@@ -11,11 +11,20 @@ import (
 // MoldReader reads mold content from any fs.FS implementation.
 type MoldReader struct {
 	fsys fs.FS
+	root string
 }
 
-// NewMoldReader creates a MoldReader from an fs.FS.
+// NewMoldReader creates a MoldReader from an fs.FS. The mold has no on-disk
+// root path (e.g., embedded or in-memory).
 func NewMoldReader(fsys fs.FS) *MoldReader {
 	return &MoldReader{fsys: fsys}
+}
+
+// NewMoldReaderFromFS creates a MoldReader from an fs.FS that is known to be
+// rooted at an on-disk directory. The root is used to locate sibling
+// directories (e.g., bundled ingots) during template rendering.
+func NewMoldReaderFromFS(fsys fs.FS, root string) *MoldReader {
+	return &MoldReader{fsys: fsys, root: root}
 }
 
 // NewMoldReaderFromPath creates a MoldReader rooted at a filesystem directory.
@@ -27,12 +36,18 @@ func NewMoldReaderFromPath(moldDir string) (*MoldReader, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("mold path %q is not a directory", moldDir)
 	}
-	return &MoldReader{fsys: os.DirFS(moldDir)}, nil
+	return &MoldReader{fsys: os.DirFS(moldDir), root: moldDir}, nil
 }
 
 // FS returns the underlying filesystem.
 func (r *MoldReader) FS() fs.FS {
 	return r.fsys
+}
+
+// Root returns the on-disk path the mold is rooted at, or an empty string
+// for readers backed by an in-memory or embedded filesystem.
+func (r *MoldReader) Root() string {
+	return r.root
 }
 
 // LoadManifest loads and parses the mold.yaml manifest.

@@ -27,9 +27,17 @@ func WithoutLock() ResolveOption {
 // from remote tags, fetches/caches the mold, updates the lock, and returns
 // an fs.FS rooted at the mold directory.
 func Resolve(rawRef string, opts ...ResolveOption) (fs.FS, error) {
+	fsys, _, err := ResolveWithRoot(rawRef, opts...)
+	return fsys, err
+}
+
+// ResolveWithRoot is like Resolve but also returns the on-disk root path
+// of the resolved mold. The root path is needed by callers that resolve
+// sibling directories (e.g., bundled ingots) during template rendering.
+func ResolveWithRoot(rawRef string, opts ...ResolveOption) (fs.FS, string, error) {
 	ref, err := ParseReference(rawRef)
 	if err != nil {
-		return nil, fmt.Errorf("parsing reference: %w", err)
+		return nil, "", fmt.Errorf("parsing reference: %w", err)
 	}
 
 	git := DefaultGitRunner()
@@ -37,7 +45,8 @@ func Resolve(rawRef string, opts ...ResolveOption) (fs.FS, error) {
 }
 
 // ResolveWith is like Resolve but accepts an injectable GitRunner (for testing).
-func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, error) {
+// It returns the resolved fs.FS and the on-disk root path.
+func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, string, error) {
 	var cfg resolveConfig
 	for _, opt := range opts {
 		opt(&cfg)
@@ -65,7 +74,7 @@ func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, e
 	if resolved == nil {
 		v, resolveErr := ResolveVersion(ref, git)
 		if resolveErr != nil {
-			return nil, fmt.Errorf("resolving version: %w", resolveErr)
+			return nil, "", fmt.Errorf("resolving version: %w", resolveErr)
 		}
 		resolved = v
 	}
@@ -73,12 +82,12 @@ func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, e
 	// Fetch (clone/cache).
 	fetcher, err := NewFetcher(git)
 	if err != nil {
-		return nil, fmt.Errorf("creating fetcher: %w", err)
+		return nil, "", fmt.Errorf("creating fetcher: %w", err)
 	}
 
-	fsys, err := fetcher.Fetch(ref, resolved)
+	fsys, root, err := fetcher.Fetch(ref, resolved)
 	if err != nil {
-		return nil, fmt.Errorf("fetching mold: %w", err)
+		return nil, "", fmt.Errorf("fetching mold: %w", err)
 	}
 
 	// Update lock file.
@@ -88,7 +97,7 @@ func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, e
 		}
 	}
 
-	return fsys, nil
+	return fsys, root, nil
 }
 
 // lockedSatisfies checks whether the locked entry still satisfies the
