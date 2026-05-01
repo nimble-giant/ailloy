@@ -1,6 +1,8 @@
 # Plugins (`ailloy plugin`)
 
 > **Note:** Plugin generation currently supports Claude Code. The core Ailloy pipeline (`cast`, `forge`, `smelt`) is tool-agnostic and works with any AI coding tool through configurable [output mappings](flux.md#output-mapping).
+>
+> **Looking to install a mold as a Claude Code plugin?** See [`cast --as-plugin`](cast-as-plugin.md) for the consumer-facing path that runs the full flux pipeline and writes the plugin to Claude's discovery location.
 
 The `plugin` command generates Claude Code plugins from Ailloy molds. A plugin bundles your mold's commands into a format Claude Code can load directly, including a plugin manifest, documentation, and installation scripts.
 
