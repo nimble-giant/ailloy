@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.16](https://github.com/nimble-giant/ailloy/compare/v0.6.15...v0.6.16) (2026-05-01)
+
+
+### Bug Fixes
+
+* skip .md files outside output manifest during template parsing ([1f16073](https://github.com/nimble-giant/ailloy/commit/1f160733ea8b1fa4705783de7c1736e8387a5990)), closes [#126](https://github.com/nimble-giant/ailloy/issues/126)
+* skip writing files that render to empty content ([81ad690](https://github.com/nimble-giant/ailloy/commit/81ad690c86308127d218776bc71593ba9a776d68)), closes [#130](https://github.com/nimble-giant/ailloy/issues/130)
+* yaml-parse --set values to support array types ([26ba0bb](https://github.com/nimble-giant/ailloy/commit/26ba0bb2c5dd04d08c947beeb5e70c3d40d63a78)), closes [#129](https://github.com/nimble-giant/ailloy/issues/129)
+
 ## [0.6.15](https://github.com/nimble-giant/ailloy/compare/v0.6.14...v0.6.15) (2026-04-30)
 
 
