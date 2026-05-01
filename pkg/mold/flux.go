@@ -234,6 +234,60 @@ func SetNestedAny(m map[string]any, dottedKey string, value any) {
 	}
 }
 
+// MergeSet returns a deep copy of base with the values from set merged in.
+// Top-level keys in set that contain dots are expanded as nested paths
+// (e.g., "agent.current_target" creates base["agent"]["current_target"]).
+// Map values merge recursively rather than replace. The base map (and any
+// nested maps it contains) is never mutated.
+func MergeSet(base, set map[string]any) map[string]any {
+	out := deepCopyMap(base)
+	for k, v := range set {
+		if strings.Contains(k, ".") {
+			SetNestedAny(out, k, v)
+			continue
+		}
+		if nested, ok := v.(map[string]any); ok {
+			existing, _ := out[k].(map[string]any)
+			out[k] = mergeMaps(existing, nested)
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// mergeMaps returns a deep copy of base with overlay merged in recursively.
+// Neither map is mutated.
+func mergeMaps(base, overlay map[string]any) map[string]any {
+	out := deepCopyMap(base)
+	for k, v := range overlay {
+		if nested, ok := v.(map[string]any); ok {
+			existing, _ := out[k].(map[string]any)
+			out[k] = mergeMaps(existing, nested)
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// deepCopyMap recursively copies a map[string]any so nested maps can be
+// mutated without affecting the original.
+func deepCopyMap(m map[string]any) map[string]any {
+	if m == nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		if nested, ok := v.(map[string]any); ok {
+			out[k] = deepCopyMap(nested)
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
 // validateFluxType checks that a value conforms to the declared type.
 // Returns an error message string, or empty string if valid.
 func validateFluxType(typ, name, val string) string {

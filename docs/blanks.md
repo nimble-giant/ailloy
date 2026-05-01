@@ -395,3 +395,41 @@ output:
 ```
 
 Since `output:` lives in flux, consumers can override destination paths at install time using `-f` value files or `--set` flags. This means a single mold can serve teams using different AI coding tools.
+
+### Fan-out: one source, many destinations
+
+When the same source directory should render to multiple destinations — for example, an agent definition that needs to land in `.claude/agents/`, `.opencode/agents/`, and `.cursor/rules/` — use a list of destinations:
+
+```yaml
+output:
+  agents:
+    - dest: .claude/agents
+      set:
+        agent.current_target: claude
+    - dest: .opencode/agents
+      set:
+        agent.current_target: opencode
+    - dest: .cursor/rules
+      set:
+        agent.current_target: cursor
+```
+
+Each list entry can be either a string (just a destination path) or a map with `dest`, optional `process`, and optional `set`. The `set` map injects values into the template context for that render pass only — without touching the global flux. Inside the template, switch on the injected value:
+
+```markdown
+{{- if eq .agent.current_target "claude" -}}
+---
+name: coding-agent
+model: opus
+---
+{{- else if eq .agent.current_target "opencode" -}}
+---
+mode: primary
+model: anthropic/claude-opus-4-20250514
+---
+{{- end -}}
+
+{{ingot "coding-agent-body"}}
+```
+
+Keys in `set` may use dotted paths (`agent.current_target`) which expand to nested maps, or be nested maps directly. The fan-out form works for both directory mappings and individual file mappings.

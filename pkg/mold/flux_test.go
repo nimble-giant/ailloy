@@ -920,3 +920,65 @@ func TestSetNestedAny_MapValue(t *testing.T) {
 		t.Errorf("expected Ready, got %v", ready["label"])
 	}
 }
+
+func TestMergeSet_DottedKey(t *testing.T) {
+	base := map[string]any{
+		"agent": map[string]any{"name": "coding"},
+	}
+	set := map[string]any{
+		"agent.current_target": "claude",
+	}
+
+	out := MergeSet(base, set)
+
+	agent, ok := out["agent"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected agent map, got %T", out["agent"])
+	}
+	if agent["name"] != "coding" {
+		t.Errorf("expected base value preserved, got %v", agent["name"])
+	}
+	if agent["current_target"] != "claude" {
+		t.Errorf("expected current_target=claude, got %v", agent["current_target"])
+	}
+
+	// Original base map must not be mutated.
+	baseAgent := base["agent"].(map[string]any)
+	if _, exists := baseAgent["current_target"]; exists {
+		t.Error("expected base to be untouched, but current_target was set")
+	}
+}
+
+func TestMergeSet_NestedMap(t *testing.T) {
+	base := map[string]any{
+		"agent": map[string]any{"name": "coding"},
+	}
+	set := map[string]any{
+		"agent": map[string]any{"current_target": "opencode"},
+	}
+
+	out := MergeSet(base, set)
+	agent := out["agent"].(map[string]any)
+	if agent["name"] != "coding" {
+		t.Errorf("expected name=coding preserved, got %v", agent["name"])
+	}
+	if agent["current_target"] != "opencode" {
+		t.Errorf("expected current_target=opencode, got %v", agent["current_target"])
+	}
+}
+
+func TestMergeSet_TopLevelScalar(t *testing.T) {
+	base := map[string]any{"x": "old"}
+	set := map[string]any{"x": "new", "y": 42}
+
+	out := MergeSet(base, set)
+	if out["x"] != "new" {
+		t.Errorf("expected x=new, got %v", out["x"])
+	}
+	if out["y"] != 42 {
+		t.Errorf("expected y=42, got %v", out["y"])
+	}
+	if base["x"] != "old" {
+		t.Error("expected base unchanged")
+	}
+}

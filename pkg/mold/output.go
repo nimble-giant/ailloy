@@ -47,6 +47,7 @@ type fileMapping struct {
 	src     string // source file path in the mold fs
 	dest    string // destination file path
 	process bool
+	set     map[string]any
 }
 
 // resolveConfig holds configuration for ResolveFiles.
@@ -247,19 +248,22 @@ func parseMapOutput(m map[string]any, moldFS fs.FS) ([]dirMapping, []fileMapping
 	for src, val := range m {
 		isDir := isDirectory(moldFS, src)
 
-		target, err := parseOutputValue(val)
+		targets, err := parseOutputValue(val)
 		if err != nil {
 			return nil, nil, fmt.Errorf("output key %q: %w", src, err)
 		}
 
-		if isDir {
-			dirs = append(dirs, dirMapping{src: src, target: target})
-		} else {
-			files = append(files, fileMapping{
-				src:     src,
-				dest:    target.Dest,
-				process: target.ShouldProcess(),
-			})
+		for _, target := range targets {
+			if isDir {
+				dirs = append(dirs, dirMapping{src: src, target: target})
+			} else {
+				files = append(files, fileMapping{
+					src:     src,
+					dest:    target.Dest,
+					process: target.ShouldProcess(),
+					set:     target.Set,
+				})
+			}
 		}
 	}
 
@@ -289,39 +293,81 @@ func parseMapOutput(m map[string]any, moldFS fs.FS) ([]dirMapping, []fileMapping
 	return dirs, files, nil
 }
 
-// parseOutputValue normalizes a single output value (string or map).
-func parseOutputValue(val any) (OutputTarget, error) {
+// parseOutputValue normalizes a single output value into one or more targets.
+//
+// Accepted forms:
+//   - string: simple destination path
+//   - map: expanded form with dest/process/set fields
+//   - list: each entry is a string or map; expands to multiple targets so a
+//     single source can fan out to multiple destinations with per-dest context
+func parseOutputValue(val any) ([]OutputTarget, error) {
 	switch v := val.(type) {
 	case string:
-		return OutputTarget{Dest: v}, nil
+		return []OutputTarget{{Dest: v}}, nil
 	case map[string]any:
-		t := OutputTarget{}
-		if dest, ok := v["dest"]; ok {
-			d, ok := dest.(string)
-			if !ok {
-				return t, fmt.Errorf("dest must be a string")
-			}
-			t.Dest = d
+		t, err := parseTargetMap(v)
+		if err != nil {
+			return nil, err
 		}
-		if proc, ok := v["process"]; ok {
-			b, ok := proc.(bool)
-			if !ok {
-				return t, fmt.Errorf("process must be a boolean")
-			}
-			t.Process = &b
+		return []OutputTarget{t}, nil
+	case []any:
+		if len(v) == 0 {
+			return nil, fmt.Errorf("list of destinations must not be empty")
 		}
-		return t, nil
+		targets := make([]OutputTarget, 0, len(v))
+		for i, entry := range v {
+			switch e := entry.(type) {
+			case string:
+				targets = append(targets, OutputTarget{Dest: e})
+			case map[string]any:
+				t, err := parseTargetMap(e)
+				if err != nil {
+					return nil, fmt.Errorf("list entry %d: %w", i, err)
+				}
+				targets = append(targets, t)
+			default:
+				return nil, fmt.Errorf("list entry %d: must be a string or map, got %T", i, entry)
+			}
+		}
+		return targets, nil
 	default:
-		return OutputTarget{}, fmt.Errorf("value must be a string or map, got %T", val)
+		return nil, fmt.Errorf("value must be a string, map, or list, got %T", val)
 	}
+}
+
+// parseTargetMap parses the expanded map form into an OutputTarget.
+func parseTargetMap(v map[string]any) (OutputTarget, error) {
+	t := OutputTarget{}
+	if dest, ok := v["dest"]; ok {
+		d, ok := dest.(string)
+		if !ok {
+			return t, fmt.Errorf("dest must be a string")
+		}
+		t.Dest = d
+	}
+	if proc, ok := v["process"]; ok {
+		b, ok := proc.(bool)
+		if !ok {
+			return t, fmt.Errorf("process must be a boolean")
+		}
+		t.Process = &b
+	}
+	if s, ok := v["set"]; ok {
+		sm, ok := s.(map[string]any)
+		if !ok {
+			return t, fmt.Errorf("set must be a map")
+		}
+		t.Set = sm
+	}
+	return t, nil
 }
 
 // resolveFromMappings walks directories and applies mappings to produce resolved files.
 func resolveFromMappings(dirs []dirMapping, files []fileMapping, moldFS fs.FS) ([]ResolvedFile, error) {
-	// Build file override set for quick lookup.
-	fileOverrides := make(map[string]fileMapping)
+	// Group file overrides by src so a single file can fan out to multiple destinations.
+	fileOverrides := make(map[string][]fileMapping)
 	for _, f := range files {
-		fileOverrides[f.src] = f
+		fileOverrides[f.src] = append(fileOverrides[f.src], f)
 	}
 
 	var resolved []ResolvedFile
@@ -336,13 +382,16 @@ func resolveFromMappings(dirs []dirMapping, files []fileMapping, moldFS fs.FS) (
 				return nil
 			}
 
-			// Check for file-level override.
-			if fo, ok := fileOverrides[p]; ok {
-				resolved = append(resolved, ResolvedFile{
-					SrcPath:  p,
-					DestPath: fo.dest,
-					Process:  fo.process,
-				})
+			// Check for file-level override (one entry per destination).
+			if overrides, ok := fileOverrides[p]; ok {
+				for _, fo := range overrides {
+					resolved = append(resolved, ResolvedFile{
+						SrcPath:  p,
+						DestPath: fo.dest,
+						Process:  fo.process,
+						Set:      fo.set,
+					})
+				}
 				delete(fileOverrides, p) // consumed
 				return nil
 			}
@@ -356,6 +405,7 @@ func resolveFromMappings(dirs []dirMapping, files []fileMapping, moldFS fs.FS) (
 				SrcPath:  p,
 				DestPath: destPath,
 				Process:  dm.target.ShouldProcess(),
+				Set:      dm.target.Set,
 			})
 			return nil
 		})
@@ -365,19 +415,19 @@ func resolveFromMappings(dirs []dirMapping, files []fileMapping, moldFS fs.FS) (
 	}
 
 	// Add remaining file-level mappings (files not inside any mapped directory).
-	for _, f := range files {
-		if _, consumed := fileOverrides[f.src]; !consumed {
-			continue
-		}
+	for src, overrides := range fileOverrides {
 		// Read the file to verify it exists.
-		if _, err := fs.Stat(moldFS, f.src); err != nil {
-			return nil, fmt.Errorf("file mapping %q: %w", f.src, err)
+		if _, err := fs.Stat(moldFS, src); err != nil {
+			return nil, fmt.Errorf("file mapping %q: %w", src, err)
 		}
-		resolved = append(resolved, ResolvedFile{
-			SrcPath:  f.src,
-			DestPath: f.dest,
-			Process:  f.process,
-		})
+		for _, f := range overrides {
+			resolved = append(resolved, ResolvedFile{
+				SrcPath:  f.src,
+				DestPath: f.dest,
+				Process:  f.process,
+				Set:      f.set,
+			})
+		}
 	}
 
 	// Sort for deterministic output.
