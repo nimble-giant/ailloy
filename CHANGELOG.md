@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.17](https://github.com/nimble-giant/ailloy/compare/v0.6.16...v0.6.17) (2026-05-01)
+
+
+### Features
+
+* multi-destination output mapping with per-dest context ([8fb2e98](https://github.com/nimble-giant/ailloy/commit/8fb2e98e0c534bfb64f595d4a7bdaed9fd45b1d4)), closes [#135](https://github.com/nimble-giant/ailloy/issues/135)
+
 ## [0.6.16](https://github.com/nimble-giant/ailloy/compare/v0.6.15...v0.6.16) (2026-05-01)
 
 
