@@ -730,6 +730,69 @@ func TestApplySetOverrides_ValueWithEquals(t *testing.T) {
 	}
 }
 
+func TestApplySetOverrides_ArrayValue(t *testing.T) {
+	flux := map[string]any{}
+	err := ApplySetOverrides(flux, []string{"agent.targets=[claude,copilot]"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	agent, ok := flux["agent"].(map[string]any)
+	if !ok {
+		t.Fatal("expected agent to be a map")
+	}
+	targets, ok := agent["targets"].([]any)
+	if !ok {
+		t.Fatalf("expected targets to be a slice, got %T", agent["targets"])
+	}
+	if len(targets) != 2 {
+		t.Fatalf("expected 2 targets, got %d", len(targets))
+	}
+	if targets[0] != "claude" {
+		t.Errorf("expected targets[0]=claude, got %v", targets[0])
+	}
+	if targets[1] != "copilot" {
+		t.Errorf("expected targets[1]=copilot, got %v", targets[1])
+	}
+}
+
+func TestApplySetOverrides_SingleElementArray(t *testing.T) {
+	flux := map[string]any{}
+	err := ApplySetOverrides(flux, []string{"agent.targets=[claude]"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	agent, ok := flux["agent"].(map[string]any)
+	if !ok {
+		t.Fatal("expected agent to be a map")
+	}
+	targets, ok := agent["targets"].([]any)
+	if !ok {
+		t.Fatalf("expected targets to be a slice, got %T", agent["targets"])
+	}
+	if len(targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(targets))
+	}
+	if targets[0] != "claude" {
+		t.Errorf("expected targets[0]=claude, got %v", targets[0])
+	}
+}
+
+func TestApplySetOverrides_PlainStringUnchanged(t *testing.T) {
+	flux := map[string]any{}
+	err := ApplySetOverrides(flux, []string{"board=Product"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Plain string values must remain strings (backward compatibility).
+	val, ok := flux["board"].(string)
+	if !ok {
+		t.Fatalf("expected board to be a string, got %T", flux["board"])
+	}
+	if val != "Product" {
+		t.Errorf("expected board=Product, got %v", val)
+	}
+}
+
 // --- GetNestedAny tests ---
 
 func TestGetNestedAny_String(t *testing.T) {
