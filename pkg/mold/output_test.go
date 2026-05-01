@@ -413,6 +413,241 @@ func TestResolveFiles_RootFiles_MapOutput_AutoDiscover(t *testing.T) {
 	}
 }
 
+func TestResolveFiles_ListOutput_Strings(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"agents/coding.md": &fstest.MapFile{Data: []byte("agent")},
+	}
+
+	output := map[string]any{
+		"agents": []any{".claude/agents", ".opencode/agents"},
+	}
+
+	resolved, err := ResolveFiles(output, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 resolved files (one per dest), got %d", len(resolved))
+	}
+
+	dests := map[string]bool{}
+	for _, rf := range resolved {
+		if rf.SrcPath != "agents/coding.md" {
+			t.Errorf("unexpected src path: %s", rf.SrcPath)
+		}
+		if !rf.Process {
+			t.Errorf("expected Process=true for %s", rf.DestPath)
+		}
+		dests[rf.DestPath] = true
+	}
+
+	if !dests[".claude/agents/coding.md"] {
+		t.Error("missing .claude/agents/coding.md")
+	}
+	if !dests[".opencode/agents/coding.md"] {
+		t.Error("missing .opencode/agents/coding.md")
+	}
+}
+
+func TestResolveFiles_ListOutput_WithSet(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"agents/coding.md": &fstest.MapFile{Data: []byte("agent")},
+	}
+
+	output := map[string]any{
+		"agents": []any{
+			map[string]any{
+				"dest": ".claude/agents",
+				"set": map[string]any{
+					"agent.current_target": "claude",
+				},
+			},
+			map[string]any{
+				"dest": ".opencode/agents",
+				"set": map[string]any{
+					"agent.current_target": "opencode",
+				},
+			},
+		},
+	}
+
+	resolved, err := ResolveFiles(output, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 resolved files, got %d", len(resolved))
+	}
+
+	byDest := map[string]ResolvedFile{}
+	for _, rf := range resolved {
+		byDest[rf.DestPath] = rf
+	}
+
+	claude, ok := byDest[".claude/agents/coding.md"]
+	if !ok {
+		t.Fatal("missing .claude/agents/coding.md")
+	}
+	if got := claude.Set["agent.current_target"]; got != "claude" {
+		t.Errorf("claude dest: expected set agent.current_target=claude, got %v", got)
+	}
+
+	oc, ok := byDest[".opencode/agents/coding.md"]
+	if !ok {
+		t.Fatal("missing .opencode/agents/coding.md")
+	}
+	if got := oc.Set["agent.current_target"]; got != "opencode" {
+		t.Errorf("opencode dest: expected set agent.current_target=opencode, got %v", got)
+	}
+}
+
+func TestResolveFiles_ListOutput_MixedWithProcess(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"workflows/ci.yml": &fstest.MapFile{Data: []byte("name: CI")},
+	}
+
+	output := map[string]any{
+		"workflows": []any{
+			map[string]any{
+				"dest":    ".github/workflows",
+				"process": false,
+			},
+			".other/workflows",
+		},
+	}
+
+	resolved, err := ResolveFiles(output, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 resolved files, got %d", len(resolved))
+	}
+
+	for _, rf := range resolved {
+		switch rf.DestPath {
+		case ".github/workflows/ci.yml":
+			if rf.Process {
+				t.Error("github workflows: expected Process=false")
+			}
+		case ".other/workflows/ci.yml":
+			if !rf.Process {
+				t.Error("other workflows: expected Process=true")
+			}
+		default:
+			t.Errorf("unexpected dest: %s", rf.DestPath)
+		}
+	}
+}
+
+func TestResolveFiles_ListOutput_FileLevel(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"AGENT.md": &fstest.MapFile{Data: []byte("body")},
+	}
+
+	output := map[string]any{
+		"AGENT.md": []any{"AGENTS.md", "CLAUDE.md"},
+	}
+
+	resolved, err := ResolveFiles(output, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 resolved files, got %d", len(resolved))
+	}
+
+	dests := map[string]bool{}
+	for _, rf := range resolved {
+		if rf.SrcPath != "AGENT.md" {
+			t.Errorf("unexpected src: %s", rf.SrcPath)
+		}
+		dests[rf.DestPath] = true
+	}
+	if !dests["AGENTS.md"] || !dests["CLAUDE.md"] {
+		t.Errorf("expected both AGENTS.md and CLAUDE.md, got %v", dests)
+	}
+}
+
+func TestResolveFiles_ListOutput_RendersWithSet(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"agents/coding.md": &fstest.MapFile{Data: []byte("target={{.agent.current_target}}")},
+	}
+
+	output := map[string]any{
+		"agents": []any{
+			map[string]any{
+				"dest": ".claude/agents",
+				"set":  map[string]any{"agent.current_target": "claude"},
+			},
+			map[string]any{
+				"dest": ".opencode/agents",
+				"set":  map[string]any{"agent.current_target": "opencode"},
+			},
+		},
+	}
+
+	resolved, err := ResolveFiles(output, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	flux := map[string]any{}
+	rendered := map[string]string{}
+	for _, rf := range resolved {
+		fluxForFile := flux
+		if len(rf.Set) > 0 {
+			fluxForFile = MergeSet(flux, rf.Set)
+		}
+		out, err := ProcessTemplate("target={{.agent.current_target}}", fluxForFile)
+		if err != nil {
+			t.Fatalf("ProcessTemplate %s: %v", rf.DestPath, err)
+		}
+		rendered[rf.DestPath] = out
+	}
+
+	if rendered[".claude/agents/coding.md"] != "target=claude" {
+		t.Errorf("claude render: got %q", rendered[".claude/agents/coding.md"])
+	}
+	if rendered[".opencode/agents/coding.md"] != "target=opencode" {
+		t.Errorf("opencode render: got %q", rendered[".opencode/agents/coding.md"])
+	}
+}
+
+func TestResolveFiles_ListOutput_Empty(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"agents/coding.md": &fstest.MapFile{Data: []byte("agent")},
+	}
+
+	output := map[string]any{
+		"agents": []any{},
+	}
+
+	_, err := ResolveFiles(output, moldFS)
+	if err == nil {
+		t.Fatal("expected error for empty list, got nil")
+	}
+}
+
+func TestResolveFiles_ListOutput_InvalidEntry(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"agents/coding.md": &fstest.MapFile{Data: []byte("agent")},
+	}
+
+	output := map[string]any{
+		"agents": []any{42},
+	}
+
+	_, err := ResolveFiles(output, moldFS)
+	if err == nil {
+		t.Fatal("expected error for non-string non-map list entry")
+	}
+}
+
 func TestResolveFiles_ExcludesReservedDirs(t *testing.T) {
 	moldFS := fstest.MapFS{
 		"commands/hello.md": &fstest.MapFile{Data: []byte("hello")},

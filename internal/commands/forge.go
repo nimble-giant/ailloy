@@ -149,7 +149,11 @@ func runForge(_ *cobra.Command, args []string) error {
 
 		var rendered string
 		if rf.Process {
-			rendered, err = renderFile(rf.SrcPath, content, flux, opts...)
+			fluxForFile := flux
+			if len(rf.Set) > 0 {
+				fluxForFile = mold.MergeSet(flux, rf.Set)
+			}
+			rendered, err = renderFile(rf.SrcPath, content, fluxForFile, opts...)
 			if err != nil {
 				return err
 			}

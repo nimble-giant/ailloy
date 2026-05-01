@@ -421,7 +421,11 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 
 		var outputContent []byte
 		if rf.Process {
-			processed, err := mold.ProcessTemplate(string(content), flux, opts...)
+			fluxForFile := flux
+			if len(rf.Set) > 0 {
+				fluxForFile = mold.MergeSet(flux, rf.Set)
+			}
+			processed, err := mold.ProcessTemplate(string(content), fluxForFile, opts...)
 			if err != nil {
 				return fmt.Errorf("failed to process %s: %w", rf.SrcPath, err)
 			}
