@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.18](https://github.com/nimble-giant/ailloy/compare/v0.6.17...v0.6.18) (2026-05-01)
+
+
+### Features
+
+* add foundry new command to scaffold foundry indexes ([4d275f5](https://github.com/nimble-giant/ailloy/commit/4d275f50b6ff686527f5d7dbcd5ded0862653530))
+* add verified badge for molds from official nimble-giant foundry ([6c97f78](https://github.com/nimble-giant/ailloy/commit/6c97f78177ecb82dbef1939eb89f2e12b0e44cbc))
+* implement foundry index system for SCM-agnostic mold discovery ([#77](https://github.com/nimble-giant/ailloy/issues/77)) ([6bc906c](https://github.com/nimble-giant/ailloy/commit/6bc906c6fb7fb9daa8a22e8dd373043ccfae7969))
+
+
+### Bug Fixes
+
+* include mold source root in ingot search path ([bc7f9d4](https://github.com/nimble-giant/ailloy/commit/bc7f9d488ae629f5c0d7b0faed8ec5607a428717)), closes [#140](https://github.com/nimble-giant/ailloy/issues/140)
+* update CI to Go 1.26 and golangci-lint v2 for vulnerability fix ([85add44](https://github.com/nimble-giant/ailloy/commit/85add4401dfcaeeb698c067e1bdc4f1a04093095))
+* use golangci-lint-action v7 for golangci-lint v2 support ([3557abe](https://github.com/nimble-giant/ailloy/commit/3557abea0ce71968be47edcdf4e2f26006219e21))
+
 ## [0.6.17](https://github.com/nimble-giant/ailloy/compare/v0.6.16...v0.6.17) (2026-05-01)
 
 
