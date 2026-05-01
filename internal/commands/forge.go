@@ -157,6 +157,12 @@ func runForge(_ *cobra.Command, args []string) error {
 			rendered = string(content)
 		}
 
+		// Skip files that render to empty or whitespace-only content (#130)
+		if rf.Process && strings.TrimSpace(rendered) == "" {
+			log.Printf("skipping %s: rendered to empty content", rf.SrcPath)
+			continue
+		}
+
 		files = append(files, renderedFile{
 			destPath: rf.DestPath,
 			content:  rendered,

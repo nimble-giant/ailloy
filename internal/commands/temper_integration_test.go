@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 
 	"github.com/nimble-giant/ailloy/pkg/assay"
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -131,6 +132,68 @@ This is a test command.
 
 	if result.FilesScanned == 0 {
 		t.Error("expected assay to find files in rendered output")
+	}
+}
+
+func TestWriteRenderedFiles_SkipsEmptyRenderedFiles(t *testing.T) {
+	// Create an in-memory filesystem with a template that renders to empty
+	moldFS := fstest.MapFS{
+		"commands/empty.md": &fstest.MapFile{
+			Data: []byte("{{- if false -}}content{{- end -}}"),
+		},
+		"commands/nonempty.md": &fstest.MapFile{
+			Data: []byte("# Hello\nThis has content."),
+		},
+	}
+
+	resolved := []mold.ResolvedFile{
+		{SrcPath: "commands/empty.md", DestPath: ".claude/commands/empty.md", Process: true},
+		{SrcPath: "commands/nonempty.md", DestPath: ".claude/commands/nonempty.md", Process: true},
+	}
+
+	tmpDir := t.TempDir()
+	err := writeRenderedFiles(resolved, moldFS, map[string]any{}, nil, tmpDir)
+	if err != nil {
+		t.Fatalf("writeRenderedFiles failed: %v", err)
+	}
+
+	// The empty-rendering file should NOT exist
+	emptyPath := filepath.Join(tmpDir, ".claude/commands/empty.md")
+	if _, err := os.Stat(emptyPath); err == nil {
+		t.Error("expected empty-rendering file to be skipped, but it was written")
+	}
+
+	// The non-empty file SHOULD exist
+	nonEmptyPath := filepath.Join(tmpDir, ".claude/commands/nonempty.md")
+	info, err := os.Stat(nonEmptyPath)
+	if err != nil {
+		t.Fatalf("expected non-empty file to be written: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("non-empty file should have content")
+	}
+}
+
+func TestWriteRenderedFiles_SkipsWhitespaceOnlyRenderedFiles(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"commands/whitespace.md": &fstest.MapFile{
+			Data: []byte("  \n\t\n  "),
+		},
+	}
+
+	resolved := []mold.ResolvedFile{
+		{SrcPath: "commands/whitespace.md", DestPath: ".claude/commands/whitespace.md", Process: true},
+	}
+
+	tmpDir := t.TempDir()
+	err := writeRenderedFiles(resolved, moldFS, map[string]any{}, nil, tmpDir)
+	if err != nil {
+		t.Fatalf("writeRenderedFiles failed: %v", err)
+	}
+
+	wsPath := filepath.Join(tmpDir, ".claude/commands/whitespace.md")
+	if _, err := os.Stat(wsPath); err == nil {
+		t.Error("expected whitespace-only file to be skipped, but it was written")
 	}
 }
 

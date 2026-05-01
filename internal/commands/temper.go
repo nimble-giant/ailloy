@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/nimble-giant/ailloy/pkg/assay"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
@@ -193,6 +194,12 @@ func writeRenderedFiles(resolved []mold.ResolvedFile, moldFS fs.FS, flux map[str
 			}
 		} else {
 			rendered = string(content)
+		}
+
+		// Skip files that render to empty or whitespace-only content (#130)
+		if rf.Process && strings.TrimSpace(rendered) == "" {
+			log.Printf("skipping %s: rendered to empty content", rf.SrcPath)
+			continue
 		}
 
 		dest := filepath.Join(outputDir, rf.DestPath)

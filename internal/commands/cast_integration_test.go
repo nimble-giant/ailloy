@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
@@ -201,6 +202,51 @@ func TestIntegration_ResolvedFilesMatchMold(t *testing.T) {
 		if expectedContent != string(fileContent) {
 			t.Errorf("file %s content mismatch between processed mold and copied version", rf.DestPath)
 		}
+	}
+}
+
+func TestCopyResolvedFiles_SkipsEmptyRenderedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	moldFS := fstest.MapFS{
+		"commands/empty.md": &fstest.MapFile{
+			Data: []byte("{{- if false -}}content{{- end -}}"),
+		},
+		"commands/nonempty.md": &fstest.MapFile{
+			Data: []byte("# Hello\nThis has content."),
+		},
+	}
+	reader := blanks.NewMoldReader(moldFS)
+
+	resolved := []mold.ResolvedFile{
+		{SrcPath: "commands/empty.md", DestPath: filepath.Join(tmpDir, ".claude/commands/empty.md"), Process: true},
+		{SrcPath: "commands/nonempty.md", DestPath: filepath.Join(tmpDir, ".claude/commands/nonempty.md"), Process: true},
+	}
+
+	err := copyResolvedFiles(reader, nil, map[string]any{}, resolved)
+	if err != nil {
+		t.Fatalf("copyResolvedFiles failed: %v", err)
+	}
+
+	// The empty-rendering file should NOT exist
+	emptyPath := filepath.Join(tmpDir, ".claude/commands/empty.md")
+	if _, err := os.Stat(emptyPath); err == nil {
+		t.Error("expected empty-rendering file to be skipped, but it was written")
+	}
+
+	// The non-empty file SHOULD exist
+	nonEmptyPath := filepath.Join(tmpDir, ".claude/commands/nonempty.md")
+	info, err := os.Stat(nonEmptyPath)
+	if err != nil {
+		t.Fatalf("expected non-empty file to be written: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("non-empty file should have content")
 	}
 }
 

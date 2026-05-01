@@ -430,6 +430,12 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 			outputContent = content
 		}
 
+		// Skip files that render to empty or whitespace-only content (#130)
+		if rf.Process && strings.TrimSpace(string(outputContent)) == "" {
+			log.Printf("skipping %s: rendered to empty content", rf.SrcPath)
+			continue
+		}
+
 		if err := os.MkdirAll(filepath.Dir(rf.DestPath), 0750); err != nil { // #nosec G301
 			return fmt.Errorf("failed to create directory for %s: %w", rf.DestPath, err)
 		}
