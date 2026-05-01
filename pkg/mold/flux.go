@@ -167,6 +167,9 @@ func LayerFluxFiles(paths []string) (map[string]any, error) {
 }
 
 // ApplySetOverrides applies --set key=value flags to a flux map using dotted paths.
+// Values that look like YAML sequences or mappings are parsed into their
+// corresponding Go types so that template functions like Sprig's `has` work
+// correctly (e.g. --set 'agent.targets=[claude,copilot]').
 func ApplySetOverrides(flux map[string]any, setFlags []string) error {
 	for _, flag := range setFlags {
 		parts := strings.SplitN(flag, "=", 2)
@@ -178,6 +181,19 @@ func ApplySetOverrides(flux map[string]any, setFlags []string) error {
 		if key == "" {
 			return fmt.Errorf("--set key cannot be empty")
 		}
+
+		// Try YAML-parsing the value to support structured types (arrays, maps).
+		// Plain scalars (strings, numbers, booleans) are kept as strings for
+		// backward compatibility.
+		var parsed any
+		if err := yaml.Unmarshal([]byte(value), &parsed); err == nil {
+			switch parsed.(type) {
+			case []any, map[string]any:
+				SetNestedAny(flux, key, parsed)
+				continue
+			}
+		}
+
 		SetNestedValue(flux, key, value)
 	}
 	return nil
