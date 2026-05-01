@@ -66,11 +66,11 @@ func resolveMoldReader(args []string) (*blanks.MoldReader, error) {
 			if castGlobal {
 				resolveOpts = append(resolveOpts, foundry.WithoutLock())
 			}
-			fsys, err := foundry.Resolve(args[0], resolveOpts...)
+			fsys, root, err := foundry.ResolveWithRoot(args[0], resolveOpts...)
 			if err != nil {
 				return nil, fmt.Errorf("resolving remote mold: %w", err)
 			}
-			return blanks.NewMoldReader(fsys), nil
+			return blanks.NewMoldReaderFromFS(fsys, root), nil
 		}
 		return blanks.NewMoldReaderFromPath(args[0])
 	}
@@ -410,7 +410,7 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 	}
 
 	// Build ingot resolver
-	resolver := buildIngotResolver(flux)
+	resolver := buildIngotResolver(flux, reader.Root())
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
 	for _, rf := range resolved {

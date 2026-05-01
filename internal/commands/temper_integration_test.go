@@ -21,7 +21,7 @@ func TestIntegration_TemperLint_RendersAndLints(t *testing.T) {
 	}
 
 	// Build ingot resolver and resolve files
-	resolver := buildIngotResolver(flux)
+	resolver := buildIngotResolver(flux, reader.Root())
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
 	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
@@ -69,7 +69,7 @@ func TestIntegration_TemperLint_WriteRenderedFiles_CreatesDirectories(t *testing
 	reader := testMoldReader(t)
 	flux := testFlux(t, reader)
 
-	resolver := buildIngotResolver(flux)
+	resolver := buildIngotResolver(flux, reader.Root())
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
 	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
@@ -201,7 +201,7 @@ func TestWriteRenderedFiles_RendersTemplates(t *testing.T) {
 	reader := testMoldReader(t)
 	flux := testFlux(t, reader)
 
-	resolver := buildIngotResolver(flux)
+	resolver := buildIngotResolver(flux, reader.Root())
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
 	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())

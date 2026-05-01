@@ -30,16 +30,16 @@ func NewFetcherWithCacheDir(git GitRunner, cacheDir string) *Fetcher {
 }
 
 // Fetch resolves and extracts a mold version, returning an fs.FS rooted at
-// the (possibly subpath-navigated) mold directory.
-func (f *Fetcher) Fetch(ref *Reference, resolved *ResolvedVersion) (fs.FS, error) {
+// the (possibly subpath-navigated) mold directory along with its on-disk root.
+func (f *Fetcher) Fetch(ref *Reference, resolved *ResolvedVersion) (fs.FS, string, error) {
 	if err := f.ensureBareClone(ref); err != nil {
-		return nil, fmt.Errorf("ensuring bare clone: %w", err)
+		return nil, "", fmt.Errorf("ensuring bare clone: %w", err)
 	}
 
 	vDir := VersionDir(f.cacheDir, ref, resolved.Tag)
 	if !hasMoldManifestInDir(vDir, ref.Subpath) {
 		if err := f.checkoutVersion(ref, resolved); err != nil {
-			return nil, fmt.Errorf("checking out version: %w", err)
+			return nil, "", fmt.Errorf("checking out version: %w", err)
 		}
 	}
 
@@ -96,7 +96,8 @@ func (f *Fetcher) checkoutVersion(ref *Reference, resolved *ResolvedVersion) err
 }
 
 // navigateSubpath applies the //subpath and validates the mold manifest exists.
-func (f *Fetcher) navigateSubpath(ref *Reference, resolved *ResolvedVersion) (fs.FS, error) {
+// It returns the resulting fs.FS and the on-disk root path.
+func (f *Fetcher) navigateSubpath(ref *Reference, resolved *ResolvedVersion) (fs.FS, string, error) {
 	vDir := VersionDir(f.cacheDir, ref, resolved.Tag)
 	root := vDir
 
@@ -104,27 +105,27 @@ func (f *Fetcher) navigateSubpath(ref *Reference, resolved *ResolvedVersion) (fs
 		// Safety: ensure subpath doesn't escape the version directory.
 		absVersion, err := filepath.Abs(vDir)
 		if err != nil {
-			return nil, fmt.Errorf("resolving version path: %w", err)
+			return nil, "", fmt.Errorf("resolving version path: %w", err)
 		}
 		absTarget, err := filepath.Abs(filepath.Join(vDir, ref.Subpath))
 		if err != nil {
-			return nil, fmt.Errorf("resolving subpath: %w", err)
+			return nil, "", fmt.Errorf("resolving subpath: %w", err)
 		}
 		if !strings.HasPrefix(absTarget, absVersion+string(filepath.Separator)) {
-			return nil, fmt.Errorf("subpath %q escapes version directory", ref.Subpath)
+			return nil, "", fmt.Errorf("subpath %q escapes version directory", ref.Subpath)
 		}
 		root = absTarget
 	}
 
 	if _, err := os.Stat(root); os.IsNotExist(err) {
-		return nil, fmt.Errorf("subpath %q does not exist in %s@%s", ref.Subpath, ref.CacheKey(), resolved.Tag)
+		return nil, "", fmt.Errorf("subpath %q does not exist in %s@%s", ref.Subpath, ref.CacheKey(), resolved.Tag)
 	}
 
 	if !hasMoldManifest(root) {
-		return nil, fmt.Errorf("no mold.yaml or ingot.yaml found at %s@%s//%s", ref.CacheKey(), resolved.Tag, ref.Subpath)
+		return nil, "", fmt.Errorf("no mold.yaml or ingot.yaml found at %s@%s//%s", ref.CacheKey(), resolved.Tag, ref.Subpath)
 	}
 
-	return os.DirFS(root), nil
+	return os.DirFS(root), root, nil
 }
 
 // hasMoldManifestInDir checks the version dir (with optional subpath) for a manifest.

@@ -123,7 +123,7 @@ func runForge(_ *cobra.Command, args []string) error {
 	}
 
 	// Build ingot resolver
-	resolver := buildIngotResolver(flux)
+	resolver := buildIngotResolver(flux, reader.Root())
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
 	// Load ignore patterns from .ailloyignore and mold.yaml.
@@ -183,9 +183,16 @@ func runForge(_ *cobra.Command, args []string) error {
 }
 
 // buildIngotResolver creates an IngotResolver with the standard search path order:
-// current directory (mold-local), project .ailloy/, global ~/.ailloy/.
-func buildIngotResolver(flux map[string]any) *mold.IngotResolver {
-	searchPaths := []string{"."}
+// mold source root (so bundled ingots are found when casting from a remote or
+// path mold), current directory (mold-local), project .ailloy/, global ~/.ailloy/.
+// moldRoot may be empty when the mold has no on-disk root (e.g., embedded molds).
+func buildIngotResolver(flux map[string]any, moldRoot string) *mold.IngotResolver {
+	var searchPaths []string
+
+	if moldRoot != "" {
+		searchPaths = append(searchPaths, moldRoot)
+	}
+	searchPaths = append(searchPaths, ".")
 
 	if _, err := os.Stat(".ailloy"); err == nil {
 		searchPaths = append(searchPaths, ".ailloy")
@@ -234,11 +241,11 @@ func writeForgeFiles(files []renderedFile, outputDir string) error {
 func resolveForgeReader(args []string) (*blanks.MoldReader, error) {
 	if len(args) >= 1 {
 		if foundry.IsRemoteReference(args[0]) {
-			fsys, err := foundry.Resolve(args[0])
+			fsys, root, err := foundry.ResolveWithRoot(args[0])
 			if err != nil {
 				return nil, fmt.Errorf("resolving remote mold: %w", err)
 			}
-			return blanks.NewMoldReader(fsys), nil
+			return blanks.NewMoldReaderFromFS(fsys, root), nil
 		}
 		return blanks.NewMoldReaderFromPath(args[0])
 	}

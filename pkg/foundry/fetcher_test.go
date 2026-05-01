@@ -106,7 +106,7 @@ func TestFetcher_Fetch(t *testing.T) {
 	ref := &Reference{Host: "github.com", Owner: "owner", Repo: "repo"}
 	resolved := &ResolvedVersion{Tag: "v1.0.0", Commit: "abc123"}
 
-	fsys, err := fetcher.Fetch(ref, resolved)
+	fsys, _, err := fetcher.Fetch(ref, resolved)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestFetcher_Fetch_Subpath(t *testing.T) {
 	ref := &Reference{Host: "github.com", Owner: "owner", Repo: "repo", Subpath: "molds/claude"}
 	resolved := &ResolvedVersion{Tag: "v1.0.0", Commit: "abc123"}
 
-	fsys, err := fetcher.Fetch(ref, resolved)
+	fsys, _, err := fetcher.Fetch(ref, resolved)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestFetcher_Fetch_CacheHit(t *testing.T) {
 	}
 
 	fetcher := NewFetcherWithCacheDir(git, cacheDir)
-	fsys, err := fetcher.Fetch(ref, resolved)
+	fsys, _, err := fetcher.Fetch(ref, resolved)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
