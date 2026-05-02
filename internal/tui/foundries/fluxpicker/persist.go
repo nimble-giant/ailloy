@@ -16,10 +16,12 @@ import (
 // cannot leave the user's flux file truncated.
 func writeFluxFile(path string, overrides map[string]any) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 	existing := map[string]any{}
+	// #nosec G304 -- path is built from a sanitized mold name plus a fixed
+	// project- or home-rooted prefix; not user-controlled at the moment of read.
 	if b, err := os.ReadFile(path); err == nil {
 		_ = yaml.Unmarshal(b, &existing)
 	}
@@ -46,7 +48,7 @@ func writeFluxFile(path string, overrides map[string]any) error {
 		_ = os.Remove(tmpPath)
 		return err
 	}
-	if err := os.Chmod(tmpPath, 0o644); err != nil {
+	if err := os.Chmod(tmpPath, 0o600); err != nil {
 		_ = os.Remove(tmpPath)
 		return err
 	}
