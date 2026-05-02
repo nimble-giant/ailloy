@@ -225,6 +225,13 @@ func runFoundryList(_ *cobra.Command, _ []string) error {
 	fmt.Println(styles.HeaderStyle.Render(fmt.Sprintf("Registered foundries (%d):", len(foundries))))
 	fmt.Println()
 
+	cacheDir, _ := index.IndexCacheDir()
+	fetcher, _ := index.NewFetcher(defaultGitRunner())
+	var lookup index.IndexLookup
+	if cacheDir != "" && fetcher != nil {
+		lookup = index.CacheFirstLookup(cacheDir, fetcher)
+	}
+
 	for _, entry := range foundries {
 		name := styles.AccentStyle.Render(entry.Name)
 		if index.IsOfficialFoundry(entry.URL) {
@@ -240,10 +247,33 @@ func runFoundryList(_ *cobra.Command, _ []string) error {
 		fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("    URL:     %s", entry.URL)))
 		fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("    Type:    %s", entry.Type)))
 		fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("    Updated: %s", lastUpdated)))
+
+		// Render nested-foundry tree if any. Skip silently when the index
+		// can't be resolved (offline / not cached / no children).
+		if lookup != nil {
+			r := index.NewResolver(lookup)
+			root, _, err := r.Resolve(entry.URL)
+			if err == nil && len(root.Children) > 0 {
+				fmt.Println(styles.SubtleStyle.Render("    Nested foundries:"))
+				for _, child := range root.Children {
+					printFoundryTree(child, "      ")
+				}
+			}
+		}
+
 		fmt.Println()
 	}
 
 	return nil
+}
+
+// printFoundryTree recursively prints a child foundry node and its descendants.
+func printFoundryTree(node *index.ResolvedFoundry, indent string) {
+	line := fmt.Sprintf("%s└─ %s (%s)", indent, node.Index.Name, node.Source)
+	fmt.Println(styles.SubtleStyle.Render(line))
+	for _, c := range node.Children {
+		printFoundryTree(c, indent+"   ")
+	}
 }
 
 func runFoundryRemove(_ *cobra.Command, args []string) error {

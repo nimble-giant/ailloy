@@ -79,7 +79,7 @@ func searchIndexes(cfg *Config, query string) ([]SearchResult, error) {
 	}
 	git := defaultGitRunnerForSearch()
 	fetcher := NewFetcherWithCacheDir(git, cacheDir)
-	lookup := cacheFirstLookup(cacheDir, fetcher)
+	lookup := CacheFirstLookup(cacheDir, fetcher)
 	return searchWithLookup(cfg, query, lookup)
 }
 
@@ -128,10 +128,11 @@ func formatOrigin(root, owner *ResolvedFoundry) string {
 	return base + " via " + strings.Join(chain, " → ")
 }
 
-// cacheFirstLookup returns an IndexLookup that reads the cache when present
+// CacheFirstLookup returns an IndexLookup that reads the cache when present
 // and falls back to the network (via Fetcher) otherwise. The synthesized
 // FoundryEntry mirrors what `foundry add` would build for the same URL.
-func cacheFirstLookup(cacheDir string, fetcher *Fetcher) IndexLookup {
+// Used by both search and the foundry list command.
+func CacheFirstLookup(cacheDir string, fetcher *Fetcher) IndexLookup {
 	return func(source string) (*Index, error) {
 		url := NormalizeFoundryURL(source)
 		entry := &FoundryEntry{
