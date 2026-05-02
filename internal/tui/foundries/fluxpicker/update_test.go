@@ -135,3 +135,42 @@ func TestUpdate_ShortcutKeysGoToFilterWhenFocused(t *testing.T) {
 		t.Fatalf("filter value = %q want ds", m.filter.Value())
 	}
 }
+
+func TestHandleSaveKey_SessionEmitsMsg(t *testing.T) {
+	m := New().OpenFor("official/demo", data.ScopeProject, nil, nil).
+		SetOverride("k", "v")
+	m.saving = saveState{active: true}
+	m.focus = focusSavePrompt
+
+	m, cmd := m.Update(keyMsg("o"))
+	if cmd == nil {
+		t.Fatal("expected cmd that emits FluxOverridesMsg")
+	}
+	msg := cmd()
+	fm, ok := msg.(FluxOverridesMsg)
+	if !ok {
+		t.Fatalf("got %T want FluxOverridesMsg", msg)
+	}
+	if fm.Target != SaveTargetSession {
+		t.Fatalf("target = %v want SaveTargetSession", fm.Target)
+	}
+	if fm.Overrides["k"] != "v" {
+		t.Fatalf("overrides not propagated: %+v", fm.Overrides)
+	}
+	if !m.saving.committed {
+		t.Fatal("expected saving.committed=true after dispatch")
+	}
+}
+
+func TestHandleSaveKey_EscReturnsToFilter(t *testing.T) {
+	m := New().OpenFor("ref", data.ScopeProject, nil, nil)
+	m.saving = saveState{active: true}
+	m.focus = focusSavePrompt
+	m, _ = m.Update(keyMsg("esc"))
+	if m.focus != focusFilter {
+		t.Fatalf("expected focus to return to filter, got %v", m.focus)
+	}
+	if m.saving.active {
+		t.Fatal("expected saving cleared")
+	}
+}

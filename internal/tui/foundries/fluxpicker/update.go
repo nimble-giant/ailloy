@@ -153,7 +153,7 @@ func (m Model) handleEditorKey(k tea.KeyMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleSaveKey is filled in by Task 8. For now, esc returns to filter.
+// handleSaveKey handles key events when the save-target prompt is focused.
 func (m Model) handleSaveKey(k tea.KeyMsg) (Model, tea.Cmd) {
 	if k.Type == tea.KeyEsc {
 		m.saving = saveState{}
@@ -161,7 +161,44 @@ func (m Model) handleSaveKey(k tea.KeyMsg) (Model, tea.Cmd) {
 		m.filter.Focus()
 		return m, nil
 	}
+	if k.Type == tea.KeyRunes && len(k.Runes) == 1 {
+		var target SaveTarget
+		switch k.Runes[0] {
+		case 'p':
+			target = SaveTargetProject
+		case 'g':
+			target = SaveTargetGlobal
+		case 'o':
+			target = SaveTargetSession
+		default:
+			return m, nil
+		}
+		moldName := lastPathSegment(m.moldRef)
+		if _, err := persistOverrides(m.scope, moldName, target, m.overrides); err != nil {
+			m.err = err
+			return m, nil
+		}
+		m.saving = saveState{committed: true, target: target}
+		return m, emitOverridesAndClose(m, target)
+	}
 	return m, nil
+}
+
+// emitOverridesAndClose returns a Cmd that emits the FluxOverridesMsg
+// upstream. The App handles the message by closing the picker and routing
+// overrides to the active tab.
+func emitOverridesAndClose(m Model, target SaveTarget) tea.Cmd {
+	overrides := m.overrides
+	moldRef := m.moldRef
+	scope := m.scope
+	return func() tea.Msg {
+		return FluxOverridesMsg{
+			MoldRef:   moldRef,
+			Scope:     scope,
+			Overrides: overrides,
+			Target:    target,
+		}
+	}
 }
 
 // filteredKeys returns the schema vars currently visible in the result list.

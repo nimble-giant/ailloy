@@ -106,7 +106,9 @@ type editorState struct {
 
 // saveState holds the save-target prompt's transient state.
 type saveState struct {
-	active bool
+	active    bool
+	committed bool
+	target    SaveTarget
 }
 
 // BadgeState describes the visual badge to draw next to a key in the list.
