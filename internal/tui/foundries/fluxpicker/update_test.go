@@ -174,3 +174,40 @@ func TestHandleSaveKey_EscReturnsToFilter(t *testing.T) {
 		t.Fatal("expected saving cleared")
 	}
 }
+
+func TestSave_BlockedWhenRequiredFieldMissing(t *testing.T) {
+	schema := []mold.FluxVar{
+		{Name: "must_have", Type: "string", Required: true},
+	}
+	m := New().OpenFor("ref", data.ScopeProject, schema, nil)
+	m.saving = saveState{active: true}
+	m.focus = focusSavePrompt
+	m, _ = m.Update(keyMsg("o"))
+	if m.err == nil {
+		t.Fatal("expected validation error blocking save")
+	}
+}
+
+func TestEsc_WithUnsavedChanges_OpensSavePrompt(t *testing.T) {
+	m := New().OpenFor("ref", data.ScopeProject,
+		[]mold.FluxVar{{Name: "k", Type: "string"}}, nil).
+		SetOverride("k", "v")
+	m.filter.Blur()
+	m, _ = m.Update(keyMsg("esc"))
+	if !m.IsOpen() {
+		t.Fatal("expected picker to STAY open with unsaved changes")
+	}
+	if m.focus != focusSavePrompt {
+		t.Fatalf("expected save prompt focus, got %v", m.focus)
+	}
+}
+
+func TestEsc_NoChanges_ClosesPicker(t *testing.T) {
+	m := New().OpenFor("ref", data.ScopeProject,
+		[]mold.FluxVar{{Name: "k"}}, nil)
+	m.filter.Blur()
+	m, _ = m.Update(keyMsg("esc"))
+	if m.IsOpen() {
+		t.Fatal("expected picker to close with no overrides")
+	}
+}

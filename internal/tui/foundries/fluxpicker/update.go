@@ -43,7 +43,11 @@ func (m Model) handleKey(k tea.KeyMsg) (Model, tea.Cmd) {
 func (m Model) handleFilterKey(k tea.KeyMsg) (Model, tea.Cmd) {
 	switch k.Type {
 	case tea.KeyEsc:
-		// Task 12 will add unsaved-changes confirm; for now, close.
+		if len(m.overrides) > 0 && !m.saving.committed {
+			m.saving = saveState{active: true}
+			m.focus = focusSavePrompt
+			return m, nil
+		}
 		return m.Close(), nil
 	case tea.KeyDown:
 		m.cursor = clamp(m.cursor+1, 0, len(m.filteredKeys())-1)
@@ -171,6 +175,11 @@ func (m Model) handleSaveKey(k tea.KeyMsg) (Model, tea.Cmd) {
 		case 'o':
 			target = SaveTargetSession
 		default:
+			return m, nil
+		}
+		merged := mergeOverrides(m.defaults, m.overrides)
+		if err := mold.ValidateFlux(m.schema, merged); err != nil {
+			m.err = err
 			return m, nil
 		}
 		moldName := lastPathSegment(m.moldRef)

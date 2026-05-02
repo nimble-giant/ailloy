@@ -120,3 +120,18 @@ func lastPathSegment(s string) string {
 	}
 	return s
 }
+
+// mergeOverrides returns a new map combining defaults and overrides
+// (overrides win at any nested key).
+func mergeOverrides(defaults map[string]any, overrides map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range defaults {
+		out[k] = v
+	}
+	for k, v := range overrides {
+		if err := setDottedKey(out, k, v); err != nil {
+			continue
+		}
+	}
+	return out
+}
