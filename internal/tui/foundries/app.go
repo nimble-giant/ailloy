@@ -1,0 +1,166 @@
+package foundries
+
+import (
+	"context"
+	"errors"
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/nimble-giant/ailloy/internal/tui/foundries/discover"
+	"github.com/nimble-giant/ailloy/internal/tui/foundries/health"
+	"github.com/nimble-giant/ailloy/internal/tui/foundries/installed"
+	"github.com/nimble-giant/ailloy/internal/tui/foundries/registered"
+	"github.com/nimble-giant/ailloy/pkg/foundry/index"
+)
+
+type discoverCtx = context.Context
+
+var errMissingDep = errors.New("operation not configured for this TUI build")
+
+// App is the root tea.Model. It owns the active tab, shared config, and
+// one sub-model per tab. Sub-models are addressed by value (Bubble Tea's
+// Elm-style update returns a new value), so we re-assign on every Update.
+type App struct {
+	active     Tab
+	width      int
+	height     int
+	cfg        *index.Config
+	discover   discover.Model
+	installed  installed.Model
+	registered registered.Model
+	health     health.Model
+}
+
+// New constructs an App. deps wires platform operations (cast/add/remove/update)
+// — pass nil-bearing Deps for tests; the TUI will still render but action keys
+// will report "no X function configured".
+func New(deps Deps) App {
+	cfg, _ := index.LoadConfig()
+	if cfg == nil {
+		cfg = &index.Config{}
+	}
+
+	discoverCast := func(ctx discoverCtx, source string, opts discover.CastOptions) error {
+		if deps.Cast == nil {
+			return errMissingDep
+		}
+		_, err := deps.Cast(ctx, source, CastOptions{
+			Global:        opts.Global,
+			WithWorkflows: opts.WithWorkflows,
+			ValueFiles:    opts.ValueFiles,
+			SetOverrides:  opts.SetOverrides,
+		})
+		return err
+	}
+	installedCast := func(ctx discoverCtx, source string, opts installed.CastOptions) error {
+		if deps.Cast == nil {
+			return errMissingDep
+		}
+		_, err := deps.Cast(ctx, source, CastOptions{
+			Global:        opts.Global,
+			WithWorkflows: opts.WithWorkflows,
+			ValueFiles:    opts.ValueFiles,
+			SetOverrides:  opts.SetOverrides,
+		})
+		return err
+	}
+	regAdd := func(cfg *index.Config, url string) (registered.AddFoundryResult, error) {
+		if deps.AddFoundry == nil {
+			return registered.AddFoundryResult{}, errMissingDep
+		}
+		r, err := deps.AddFoundry(cfg, url)
+		return registered.AddFoundryResult{Entry: r.Entry, AlreadyExists: r.AlreadyExists, MoldCount: r.MoldCount}, err
+	}
+	regRemove := func(cfg *index.Config, nameOrURL string) (index.FoundryEntry, error) {
+		if deps.RemoveFoundry == nil {
+			return index.FoundryEntry{}, errMissingDep
+		}
+		return deps.RemoveFoundry(cfg, nameOrURL)
+	}
+	regUpdate := func(cfg *index.Config) ([]registered.UpdateFoundryReport, error) {
+		if deps.UpdateFoundries == nil {
+			return nil, errMissingDep
+		}
+		reports, err := deps.UpdateFoundries(cfg)
+		out := make([]registered.UpdateFoundryReport, 0, len(reports))
+		for _, r := range reports {
+			out = append(out, registered.UpdateFoundryReport{
+				Name: r.Name, URL: r.URL, MoldCount: r.MoldCount, Persisted: r.Persisted, Err: r.Err,
+			})
+		}
+		return out, err
+	}
+
+	return App{
+		cfg:        cfg,
+		discover:   discover.New(cfg, discoverCast),
+		installed:  installed.New(cfg, installedCast),
+		registered: registered.New(cfg, regAdd, regRemove, regUpdate),
+		health:     health.New(cfg),
+	}
+}
+
+func (a App) Init() tea.Cmd {
+	return tea.Batch(
+		a.discover.Init(),
+		a.installed.Init(),
+		a.registered.Init(),
+		a.health.Init(),
+	)
+}
+
+func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch m := msg.(type) {
+	case tea.WindowSizeMsg:
+		a.width, a.height = m.Width, m.Height
+	case tea.KeyMsg:
+		switch m.String() {
+		case "ctrl+c", "q":
+			return a, tea.Quit
+		case "tab", "right":
+			a.active = (a.active + 1) % tabCount
+			return a, nil
+		case "shift+tab", "left":
+			a.active = (a.active + tabCount - 1) % tabCount
+			return a, nil
+		}
+	}
+
+	var cmd tea.Cmd
+	switch a.active {
+	case TabDiscover:
+		a.discover, cmd = a.discover.Update(msg)
+	case TabInstalled:
+		a.installed, cmd = a.installed.Update(msg)
+	case TabFoundries:
+		a.registered, cmd = a.registered.Update(msg)
+	case TabHealth:
+		a.health, cmd = a.health.Update(msg)
+	}
+	return a, cmd
+}
+
+func (a App) View() string {
+	var b strings.Builder
+	for t := Tab(0); t < tabCount; t++ {
+		if t == a.active {
+			b.WriteString(tabActive.Render(t.String()))
+		} else {
+			b.WriteString(tabInactive.Render(t.String()))
+		}
+	}
+	b.WriteString("\n\n")
+	switch a.active {
+	case TabDiscover:
+		b.WriteString(bodyBox.Render(a.discover.View()))
+	case TabInstalled:
+		b.WriteString(bodyBox.Render(a.installed.View()))
+	case TabFoundries:
+		b.WriteString(bodyBox.Render(a.registered.View()))
+	case TabHealth:
+		b.WriteString(bodyBox.Render(a.health.View()))
+	}
+	b.WriteString("\n")
+	b.WriteString(statusBar.Render("tab/shift-tab to switch · q quit"))
+	return b.String()
+}
