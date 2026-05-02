@@ -116,8 +116,8 @@ func (r *Resolver) resolveNode(source string, parents []string) (*ResolvedFoundr
 	for _, ref := range idx.Foundries {
 		child, err := r.resolveNode(ref.Source, childParents)
 		if err != nil {
-			// Child fetch errors are handled in a later task — for now propagate.
-			return nil, err
+			r.warnings = append(r.warnings, ResolutionWarning{Source: ref.Source, Err: err})
+			continue
 		}
 		node.Children = append(node.Children, child)
 	}

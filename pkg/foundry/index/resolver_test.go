@@ -1,6 +1,7 @@
 package index
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -205,6 +206,59 @@ func TestResolverNameCollision(t *testing.T) {
 	}
 	if !strings.Contains(msg, "github.com/a/x") || !strings.Contains(msg, "github.com/b/x") {
 		t.Errorf("error %q should name both source URLs", msg)
+	}
+}
+
+func TestResolverChildFetchFailure(t *testing.T) {
+	root := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "root",
+		Molds: []MoldEntry{{Name: "ok-mold", Source: "github.com/x/ok"}},
+		Foundries: []FoundryRef{
+			{Name: "broken", Source: "github.com/x/broken"},
+			{Name: "good", Source: "github.com/x/good"},
+		},
+	}
+	good := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "good",
+		Molds: []MoldEntry{{Name: "good-mold", Source: "github.com/x/good-mold"}},
+	}
+	lookup := func(source string) (*Index, error) {
+		switch canonicalizeSource(source) {
+		case "github.com/x/root":
+			return root, nil
+		case "github.com/x/broken":
+			return nil, fmt.Errorf("network down")
+		case "github.com/x/good":
+			return good, nil
+		}
+		t.Fatalf("unexpected lookup: %q", source)
+		return nil, nil
+	}
+
+	r := NewResolver(lookup)
+	rf, molds, err := r.Resolve("github.com/x/root")
+	if err != nil {
+		t.Fatalf("Resolve: %v (broken child should be a warning, not an error)", err)
+	}
+	// Only the good child should appear in rf.Children.
+	if len(rf.Children) != 1 || rf.Children[0].Index.Name != "good" {
+		t.Errorf("rf.Children = %+v, want exactly [good]", rf.Children)
+	}
+	// ok-mold + good-mold should both be present.
+	var names []string
+	for _, m := range molds {
+		names = append(names, m.Entry.Name)
+	}
+	if len(names) != 2 {
+		t.Errorf("got molds %v, want 2 (ok-mold + good-mold)", names)
+	}
+	// Warning should record the broken source.
+	warnings := r.Warnings()
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %+v, want 1", warnings)
+	}
+	if !strings.Contains(canonicalizeSource(warnings[0].Source), "github.com/x/broken") {
+		t.Errorf("warning source = %q, want broken", warnings[0].Source)
 	}
 }
 
