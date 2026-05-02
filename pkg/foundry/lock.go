@@ -14,12 +14,14 @@ const LockFileName = "ailloy.lock"
 
 // LockEntry records the resolved version of a single mold dependency.
 type LockEntry struct {
-	Name      string    `yaml:"name"`
-	Source    string    `yaml:"source"`
-	Version   string    `yaml:"version"`
-	Commit    string    `yaml:"commit"`
-	Subpath   string    `yaml:"subpath,omitempty"`
-	Timestamp time.Time `yaml:"timestamp"`
+	Name       string            `yaml:"name"`
+	Source     string            `yaml:"source"`
+	Version    string            `yaml:"version"`
+	Commit     string            `yaml:"commit"`
+	Subpath    string            `yaml:"subpath,omitempty"`
+	Timestamp  time.Time         `yaml:"timestamp"`
+	Files      []string          `yaml:"files,omitempty"`
+	FileHashes map[string]string `yaml:"fileHashes,omitempty"`
 }
 
 // LockFile is the on-disk lock file format.
