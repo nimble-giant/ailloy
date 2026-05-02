@@ -160,6 +160,10 @@ Register, list, update, and remove foundry indexes:
 
 ```bash
 # Register a foundry index (fetches and validates the index)
+# Bare references default to https://, mirroring `ailloy cast`.
+ailloy foundry add github.com/nimble-giant/ailloy-foundry-index
+
+# Explicit schemes (https://, http://, git@) are still accepted as-is.
 ailloy foundry add https://github.com/nimble-giant/ailloy-foundry-index
 
 # List all registered foundry indexes and their status
@@ -320,13 +324,13 @@ molds:
 **As a git repository** (recommended for versioned indexes):
 
 1. Create a repository with a `foundry.yaml` at the root
-2. Users register it with: `ailloy foundry add https://github.com/my-org/my-foundry-index`
+2. Users register it with: `ailloy foundry add github.com/my-org/my-foundry-index` (bare references default to `https://`; the fully qualified URL works too)
 3. Updates are fetched with: `ailloy foundry update`
 
 **As a static YAML file** (for simple hosting):
 
 1. Host a `foundry.yaml` file at a stable URL
-2. Users register it with: `ailloy foundry add https://example.com/foundry.yaml`
+2. Users register it with: `ailloy foundry add https://example.com/foundry.yaml` (a bare `example.com/foundry.yaml` is also accepted and defaults to `https://`)
 3. URLs ending in `.yaml` or `.yml` are automatically detected as static files
 
 ### Submitting to the Official Index
