@@ -16,57 +16,62 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 const (
-	upgradeRepoOwner = "nimble-giant"
-	upgradeRepoName  = "ailloy"
+	evolveRepoOwner = "nimble-giant"
+	evolveRepoName  = "ailloy"
 )
 
 var (
-	upgradeCheck bool
-	upgradeForce bool
-	upgradePin   string
+	evolveCheck    bool
+	evolveForce    bool
+	evolvePin      string
+	evolveSkipAnim bool
 )
 
 var (
-	upgradeReleaseAPIBase = "https://api.github.com"
-	upgradeReleaseDLBase  = "https://github.com"
-	upgradeHTTPClient     = &http.Client{Timeout: 30 * time.Second}
-	upgradeCurrentVersion = ""
+	evolveReleaseAPIBase = "https://api.github.com"
+	evolveReleaseDLBase  = "https://github.com"
+	evolveHTTPClient     = &http.Client{Timeout: 30 * time.Second}
+	evolveCurrentVersion = ""
 )
 
-var upgradeCmd = &cobra.Command{
-	Use:   "refine",
-	Short: "Refine the ailloy CLI itself to the latest release",
-	Long: `Download and install the latest ailloy release in place.
+var evolveCmd = &cobra.Command{
+	Use:   "evolve",
+	Short: "Evolve the ailloy CLI to the latest release",
+	Long: `Evolve (self-upgrade) the running ailloy binary to the latest release.
 
-Refines (upgrades) the running ailloy binary. Skips Homebrew installs
-by default — those should run 'brew upgrade nimble-giant/tap/ailloy'
-instead. Use --force to override.
+Fetches the latest release from GitHub, verifies SHA256 against the
+release's checksums.txt, and atomically swaps the running binary in
+place. Skips Homebrew installs by default — those should run
+'brew upgrade nimble-giant/tap/ailloy' instead. Use --force to override.
 
 Use --version to install or downgrade to a specific release tag.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	RunE:          runUpgrade,
+	RunE:          runEvolve,
 }
 
 func init() {
-	rootCmd.AddCommand(upgradeCmd)
-	upgradeCmd.Flags().BoolVar(&upgradeCheck, "check", false, "print available version without installing")
-	upgradeCmd.Flags().BoolVar(&upgradeForce, "force", false, "upgrade even if installed via Homebrew")
-	upgradeCmd.Flags().StringVar(&upgradePin, "version", "", "install a specific release tag (e.g. v0.6.19)")
+	rootCmd.AddCommand(evolveCmd)
+	evolveCmd.Flags().BoolVar(&evolveCheck, "check", false, "print available version without installing")
+	evolveCmd.Flags().BoolVar(&evolveForce, "force", false, "evolve even if installed via Homebrew")
+	evolveCmd.Flags().StringVar(&evolvePin, "version", "", "install a specific release tag (e.g. v0.6.19)")
+	evolveCmd.Flags().BoolVar(&evolveSkipAnim, "no-animate", false, "skip the evolution animation")
 }
 
-func runUpgrade(_ *cobra.Command, _ []string) error {
-	current := strings.TrimSpace(upgradeCurrentVersion)
+func runEvolve(_ *cobra.Command, _ []string) error {
+	current := strings.TrimSpace(evolveCurrentVersion)
 	if current == "" {
 		current = "dev"
 	}
 
-	target := strings.TrimSpace(upgradePin)
+	target := strings.TrimSpace(evolvePin)
 	if target == "" {
 		latest, err := fetchLatestTag()
 		if err != nil {
@@ -78,14 +83,14 @@ func runUpgrade(_ *cobra.Command, _ []string) error {
 		target = "v" + target
 	}
 
-	if upgradePin == "" {
+	if evolvePin == "" {
 		if cmp, err := compareSemver(current, strings.TrimPrefix(target, "v")); err == nil && cmp == 0 {
 			fmt.Println(styles.SuccessStyle.Render("✓ ") + fmt.Sprintf("ailloy is already at %s", target))
 			return nil
 		}
 	}
 
-	if upgradeCheck {
+	if evolveCheck {
 		fmt.Printf("current: %s\n", current)
 		fmt.Printf("latest:  %s\n", target)
 		return nil
@@ -101,11 +106,11 @@ func runUpgrade(_ *cobra.Command, _ []string) error {
 			"Self-upgrade is not supported on Windows.")
 		fmt.Println(styles.SubtleStyle.Render(
 			"    Download " + target + " from https://github.com/" +
-				upgradeRepoOwner + "/" + upgradeRepoName + "/releases"))
+				evolveRepoOwner + "/" + evolveRepoName + "/releases"))
 		return errors.New("windows self-upgrade unsupported")
 	}
 
-	if isHomebrewPath(exePath) && !upgradeForce {
+	if isHomebrewPath(exePath) && !evolveForce {
 		fmt.Println(styles.WarningStyle.Render("⚠️  ") +
 			"ailloy was installed via Homebrew.")
 		fmt.Println(styles.SubtleStyle.Render(
@@ -119,7 +124,8 @@ func runUpgrade(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	fmt.Println(styles.SuccessStyle.Render("✓ ") + "Refined ailloy to " + target)
+	playEvolutionAnimation(target, evolveSkipAnim)
+
 	if out, err := exec.Command(exePath, "--version").CombinedOutput(); err == nil { // #nosec G204 -- exePath is the resolved path of our own executable
 		fmt.Println(strings.TrimSpace(string(out)))
 	}
@@ -163,13 +169,13 @@ func isHomebrewPath(path string) bool {
 }
 
 func fetchLatestTag() (string, error) {
-	url := upgradeReleaseAPIBase + "/repos/" + upgradeRepoOwner + "/" + upgradeRepoName + "/releases/latest"
+	url := evolveReleaseAPIBase + "/repos/" + evolveRepoOwner + "/" + evolveRepoName + "/releases/latest"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := upgradeHTTPClient.Do(req)
+	resp, err := evolveHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -213,7 +219,7 @@ func assetName(goos, goarch string) string {
 func installRelease(tag, destPath string) error {
 	asset := assetName(runtime.GOOS, runtime.GOARCH)
 	releaseBase := fmt.Sprintf("%s/%s/%s/releases/download/%s",
-		upgradeReleaseDLBase, upgradeRepoOwner, upgradeRepoName, tag)
+		evolveReleaseDLBase, evolveRepoOwner, evolveRepoName, tag)
 
 	checksums, err := downloadString(releaseBase + "/checksums.txt")
 	if err != nil {
@@ -225,7 +231,7 @@ func installRelease(tag, destPath string) error {
 	}
 
 	dir := filepath.Dir(destPath)
-	tmp, err := os.CreateTemp(dir, ".ailloy-upgrade-*")
+	tmp, err := os.CreateTemp(dir, ".ailloy-evolve-*")
 	if err != nil {
 		return fmt.Errorf("create temp file in %s: %w", dir, err)
 	}
@@ -237,7 +243,7 @@ func installRelease(tag, destPath string) error {
 		}
 	}()
 
-	resp, err := upgradeHTTPClient.Get(releaseBase + "/" + asset)
+	resp, err := evolveHTTPClient.Get(releaseBase + "/" + asset)
 	if err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("download %s: %w", asset, err)
@@ -273,7 +279,7 @@ func installRelease(tag, destPath string) error {
 }
 
 func downloadString(url string) (string, error) {
-	resp, err := upgradeHTTPClient.Get(url)
+	resp, err := evolveHTTPClient.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -307,4 +313,83 @@ func lookupChecksum(content, name string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// evolveAnimationFrames returns the foreground sprite and silhouette frames
+// used by the evolution animation. Exported (lowercase, package-internal) for
+// testing.
+func evolveAnimationFrames() (full, silhouette []string) {
+	full = []string{
+		`     /\___/\     `,
+		`    ( o   o )    `,
+		`     \  ω  /     `,
+		`      |---|      `,
+		`     /     \     `,
+	}
+	silhouette = []string{
+		`     ███████     `,
+		`    █████████    `,
+		`     ███████     `,
+		`      █████      `,
+		`     ███████     `,
+	}
+	return
+}
+
+// playEvolutionAnimation prints a Pokemon-style evolution sequence ending with
+// the new version. Falls back to a plain success line when stdout is not a
+// TTY or skip is set, so CI logs and non-interactive shells stay clean.
+func playEvolutionAnimation(target string, skip bool) {
+	if skip || !term.IsTerminal(int(os.Stdout.Fd())) {
+		fmt.Println(styles.SuccessStyle.Render("✓ ") + "Your ailloy evolved into " + target + "!")
+		return
+	}
+
+	full, silhouette := evolveAnimationFrames()
+	height := len(full)
+
+	headline := lipgloss.NewStyle().Bold(true).Foreground(styles.Primary1)
+	flash := lipgloss.NewStyle().Foreground(styles.Primary1)
+	dim := styles.SubtleStyle
+
+	fmt.Println()
+	fmt.Println(headline.Render("What? AILLOY is evolving!"))
+	fmt.Println()
+	for _, line := range full {
+		fmt.Println(flash.Render(line))
+	}
+
+	frames := []bool{false, true, false, true, false, true, false, true, false, true}
+	delays := []time.Duration{
+		300 * time.Millisecond,
+		260 * time.Millisecond,
+		220 * time.Millisecond,
+		200 * time.Millisecond,
+		180 * time.Millisecond,
+		160 * time.Millisecond,
+		140 * time.Millisecond,
+		120 * time.Millisecond,
+		100 * time.Millisecond,
+		90 * time.Millisecond,
+	}
+
+	for i, useFull := range frames {
+		time.Sleep(delays[i])
+		fmt.Printf("\033[%dA", height)
+		var art []string
+		if useFull {
+			art = full
+		} else {
+			art = silhouette
+		}
+		for _, line := range art {
+			fmt.Print("\033[K")
+			fmt.Println(flash.Render(line))
+		}
+	}
+
+	time.Sleep(450 * time.Millisecond)
+	fmt.Println()
+	fmt.Println(styles.SuccessStyle.Render("✨  Congratulations! Your AILLOY evolved into " + target + "!"))
+	fmt.Println(dim.Render("    (it learned how to update itself)"))
 }
