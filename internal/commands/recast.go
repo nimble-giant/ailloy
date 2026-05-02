@@ -10,9 +10,10 @@ import (
 )
 
 var recastCmd = &cobra.Command{
-	Use:   "recast [name]",
-	Short: "Re-resolve installed molds to newer versions",
-	Long: `Re-resolve installed molds to newer versions.
+	Use:     "recast [name]",
+	Aliases: []string{"upgrade"},
+	Short:   "Re-resolve installed molds to newer versions",
+	Long: `Re-resolve installed molds to newer versions (alias: upgrade).
 
 Reads .ailloy/installed.yaml and refreshes each mold to its latest matching
 version. If ailloy.lock exists, also updates lock entries in lockstep.

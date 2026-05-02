@@ -39,12 +39,13 @@ var (
 )
 
 var upgradeCmd = &cobra.Command{
-	Use:   "upgrade",
-	Short: "Upgrade the ailloy CLI itself to the latest release",
+	Use:   "refine",
+	Short: "Refine the ailloy CLI itself to the latest release",
 	Long: `Download and install the latest ailloy release in place.
 
-Skips Homebrew installs by default — those should run
-'brew upgrade nimble-giant/tap/ailloy' instead. Use --force to override.
+Refines (upgrades) the running ailloy binary. Skips Homebrew installs
+by default — those should run 'brew upgrade nimble-giant/tap/ailloy'
+instead. Use --force to override.
 
 Use --version to install or downgrade to a specific release tag.`,
 	SilenceUsage:  true,
@@ -118,7 +119,7 @@ func runUpgrade(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	fmt.Println(styles.SuccessStyle.Render("✓ ") + "Upgraded ailloy to " + target)
+	fmt.Println(styles.SuccessStyle.Render("✓ ") + "Refined ailloy to " + target)
 	if out, err := exec.Command(exePath, "--version").CombinedOutput(); err == nil { // #nosec G204 -- exePath is the resolved path of our own executable
 		fmt.Println(strings.TrimSpace(string(out)))
 	}
