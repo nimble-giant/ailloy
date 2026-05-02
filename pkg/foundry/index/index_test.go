@@ -60,6 +60,32 @@ molds: []
 			},
 		},
 		{
+			name: "index with nested foundries",
+			input: `
+apiVersion: v1
+kind: foundry-index
+name: aggregator
+molds: []
+foundries:
+  - name: replicated
+    source: github.com/kriscoleman/replicated-foundry
+    description: "Kris's molds"
+`,
+			want: Index{
+				APIVersion: "v1",
+				Kind:       "foundry-index",
+				Name:       "aggregator",
+				Molds:      []MoldEntry{},
+				Foundries: []FoundryRef{
+					{
+						Name:        "replicated",
+						Source:      "github.com/kriscoleman/replicated-foundry",
+						Description: "Kris's molds",
+					},
+				},
+			},
+		},
+		{
 			name:    "invalid yaml",
 			input:   `{{{not yaml`,
 			wantErr: true,
@@ -102,6 +128,17 @@ molds: []
 				}
 				if m.Source != tt.want.Molds[i].Source {
 					t.Errorf("Molds[%d].Source = %q, want %q", i, m.Source, tt.want.Molds[i].Source)
+				}
+			}
+			if len(idx.Foundries) != len(tt.want.Foundries) {
+				t.Fatalf("len(Foundries) = %d, want %d", len(idx.Foundries), len(tt.want.Foundries))
+			}
+			for i, f := range idx.Foundries {
+				if f.Name != tt.want.Foundries[i].Name {
+					t.Errorf("Foundries[%d].Name = %q, want %q", i, f.Name, tt.want.Foundries[i].Name)
+				}
+				if f.Source != tt.want.Foundries[i].Source {
+					t.Errorf("Foundries[%d].Source = %q, want %q", i, f.Source, tt.want.Foundries[i].Source)
 				}
 			}
 		})
@@ -173,6 +210,18 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			wantErr: "molds[0].source is required",
+		},
+		{
+			name: "foundry ref missing source",
+			idx: Index{
+				APIVersion: "v1",
+				Kind:       "foundry-index",
+				Name:       "test",
+				Foundries: []FoundryRef{
+					{Name: "child"},
+				},
+			},
+			wantErr: "foundries[0].source is required",
 		},
 	}
 
