@@ -165,6 +165,8 @@ func (m Model) CurrentMold() (ref string, scope data.Scope, ok bool) {
 
 // ApplySessionOverrides records session overrides for the given mold ref.
 // They will be applied as --set overrides on the next cast of that mold.
+// Last-write-wins: re-applying replaces any prior pending overrides for the
+// same ref rather than merging.
 func (m Model) ApplySessionOverrides(moldRef string, overrides map[string]any) Model {
 	if m.pending == nil {
 		m.pending = map[string][]string{}
@@ -173,16 +175,33 @@ func (m Model) ApplySessionOverrides(moldRef string, overrides map[string]any) M
 	return m
 }
 
-// encodeSetOverrides converts a typed override map into the --set k=v
-// strings that CastOptions.SetOverrides expects. Result is sorted for
-// deterministic ordering.
+// encodeSetOverrides converts a typed override map into the --set k=v strings
+// that CastOptions.SetOverrides expects. Slices are emitted as YAML flow
+// sequences ([a,b,c]) so the cast core's YAML-aware --set parser produces a
+// real list rather than parsing the Go-default "[a b c]" form as a single
+// string. Result is sorted for deterministic ordering.
 func encodeSetOverrides(overrides map[string]any) []string {
 	out := make([]string, 0, len(overrides))
 	for k, v := range overrides {
-		out = append(out, fmt.Sprintf("%s=%v", k, v))
+		out = append(out, fmt.Sprintf("%s=%s", k, formatSetValue(v)))
 	}
 	sort.Strings(out)
 	return out
+}
+
+func formatSetValue(v any) string {
+	switch x := v.(type) {
+	case []string:
+		return "[" + strings.Join(x, ",") + "]"
+	case []any:
+		parts := make([]string, len(x))
+		for i, item := range x {
+			parts[i] = fmt.Sprintf("%v", item)
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 func (m Model) View() string {
