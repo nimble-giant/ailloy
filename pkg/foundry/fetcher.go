@@ -51,10 +51,13 @@ func (f *Fetcher) ensureBareClone(ref *Reference) error {
 	bareDir := BareCloneDir(f.cacheDir, ref)
 
 	if _, err := os.Stat(filepath.Join(bareDir, "HEAD")); err == nil {
-		// Bare clone exists — fetch updates.
-		out, err := f.git("-C", bareDir, "fetch", "--all")
+		// Bare clone exists — fetch updates including new tags.
+		// --tags is required so tags published after the initial clone
+		// (e.g. v0.4.0 of nimble-mold) become resolvable. Without it,
+		// `git archive <new-tag>` fails with "not a valid object name".
+		out, err := f.git("-C", bareDir, "fetch", "--all", "--tags", "--force")
 		if err != nil {
-			return fmt.Errorf("git fetch --all: %w\n%s", err, out)
+			return fmt.Errorf("git fetch --all --tags: %w\n%s", err, out)
 		}
 		return nil
 	}
