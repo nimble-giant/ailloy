@@ -91,7 +91,11 @@ func (m Model) Close() Model {
 	return m
 }
 
-// editorState holds the active key being edited.
+// editorState holds the active key being edited. rawValue and boolVal MUST
+// be the same pointers passed to buildEditorForm — the huh.Form mutates them
+// in place, and handleEditorKey reads through them on commit. Always replace
+// the whole struct via buildEditorForm rather than overwriting fields
+// individually, or the form will mutate orphaned memory.
 type editorState struct {
 	active   bool
 	key      string

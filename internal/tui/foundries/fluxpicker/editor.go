@@ -104,6 +104,9 @@ func commitEditorValue(m Model, fv mold.FluxVar, raw string) Model {
 		}
 		m.overrides[fv.Name] = n
 	case "bool":
+		// Permissive parse for non-form callers (tests, future programmatic
+		// callers). The TUI path always synthesizes "true"/"false" before
+		// reaching here, so the alternate forms are unreachable from the UI.
 		switch strings.ToLower(strings.TrimSpace(raw)) {
 		case "true", "yes", "y", "1":
 			m.overrides[fv.Name] = true
