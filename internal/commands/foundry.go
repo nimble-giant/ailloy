@@ -169,7 +169,7 @@ func runFoundrySearch(_ *cobra.Command, args []string) error {
 }
 
 func runFoundryAdd(_ *cobra.Command, args []string) error {
-	url := args[0]
+	url := index.NormalizeFoundryURL(args[0])
 
 	cfg, err := index.LoadConfig()
 	if err != nil {

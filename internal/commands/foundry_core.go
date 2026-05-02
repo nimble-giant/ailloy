@@ -25,6 +25,8 @@ type AddFoundryResult struct {
 func AddFoundryCore(cfg *index.Config, url string) (AddFoundryResult, error) {
 	var res AddFoundryResult
 
+	url = index.NormalizeFoundryURL(url)
+
 	if existing := cfg.FindFoundry(url); existing != nil {
 		res.Entry = *existing
 		res.AlreadyExists = true

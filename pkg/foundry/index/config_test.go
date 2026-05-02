@@ -312,6 +312,30 @@ func TestHasOfficialFoundry(t *testing.T) {
 	}
 }
 
+func TestNormalizeFoundryURL(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"github.com/owner/repo", "https://github.com/owner/repo"},
+		{"  github.com/owner/repo  ", "https://github.com/owner/repo"},
+		{"https://github.com/owner/repo", "https://github.com/owner/repo"},
+		{"http://example.com/foundry.yaml", "http://example.com/foundry.yaml"},
+		{"ssh://git@github.com/owner/repo.git", "ssh://git@github.com/owner/repo.git"},
+		{"git@github.com:owner/repo.git", "git@github.com:owner/repo.git"},
+		{"example.com/index.yaml", "https://example.com/index.yaml"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			if got := NormalizeFoundryURL(tt.in); got != tt.want {
+				t.Errorf("NormalizeFoundryURL(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDetectType(t *testing.T) {
 	tests := []struct {
 		url  string
