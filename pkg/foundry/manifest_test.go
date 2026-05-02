@@ -141,3 +141,38 @@ func TestInstalledManifest_FindBySource(t *testing.T) {
 		t.Errorf("nil manifest FindBySource = %+v, want nil", got)
 	}
 }
+
+func TestManifest_AbsentDoesNotBreakLockReads(t *testing.T) {
+	dir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	// Pre-existing lock, no manifest — typical pre-upgrade state.
+	lock := &LockFile{
+		APIVersion: "v1",
+		Molds: []LockEntry{{
+			Name: "x", Source: "github.com/o/x", Version: "v1.0.0", Commit: "abc",
+			Timestamp: time.Now().UTC(),
+		}},
+	}
+	if err := WriteLockFile(LockFileName, lock); err != nil {
+		t.Fatal(err)
+	}
+
+	manifest, err := ReadInstalledManifest(InstalledManifestPath)
+	if err != nil {
+		t.Fatalf("ReadInstalledManifest should not error on missing file: %v", err)
+	}
+	if manifest != nil {
+		t.Errorf("expected nil manifest, got %+v", manifest)
+	}
+	if !shouldUseLock(LockFileName) {
+		t.Error("shouldUseLock should still be true when only lock exists")
+	}
+}
