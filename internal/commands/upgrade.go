@@ -119,7 +119,7 @@ func runUpgrade(_ *cobra.Command, _ []string) error {
 	}
 
 	fmt.Println(styles.SuccessStyle.Render("✓ ") + "Upgraded ailloy to " + target)
-	if out, err := exec.Command(exePath, "--version").CombinedOutput(); err == nil {
+	if out, err := exec.Command(exePath, "--version").CombinedOutput(); err == nil { // #nosec G204 -- exePath is the resolved path of our own executable
 		fmt.Println(strings.TrimSpace(string(out)))
 	}
 	return nil
@@ -261,7 +261,7 @@ func installRelease(tag, destPath string) error {
 		return fmt.Errorf("checksum mismatch for %s: got %s, expected %s", asset, got, expected)
 	}
 
-	if err := os.Chmod(tmpPath, 0o755); err != nil {
+	if err := os.Chmod(tmpPath, 0o755); err != nil { // #nosec G302 -- binary must be executable
 		return fmt.Errorf("chmod new binary: %w", err)
 	}
 	if err := os.Rename(tmpPath, destPath); err != nil {
