@@ -65,6 +65,15 @@ The Ailloy pipeline is a small set of composable steps. Author once, configure p
 ### 1. Install
 
 <details>
+<summary><strong>Homebrew (macOS, Linux)</strong></summary>
+
+```bash
+brew install nimble-giant/tap/ailloy
+```
+
+</details>
+
+<details>
 <summary><strong>Quick install (recommended)</strong></summary>
 
 ```bash
