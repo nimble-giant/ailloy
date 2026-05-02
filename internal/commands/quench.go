@@ -29,21 +29,15 @@ without writing.`,
 var (
 	quenchVerify bool
 	quenchGlobal bool
-	quenchRescan bool
 )
 
 func init() {
 	rootCmd.AddCommand(quenchCmd)
 	quenchCmd.Flags().BoolVar(&quenchVerify, "verify", false, "check pins without writing (CI-friendly)")
 	quenchCmd.Flags().BoolVarP(&quenchGlobal, "global", "g", false, "operate on the global manifest/lock under ~/")
-	quenchCmd.Flags().BoolVar(&quenchRescan, "rescan", false, "best-effort scan for previously cast molds without an installed manifest")
 }
 
 func runQuench(_ *cobra.Command, args []string) error {
-	if quenchRescan {
-		return runRescan(quenchGlobal)
-	}
-
 	manifestPath := manifestPathFor(quenchGlobal)
 	lockPath := lockPathFor(quenchGlobal)
 
@@ -151,7 +145,7 @@ func runQuench(_ *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Printf("%s %d dependencies pinned in %s.\n",
 		styles.SuccessStyle.Render("Locked:"),
-		len(newLock.Molds),
+		len(entries),
 		styles.CodeStyle.Render(lockPath),
 	)
 	fmt.Printf("Run %s to update to newer versions.\n", styles.CodeStyle.Render("ailloy recast"))
@@ -204,20 +198,4 @@ func referenceFromInstalledEntry(entry *foundry.InstalledEntry) (*foundry.Refere
 		Subpath: entry.Subpath,
 		Type:    foundry.Latest,
 	}, nil
-}
-
-// runRescan is a best-effort migration helper for users who have previously
-// cast blanks but no installed manifest. v1 implementation: print guidance
-// only — directing users to re-cast each mold once.
-func runRescan(_ bool) error {
-	fmt.Println(styles.WorkingBanner("Rescan: detecting previously cast molds..."))
-	fmt.Println()
-	fmt.Println(styles.WarningStyle.Render("Rescan is a placeholder in this release."))
-	fmt.Println("Until a fuller scan is implemented, please re-run " +
-		styles.CodeStyle.Render("ailloy cast <ref>") +
-		" once for each mold you previously installed.")
-	fmt.Println("Each cast will populate " +
-		styles.CodeStyle.Render(".ailloy/installed.yaml") +
-		" automatically.")
-	return nil
 }
