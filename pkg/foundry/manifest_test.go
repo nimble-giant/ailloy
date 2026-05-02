@@ -54,6 +54,9 @@ func TestInstalledManifest_RoundTrip(t *testing.T) {
 	if e.Commit != "2347a626798553252668a15dc98dd020ab9a9c0c" {
 		t.Errorf("Commit = %q", e.Commit)
 	}
+	if !e.CastAt.Equal(ts) {
+		t.Errorf("CastAt = %v, want %v", e.CastAt, ts)
+	}
 	if loaded.Molds[1].Subpath != "sub/path" {
 		t.Errorf("Subpath = %q", loaded.Molds[1].Subpath)
 	}
