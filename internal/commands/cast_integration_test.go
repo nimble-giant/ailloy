@@ -250,6 +250,120 @@ func TestCopyResolvedFiles_SkipsEmptyRenderedFiles(t *testing.T) {
 	}
 }
 
+func TestCleanupEmptyDirs_RemovesEmptyAndAncestors(t *testing.T) {
+	tmp := t.TempDir()
+
+	emptyLeaf := filepath.Join(tmp, ".claude", "agents")
+	keepLeaf := filepath.Join(tmp, ".opencode", "agents")
+	if err := os.MkdirAll(emptyLeaf, 0750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.MkdirAll(keepLeaf, 0750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(keepLeaf, "agent.md"), []byte("hi"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	dirs := []string{emptyLeaf, keepLeaf}
+	remaining := cleanupEmptyDirs(dirs, tmp)
+
+	if _, err := os.Stat(emptyLeaf); !os.IsNotExist(err) {
+		t.Errorf("expected empty leaf %s to be removed, got err=%v", emptyLeaf, err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, ".claude")); !os.IsNotExist(err) {
+		t.Errorf("expected empty ancestor .claude to be removed")
+	}
+	if _, err := os.Stat(keepLeaf); err != nil {
+		t.Errorf("expected non-empty leaf %s to remain: %v", keepLeaf, err)
+	}
+	if _, err := os.Stat(tmp); err != nil {
+		t.Errorf("expected destPrefix %s to remain: %v", tmp, err)
+	}
+
+	if len(remaining) != 1 || remaining[0] != keepLeaf {
+		t.Errorf("expected remaining=[%s], got %v", keepLeaf, remaining)
+	}
+}
+
+func TestCleanupEmptyDirs_PreservesNonEmptyAncestors(t *testing.T) {
+	tmp := t.TempDir()
+
+	leaf := filepath.Join(tmp, ".claude", "agents")
+	if err := os.MkdirAll(leaf, 0750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Pre-existing sibling content under .claude/ that the cast did not produce.
+	sibling := filepath.Join(tmp, ".claude", "settings.json")
+	if err := os.WriteFile(sibling, []byte("{}"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	cleanupEmptyDirs([]string{leaf}, tmp)
+
+	if _, err := os.Stat(leaf); !os.IsNotExist(err) {
+		t.Errorf("expected empty leaf to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(tmp, ".claude")); err != nil {
+		t.Errorf("expected non-empty ancestor .claude to remain: %v", err)
+	}
+}
+
+func TestCopyResolvedFiles_RemovesEmptyMultiDestDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	moldFS := fstest.MapFS{
+		"agents/foo.md": &fstest.MapFile{
+			Data: []byte("{{- if eq .target \"opencode\" -}}# foo{{- end -}}"),
+		},
+	}
+	reader := blanks.NewMoldReader(moldFS)
+
+	resolved := []mold.ResolvedFile{
+		{
+			SrcPath:  "agents/foo.md",
+			DestPath: ".claude/agents/foo.md",
+			Process:  true,
+			Set:      map[string]any{"target": "claude"},
+		},
+		{
+			SrcPath:  "agents/foo.md",
+			DestPath: ".opencode/agents/foo.md",
+			Process:  true,
+			Set:      map[string]any{"target": "opencode"},
+		},
+	}
+
+	dirs := []string{".claude/agents", ".opencode/agents"}
+	for _, d := range dirs {
+		if err := os.MkdirAll(d, 0750); err != nil {
+			t.Fatalf("mkdir %s: %v", d, err)
+		}
+	}
+
+	if err := copyResolvedFiles(reader, nil, map[string]any{}, resolved); err != nil {
+		t.Fatalf("copyResolvedFiles failed: %v", err)
+	}
+
+	remaining := cleanupEmptyDirs(dirs, "")
+
+	if _, err := os.Stat(".claude"); !os.IsNotExist(err) {
+		t.Errorf("expected .claude to be removed (all renders empty)")
+	}
+	if _, err := os.Stat(".opencode/agents/foo.md"); err != nil {
+		t.Errorf("expected .opencode/agents/foo.md to be written: %v", err)
+	}
+
+	if len(remaining) != 1 || remaining[0] != ".opencode/agents" {
+		t.Errorf("expected remaining=[.opencode/agents], got %v", remaining)
+	}
+}
+
 func TestIntegration_CastProject_DirectoryCreation(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
