@@ -65,6 +65,9 @@ func (m Model) handleFilterKey(k tea.KeyMsg) (Model, tea.Cmd) {
 		m.filter.Blur()
 		return m, nil
 	case tea.KeyRunes:
+		// Single-character shortcuts only fire when the filter is blurred —
+		// otherwise typing 'd'/'R'/'s' into the filter would clear overrides
+		// or open the save prompt instead of editing the query.
 		if len(k.Runes) == 1 && !m.filter.Focused() {
 			switch k.Runes[0] {
 			case 'd':
@@ -82,7 +85,8 @@ func (m Model) handleFilterKey(k tea.KeyMsg) (Model, tea.Cmd) {
 			}
 		}
 	}
-	// Otherwise pass through to the textinput.
+	// Otherwise pass through to the textinput; filter changed, so reset the
+	// highlight to the top of the new result list.
 	var cmd tea.Cmd
 	m.filter, cmd = m.filter.Update(k)
 	m.cursor = 0

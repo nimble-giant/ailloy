@@ -112,3 +112,26 @@ func TestUpdate_TypingIntoFilterUpdatesQuery(t *testing.T) {
 		t.Fatalf("cursor reset expected; got %d", m.cursor)
 	}
 }
+
+func TestUpdate_ShortcutKeysGoToFilterWhenFocused(t *testing.T) {
+	m := New().OpenFor("a", data.ScopeProject,
+		[]mold.FluxVar{{Name: "k"}}, nil).
+		SetOverride("k", "v")
+	// filter is focused by OpenFor; 'd' must NOT clear the override.
+	m, _ = m.Update(keyMsg("d"))
+	if _, ok := m.Overrides()["k"]; !ok {
+		t.Fatal("'d' on focused filter should not clear override")
+	}
+	if m.filter.Value() != "d" {
+		t.Fatalf("filter value = %q want d", m.filter.Value())
+	}
+
+	// 's' must NOT open save prompt while filter is focused.
+	m, _ = m.Update(keyMsg("s"))
+	if m.focus == focusSavePrompt {
+		t.Fatal("'s' on focused filter should not open save prompt")
+	}
+	if m.filter.Value() != "ds" {
+		t.Fatalf("filter value = %q want ds", m.filter.Value())
+	}
+}
