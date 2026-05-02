@@ -591,7 +591,7 @@ func recordInstalled(result *foundry.ResolveResult, global bool) error {
 	}
 	manifest, err := foundry.ReadInstalledManifest(path)
 	if err != nil {
-		// Fall back to a fresh manifest on parse error so we don't lose the cast record.
+		log.Printf("warning: corrupt installed manifest at %s, resetting: %v", path, err)
 		manifest = nil
 	}
 	if manifest == nil {

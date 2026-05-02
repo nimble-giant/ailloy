@@ -132,7 +132,8 @@ type ResolveResult struct {
 }
 
 // ResolveWithMetadata is like Resolve but returns provenance details for the
-// caller to record in the installed manifest.
+// caller to record in the installed manifest. On error, the returned
+// *ResolveResult is always nil.
 func ResolveWithMetadata(rawRef string, opts ...ResolveOption) (fs.FS, *ResolveResult, error) {
 	ref, err := ParseReference(rawRef)
 	if err != nil {
@@ -140,7 +141,10 @@ func ResolveWithMetadata(rawRef string, opts ...ResolveOption) (fs.FS, *ResolveR
 	}
 	git := DefaultGitRunner()
 	fsys, result, err := resolveWithMeta(ref, git, opts...)
-	return fsys, result, err
+	if err != nil {
+		return nil, nil, err
+	}
+	return fsys, result, nil
 }
 
 // resolveWithMeta is the internal implementation; mirrors ResolveWith but also
