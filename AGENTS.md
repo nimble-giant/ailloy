@@ -45,6 +45,7 @@ Key CLI commands for working with molds:
 - **smelt** (`package`): Package a mold for distribution
 - **recast**: Re-resolve installed molds to newer versions; refreshes `.ailloy/installed.yaml` and (if present) `ailloy.lock`
 - **quench**: Opt in to `ailloy.lock` by pinning everything in `.ailloy/installed.yaml`; supports `--verify` (CI drift check) and `--global`
+- **evolve** (`reinstall`): Self-upgrade the ailloy CLI binary in place from the latest GitHub release; supports `--check`, `--version`, `--force`, and `--no-animate`. Refuses on Homebrew installs (use `brew upgrade nimble-giant/tap/ailloy`)
 
 ## Usage
 
