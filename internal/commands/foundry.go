@@ -149,16 +149,6 @@ func runFoundryAdd(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	entry := index.FoundryEntry{
-		Name:   index.DetectType(url), // placeholder, will be overridden by index name
-		URL:    url,
-		Type:   index.DetectType(url),
-		Status: "pending",
-	}
-	// Derive initial name from URL.
-	entry.Name = nameFromFoundryURL(url)
-
-	// Check for duplicates before fetching.
 	if existing := cfg.FindFoundry(url); existing != nil {
 		fmt.Println(styles.InfoStyle.Render("Foundry already registered: ") + styles.CodeStyle.Render(url))
 		return nil
@@ -166,20 +156,15 @@ func runFoundryAdd(_ *cobra.Command, args []string) error {
 
 	fmt.Println(styles.WorkingBanner("Fetching foundry index..."))
 
-	// Fetch and validate the index.
-	git := defaultGitRunner()
-	fetcher, err := index.NewFetcher(git)
+	res, err := AddFoundryCore(cfg, url)
 	if err != nil {
 		return err
 	}
-
-	idx, err := fetcher.FetchIndex(&entry)
-	if err != nil {
-		return fmt.Errorf("fetching foundry index: %w", err)
+	if res.AlreadyExists {
+		fmt.Println(styles.InfoStyle.Render("Foundry already registered: ") + styles.CodeStyle.Render(url))
+		return nil
 	}
 
-	// Add to config and save.
-	cfg.AddFoundry(entry)
 	if err := index.SaveConfig(cfg); err != nil {
 		return err
 	}
@@ -187,10 +172,10 @@ func runFoundryAdd(_ *cobra.Command, args []string) error {
 	configPath, _ := index.ConfigPath()
 
 	fmt.Println()
-	fmt.Println(styles.SuccessStyle.Render("Foundry registered: ") + styles.AccentStyle.Render(entry.Name))
+	fmt.Println(styles.SuccessStyle.Render("Foundry registered: ") + styles.AccentStyle.Render(res.Entry.Name))
 	fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("  URL:   %s", url)))
-	fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("  Type:  %s", entry.Type)))
-	fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("  Molds: %d", len(idx.Molds))))
+	fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("  Type:  %s", res.Entry.Type)))
+	fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("  Molds: %d", res.MoldCount)))
 	fmt.Println(styles.SubtleStyle.Render("  Config: " + configPath))
 
 	return nil
@@ -202,18 +187,12 @@ func runFoundryList(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	if len(cfg.Foundries) == 0 {
-		fmt.Println(styles.InfoBoxStyle.Render(
-			styles.InfoStyle.Render("No foundries registered.") + "\n\n" +
-				"Add one with: " + styles.CodeStyle.Render("ailloy foundry add <url>"),
-		))
-		return nil
-	}
+	foundries := cfg.EffectiveFoundries()
 
-	fmt.Println(styles.HeaderStyle.Render(fmt.Sprintf("Registered foundries (%d):", len(cfg.Foundries))))
+	fmt.Println(styles.HeaderStyle.Render(fmt.Sprintf("Registered foundries (%d):", len(foundries))))
 	fmt.Println()
 
-	for _, entry := range cfg.Foundries {
+	for _, entry := range foundries {
 		name := styles.AccentStyle.Render(entry.Name)
 		if index.IsOfficialFoundry(entry.URL) {
 			name += " " + styles.SuccessStyle.Render("✓ verified")
@@ -242,20 +221,13 @@ func runFoundryRemove(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	// Find the entry before removing (for cache cleanup).
-	entry := cfg.FindFoundry(nameOrURL)
-	if entry == nil {
-		return fmt.Errorf("foundry %q not found", nameOrURL)
+	removed, err := RemoveFoundryCore(cfg, nameOrURL)
+	if err != nil {
+		return err
 	}
 
-	// Clean up cached index files.
-	cacheDir, err := index.IndexCacheDir()
-	if err == nil {
-		_ = index.CleanIndexCache(cacheDir, entry)
-	}
-
-	if !cfg.RemoveFoundry(nameOrURL) {
-		return fmt.Errorf("foundry %q not found", nameOrURL)
+	if cacheDir, cerr := index.IndexCacheDir(); cerr == nil {
+		_ = index.CleanIndexCache(cacheDir, &removed)
 	}
 
 	if err := index.SaveConfig(cfg); err != nil {
@@ -273,45 +245,34 @@ func runFoundryUpdate(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	if len(cfg.Foundries) == 0 {
-		fmt.Println(styles.InfoStyle.Render("No foundries registered."))
-		return nil
-	}
-
 	fmt.Println(styles.WorkingBanner("Updating foundry indexes..."))
 	fmt.Println()
 
-	git := defaultGitRunner()
-	fetcher, err := index.NewFetcher(git)
+	reports, err := UpdateFoundriesCore(cfg)
 	if err != nil {
 		return err
 	}
 
-	var errors []string
-	for i := range cfg.Foundries {
-		entry := &cfg.Foundries[i]
-		fmt.Printf("  Updating %s...", styles.AccentStyle.Render(entry.Name))
-
-		idx, err := fetcher.FetchIndex(entry)
-		if err != nil {
+	var failures int
+	for _, r := range reports {
+		fmt.Printf("  Updating %s...", styles.AccentStyle.Render(r.Name))
+		if r.Err != nil {
+			failures++
 			fmt.Println(" " + styles.ErrorStyle.Render("error"))
-			fmt.Println(styles.SubtleStyle.Render("    " + err.Error()))
-			errors = append(errors, fmt.Sprintf("%s: %v", entry.Name, err))
+			fmt.Println(styles.SubtleStyle.Render("    " + r.Err.Error()))
 			continue
 		}
-
 		fmt.Println(" " + styles.SuccessStyle.Render("ok") +
-			styles.SubtleStyle.Render(fmt.Sprintf(" (%d molds)", len(idx.Molds))))
+			styles.SubtleStyle.Render(fmt.Sprintf(" (%d molds)", r.MoldCount)))
 	}
 
-	// Save updated timestamps and statuses.
 	if err := index.SaveConfig(cfg); err != nil {
 		return err
 	}
 
 	fmt.Println()
-	if len(errors) > 0 {
-		return fmt.Errorf("%d foundry(ies) failed to update", len(errors))
+	if failures > 0 {
+		return fmt.Errorf("%d foundry(ies) failed to update", failures)
 	}
 
 	fmt.Println(styles.SuccessStyle.Render("All foundries updated successfully."))
