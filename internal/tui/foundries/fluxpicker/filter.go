@@ -14,7 +14,7 @@ func filterKeys(schema []mold.FluxVar, query string) []mold.FluxVar {
 	if query == "" {
 		out := make([]mold.FluxVar, len(schema))
 		copy(out, schema)
-		sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+		sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 		return out
 	}
 	names := make([]string, len(schema))

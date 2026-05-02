@@ -45,3 +45,12 @@ func TestFilterKeys_NoMatches(t *testing.T) {
 		t.Fatalf("expected zero matches, got %d", len(out))
 	}
 }
+
+func TestFilterKeys_NilSchema(t *testing.T) {
+	if got := filterKeys(nil, ""); len(got) != 0 {
+		t.Fatalf("nil schema empty query: len = %d want 0", len(got))
+	}
+	if got := filterKeys(nil, "x"); len(got) != 0 {
+		t.Fatalf("nil schema with query: len = %d want 0", len(got))
+	}
+}
