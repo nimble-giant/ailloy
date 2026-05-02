@@ -42,9 +42,12 @@ var (
 )
 
 var evolveCmd = &cobra.Command{
-	Use:   "evolve",
-	Short: "Evolve the ailloy CLI to the latest release",
+	Use:     "evolve",
+	Aliases: []string{"reinstall"},
+	Short:   "Evolve the ailloy CLI to the latest release",
 	Long: `Evolve (self-upgrade) the running ailloy binary to the latest release.
+
+Aliased as 'reinstall' for users who reach for that name first.
 
 Fetches the latest release from GitHub, verifies SHA256 against the
 release's checksums.txt, and atomically swaps the running binary in
