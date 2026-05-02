@@ -3,6 +3,8 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +39,16 @@ type CastResult struct {
 // ctx is currently unused but reserved for future cancellation.
 func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, error) {
 	var res CastResult
+
+	// Silence per-file "✅ Created" lines from copyResolvedFiles so the
+	// Bubble Tea alt-screen doesn't get clobbered. Also redirect stderr
+	// so log.Printf warnings (e.g. install-state, lock-file write) don't
+	// bleed through.
+	castSilent.Store(true)
+	defer castSilent.Store(false)
+	prevLog := log.Writer()
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(prevLog)
 
 	reader, source, err := openMoldReaderForCore(ref, opts.Global)
 	if err != nil {

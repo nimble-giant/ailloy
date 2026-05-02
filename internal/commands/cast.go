@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/huh"
@@ -42,6 +43,11 @@ var (
 	castGlobal    bool
 	castSetFlags  []string
 	castValFiles  []string
+	// castSilent suppresses interactive output from copyResolvedFiles and
+	// related helpers. Set by CastMold (the programmatic core used by the
+	// foundries TUI) so per-file "✅ Created" lines don't corrupt the
+	// Bubble Tea alt-screen.
+	castSilent atomic.Bool
 )
 
 func init() {
@@ -534,7 +540,9 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 			return fmt.Errorf("failed to write %s: %w", rf.DestPath, err)
 		}
 
-		fmt.Println(styles.SuccessStyle.Render("✅ Created: ") + styles.CodeStyle.Render(rf.DestPath))
+		if !castSilent.Load() {
+			fmt.Println(styles.SuccessStyle.Render("✅ Created: ") + styles.CodeStyle.Render(rf.DestPath))
+		}
 	}
 
 	return nil
