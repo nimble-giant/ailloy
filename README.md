@@ -210,11 +210,39 @@ ailloy cast github.com/nimble-giant/nimble-mold -f flux-overrides.yaml
 
 See the [Remote Molds guide](docs/foundry.md).
 
+The official nimble-giant foundry (`github.com/nimble-giant/foundry`) is a
+verified built-in default — it appears in `list` and is searched by `search`
+without any registration step.
+
 - `search <query>` — Search registered indexes and GitHub Topics
 - `add <url>` — Register a foundry index (git repo or static YAML URL)
 - `list` — List registered indexes and their status
 - `remove <name|url>` — Remove a registered index
 - `update` — Refresh all cached indexes
+
+</details>
+
+<details>
+<summary><strong><code>foundries</code></strong> — interactive TUI</summary>
+
+`ailloy foundries` opens a four-tab terminal UI (Discover / Installed /
+Foundries / Health) for browsing the catalog, multi-installing molds,
+managing your casted ailloys, and surfacing drift + assay findings.
+Requires a TTY. See the [TUI section in the foundry guide](docs/foundry.md#interactive-tui).
+
+</details>
+
+<details>
+<summary><strong><code>uninstall</code></strong> — remove a casted mold</summary>
+
+`ailloy uninstall <source>` removes the files a previous `cast` wrote.
+Uses the install manifest (`files:` + `fileHashes:` in `ailloy.lock`) so
+user-modified files are retained unless `--force` is passed; files claimed
+by another casted mold are retained automatically.
+
+- `-g/--global` — operate on `~/ailloy.lock` instead of `./ailloy.lock`
+- `--dry-run` — print what would be removed without touching disk
+- `--force` — delete files even if modified since cast
 
 </details>
 
