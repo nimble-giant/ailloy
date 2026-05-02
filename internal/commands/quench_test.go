@@ -63,3 +63,21 @@ func TestVerifyManifestAgainstLock_AllPresent(t *testing.T) {
 		t.Errorf("expected no failures, got %v", got)
 	}
 }
+
+// Drift on an entry whose lock row is missing version/commit should report the
+// "missing version or commit" message only, not also the drift message.
+func TestVerifyManifestAgainstLock_BlankLockEntryDoesNotDoubleReport(t *testing.T) {
+	entries := []foundry.InstalledEntry{
+		{Name: "a", Source: "github.com/x/a", Commit: "abc"},
+	}
+	lock := &foundry.LockFile{
+		APIVersion: "v1",
+		Molds: []foundry.LockEntry{
+			{Name: "a", Source: "github.com/x/a", Version: "", Commit: "", Timestamp: time.Now()},
+		},
+	}
+	failures := verifyManifestAgainstLock(entries, lock)
+	if len(failures) != 1 {
+		t.Fatalf("expected exactly 1 failure (no double-report), got %d: %v", len(failures), failures)
+	}
+}

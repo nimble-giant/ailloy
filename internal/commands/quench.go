@@ -57,7 +57,13 @@ func runQuench(_ *cobra.Command, args []string) error {
 			styles.CodeStyle.Render("ailloy cast"))
 	}
 
-	// Filter to a single ref if provided.
+	// Read the existing lock up front so we can both verify against it and
+	// reject scoped quench when there's nothing to scope into.
+	existingLock, _ := foundry.ReadLockFile(lockPath)
+
+	// Filter to a single ref if provided. Scoped quench requires an existing
+	// lock — otherwise we'd silently drop every other manifest entry by writing
+	// a single-entry lock. Tell the user to run `ailloy quench` first.
 	entries := manifest.Molds
 	if len(args) == 1 {
 		ref, err := foundry.ParseReference(args[0])
@@ -70,6 +76,11 @@ func runQuench(_ *cobra.Command, args []string) error {
 				args[0],
 				styles.CodeStyle.Render("ailloy cast "+args[0]))
 		}
+		if existingLock == nil {
+			return fmt.Errorf("no %s present — run %s (without arguments) first to opt in",
+				styles.CodeStyle.Render(lockPath),
+				styles.CodeStyle.Render("ailloy quench"))
+		}
 		entries = []foundry.InstalledEntry{*match}
 	}
 
@@ -81,7 +92,6 @@ func runQuench(_ *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Verification phase: manifest <-> lock consistency.
-	existingLock, _ := foundry.ReadLockFile(lockPath)
 	failures := verifyManifestAgainstLock(entries, existingLock)
 	for _, msg := range failures {
 		fmt.Printf("  %s %s\n", styles.WarningStyle.Render("!"), msg)
@@ -119,14 +129,10 @@ func runQuench(_ *cobra.Command, args []string) error {
 			Subpath:   entry.Subpath,
 			Timestamp: time.Now().UTC(),
 		})
-		commitShort := resolved.Commit
-		if len(commitShort) > 7 {
-			commitShort = commitShort[:7]
-		}
 		fmt.Printf("  %s  %s @ %s\n",
 			styles.FoxBullet(entry.Name),
 			styles.CodeStyle.Render(resolved.Tag),
-			styles.CodeStyle.Render(commitShort),
+			styles.CodeStyle.Render(shortSHA(resolved.Commit)),
 		)
 	}
 
@@ -164,16 +170,15 @@ func verifyManifestAgainstLock(entries []foundry.InstalledEntry, lock *foundry.L
 			failures = append(failures, fmt.Sprintf("%s is in installed manifest but missing from lock", entry.Name))
 			continue
 		}
-		if locked.Commit != entry.Commit {
+		if locked.Version == "" || locked.Commit == "" {
+			failures = append(failures, fmt.Sprintf("%s lock entry is missing version or commit", entry.Name))
+		} else if locked.Commit != entry.Commit {
 			failures = append(failures,
 				fmt.Sprintf("%s commit drift: manifest=%s lock=%s",
 					entry.Name,
 					shortSHA(entry.Commit),
 					shortSHA(locked.Commit),
 				))
-		}
-		if locked.Version == "" || locked.Commit == "" {
-			failures = append(failures, fmt.Sprintf("%s lock entry is missing version or commit", entry.Name))
 		}
 	}
 	return failures
