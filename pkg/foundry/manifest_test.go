@@ -84,3 +84,60 @@ func TestWriteInstalledManifest_CreatesParentDir(t *testing.T) {
 		t.Fatalf("file not created: %v", err)
 	}
 }
+
+func TestInstalledManifest_UpsertEntry(t *testing.T) {
+	m := &InstalledManifest{APIVersion: "v1"}
+
+	m.UpsertEntry(InstalledEntry{
+		Name:    "a",
+		Source:  "github.com/x/a",
+		Version: "v1.0.0",
+		Commit:  "aaa",
+	})
+	if len(m.Molds) != 1 {
+		t.Fatalf("expected 1 entry after first upsert, got %d", len(m.Molds))
+	}
+
+	m.UpsertEntry(InstalledEntry{
+		Name:    "a",
+		Source:  "github.com/x/a",
+		Version: "v1.1.0",
+		Commit:  "bbb",
+	})
+	if len(m.Molds) != 1 {
+		t.Fatalf("expected 1 entry after re-upsert, got %d", len(m.Molds))
+	}
+	if m.Molds[0].Version != "v1.1.0" || m.Molds[0].Commit != "bbb" {
+		t.Errorf("upsert did not replace existing entry: %+v", m.Molds[0])
+	}
+
+	m.UpsertEntry(InstalledEntry{
+		Name:    "b",
+		Source:  "github.com/x/b",
+		Version: "v0.1.0",
+		Commit:  "ccc",
+	})
+	if len(m.Molds) != 2 {
+		t.Fatalf("expected 2 entries after second source upsert, got %d", len(m.Molds))
+	}
+}
+
+func TestInstalledManifest_FindBySource(t *testing.T) {
+	m := &InstalledManifest{
+		APIVersion: "v1",
+		Molds: []InstalledEntry{
+			{Name: "a", Source: "github.com/x/a"},
+			{Name: "b", Source: "github.com/x/b"},
+		},
+	}
+	if got := m.FindBySource("github.com/x/b"); got == nil || got.Name != "b" {
+		t.Errorf("FindBySource(b) = %+v, want entry b", got)
+	}
+	if got := m.FindBySource("github.com/x/missing"); got != nil {
+		t.Errorf("FindBySource(missing) = %+v, want nil", got)
+	}
+	var nilM *InstalledManifest
+	if got := nilM.FindBySource("any"); got != nil {
+		t.Errorf("nil manifest FindBySource = %+v, want nil", got)
+	}
+}
