@@ -318,76 +318,60 @@ func lookupChecksum(content, name string) (string, bool) {
 	return "", false
 }
 
-// evolveAnimationFrames returns the foreground sprite and silhouette frames
-// used by the evolution animation. Exported (lowercase, package-internal) for
-// testing.
-func evolveAnimationFrames() (full, silhouette []string) {
-	full = []string{
-		`     /\___/\     `,
-		`    ( o   o )    `,
-		`     \  ω  /     `,
-		`      |---|      `,
-		`     /     \     `,
-	}
-	silhouette = []string{
-		`     ███████     `,
-		`    █████████    `,
-		`     ███████     `,
-		`      █████      `,
-		`     ███████     `,
-	}
-	return
+// evolveAnimationArt returns the multi-line ailloy fox art used by the
+// evolution animation. Exposed for testing.
+func evolveAnimationArt() string {
+	return strings.TrimLeft(styles.AilloyFox, "\n")
 }
 
 // playEvolutionAnimation prints a Pokemon-style evolution sequence ending with
-// the new version. Falls back to a plain success line when stdout is not a
-// TTY or skip is set, so CI logs and non-interactive shells stay clean.
+// the new version. Flashes the AilloyFox mascot between its normal color and
+// a white silhouette, mimicking the in-game evolution effect. Falls back to a
+// plain success line when stdout is not a TTY or skip is set, so CI logs and
+// non-interactive shells stay clean.
 func playEvolutionAnimation(target string, skip bool) {
 	if skip || !term.IsTerminal(int(os.Stdout.Fd())) {
-		fmt.Println(styles.SuccessStyle.Render("✓ ") + "Your ailloy evolved into " + target + "!")
+		fmt.Println(styles.SuccessStyle.Render("✓ 🦊 ") + "Your ailloy evolved into " + target + "!")
 		return
 	}
 
-	full, silhouette := evolveAnimationFrames()
-	height := len(full)
+	art := evolveAnimationArt()
+	height := strings.Count(art, "\n") + 1
 
 	headline := lipgloss.NewStyle().Bold(true).Foreground(styles.Primary1)
-	flash := lipgloss.NewStyle().Foreground(styles.Primary1)
+	primary := lipgloss.NewStyle().Foreground(styles.Primary1)
+	flash := lipgloss.NewStyle().Foreground(styles.White)
 	dim := styles.SubtleStyle
 
 	fmt.Println()
 	fmt.Println(headline.Render("What? AILLOY is evolving!"))
 	fmt.Println()
-	for _, line := range full {
-		fmt.Println(flash.Render(line))
+	fmt.Println(primary.Render(art))
+
+	cycles := []struct {
+		useFlash bool
+		delay    time.Duration
+	}{
+		{true, 280 * time.Millisecond},
+		{false, 240 * time.Millisecond},
+		{true, 200 * time.Millisecond},
+		{false, 180 * time.Millisecond},
+		{true, 160 * time.Millisecond},
+		{false, 140 * time.Millisecond},
+		{true, 120 * time.Millisecond},
+		{false, 100 * time.Millisecond},
 	}
 
-	frames := []bool{false, true, false, true, false, true, false, true, false, true}
-	delays := []time.Duration{
-		300 * time.Millisecond,
-		260 * time.Millisecond,
-		220 * time.Millisecond,
-		200 * time.Millisecond,
-		180 * time.Millisecond,
-		160 * time.Millisecond,
-		140 * time.Millisecond,
-		120 * time.Millisecond,
-		100 * time.Millisecond,
-		90 * time.Millisecond,
-	}
-
-	for i, useFull := range frames {
-		time.Sleep(delays[i])
+	for _, c := range cycles {
+		time.Sleep(c.delay)
 		fmt.Printf("\033[%dA", height)
-		var art []string
-		if useFull {
-			art = full
-		} else {
-			art = silhouette
+		style := primary
+		if c.useFlash {
+			style = flash
 		}
-		for _, line := range art {
+		for _, line := range strings.Split(art, "\n") {
 			fmt.Print("\033[K")
-			fmt.Println(flash.Render(line))
+			fmt.Println(style.Render(line))
 		}
 	}
 
