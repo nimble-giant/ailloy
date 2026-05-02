@@ -117,6 +117,35 @@ func ResolveWithRoot(rawRef string, opts ...ResolveOption) (fs.FS, string, error
 
 // ResolveWith resolves a parsed reference using the given GitRunner.
 func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, string, error) {
+	fsys, result, err := resolveWithMeta(ref, git, opts...)
+	if err != nil {
+		return nil, "", err
+	}
+	return fsys, result.Root, nil
+}
+
+// ResolveResult captures resolution outputs callers need to record provenance.
+type ResolveResult struct {
+	Ref      *Reference
+	Resolved ResolvedVersion
+	Root     string
+}
+
+// ResolveWithMetadata is like Resolve but returns provenance details for the
+// caller to record in the installed manifest.
+func ResolveWithMetadata(rawRef string, opts ...ResolveOption) (fs.FS, *ResolveResult, error) {
+	ref, err := ParseReference(rawRef)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parsing reference: %w", err)
+	}
+	git := DefaultGitRunner()
+	fsys, result, err := resolveWithMeta(ref, git, opts...)
+	return fsys, result, err
+}
+
+// resolveWithMeta is the internal implementation; mirrors ResolveWith but also
+// returns the ResolvedVersion alongside the fs.FS.
+func resolveWithMeta(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, *ResolveResult, error) {
 	var cfg resolveConfig
 	for _, opt := range opts {
 		opt(&cfg)
@@ -125,7 +154,6 @@ func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, s
 
 	useLock := shouldUseLock(cfg.lockPath)
 
-	// Read existing lock file if present.
 	var resolved *ResolvedVersion
 	if useLock {
 		lock, err := ReadLockFile(cfg.lockPath)
@@ -140,33 +168,30 @@ func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, s
 		}
 	}
 
-	// Resolve from remote if not locked.
 	if resolved == nil {
 		v, resolveErr := ResolveVersion(ref, git)
 		if resolveErr != nil {
-			return nil, "", fmt.Errorf("resolving version: %w", resolveErr)
+			return nil, nil, fmt.Errorf("resolving version: %w", resolveErr)
 		}
 		resolved = v
 	}
 
-	// Fetch (clone/cache).
 	fetcher, err := NewFetcher(git)
 	if err != nil {
-		return nil, "", fmt.Errorf("creating fetcher: %w", err)
+		return nil, nil, fmt.Errorf("creating fetcher: %w", err)
 	}
 	fsys, root, err := fetcher.Fetch(ref, resolved)
 	if err != nil {
-		return nil, "", fmt.Errorf("fetching mold: %w", err)
+		return nil, nil, fmt.Errorf("fetching mold: %w", err)
 	}
 
-	// Update lock only if it already exists.
 	if useLock {
 		if err := updateLockAt(cfg.lockPath, ref, resolved); err != nil {
 			log.Printf("warning: updating lock file: %v", err)
 		}
 	}
 
-	return fsys, root, nil
+	return fsys, &ResolveResult{Ref: ref, Resolved: *resolved, Root: root}, nil
 }
 
 func lockedSatisfies(ref *Reference, entry *LockEntry) bool {
