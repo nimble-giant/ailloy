@@ -35,6 +35,7 @@ Ailloy provides Helm-coded aliases for every core command, so you can use whiche
 | Lock dependency versions | — | `ailloy quench` | `ailloy lock` |
 | Interactive configuration | — | `ailloy anneal` | `ailloy configure` |
 | Scaffold a new package | `helm create` | `ailloy mold new` | `ailloy mold create` |
+| Self-upgrade the CLI | — | `ailloy evolve` | `ailloy reinstall` |
 
 ## Side-by-Side Examples
 

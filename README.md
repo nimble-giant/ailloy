@@ -102,6 +102,8 @@ make build   # binary at ./bin/ailloy
 
 </details>
 
+> **Already installed?** `ailloy evolve` (alias: `reinstall`) upgrades the CLI in place to the latest release — Homebrew installs should still use `brew upgrade nimble-giant/tap/ailloy`.
+
 ### 2. Cast a mold
 
 Molds resolve directly from git — no clone required:
@@ -249,6 +251,20 @@ by another casted mold are retained automatically.
 - `-g/--global` — operate on `~/ailloy.lock` instead of `./ailloy.lock`
 - `--dry-run` — print what would be removed without touching disk
 - `--force` — delete files even if modified since cast
+
+</details>
+
+<details>
+<summary><strong><code>evolve</code></strong> — self-upgrade the CLI</summary>
+
+**`ailloy evolve`** (alias: `reinstall`) — Download the latest release, verify its SHA256 against the release's `checksums.txt`, and atomically swap the running binary in place. On success, plays a Pokemon-style evolution animation; falls back to a plain success line outside a TTY.
+
+- `--check` — Print current and latest version without installing
+- `--version vX.Y.Z` — Install or downgrade to a specific release tag
+- `--force` — Upgrade even if installed via Homebrew (default behavior is to refuse and point at `brew upgrade nimble-giant/tap/ailloy`)
+- `--no-animate` — Skip the evolution animation
+
+Windows is not supported (the running `.exe` can't be replaced in place); download a release manually instead.
 
 </details>
 
