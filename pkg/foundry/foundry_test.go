@@ -3,6 +3,7 @@ package foundry
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -117,3 +118,61 @@ func TestWithoutLock_SkipsLockFileIO(t *testing.T) {
 		t.Error("lock file was modified despite WithoutLock being set")
 	}
 }
+
+func TestRecordInstalledFiles(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, "ailloy.lock")
+
+	seed := &LockFile{
+		APIVersion: "v1",
+		Molds:      []LockEntry{{Name: "test", Source: "github.com/x/y", Version: "v1", Commit: "c1"}},
+	}
+	if err := WriteLockFile(lockPath, seed); err != nil {
+		t.Fatal(err)
+	}
+
+	files := []InstalledFile{
+		{RelPath: "b/file.md", SHA256: "hash-b"},
+		{RelPath: "a/dir/x.md", SHA256: "hash-a"},
+		{RelPath: "a/dir/x.md", SHA256: "hash-a"},
+	}
+
+	if err := RecordInstalledFiles(lockPath, "github.com/x/y", files); err != nil {
+		t.Fatalf("RecordInstalledFiles: %v", err)
+	}
+
+	loaded, err := ReadLockFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := loaded.Molds[0].Files
+	want := []string{"a/dir/x.md", "b/file.md"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Files = %v, want %v", got, want)
+	}
+	if loaded.Molds[0].FileHashes["a/dir/x.md"] != "hash-a" {
+		t.Errorf("hash mismatch: %v", loaded.Molds[0].FileHashes)
+	}
+}
+
+func TestRecordInstalledFiles_NoLockFile(t *testing.T) {
+	err := RecordInstalledFiles("/nonexistent/ailloy.lock", "github.com/x/y", []InstalledFile{{RelPath: "a"}})
+	if err == nil {
+		t.Error("expected error for missing lockfile")
+	}
+}
+
+func TestRecordInstalledFiles_EntryNotFound(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, "ailloy.lock")
+	if err := WriteLockFile(lockPath, &LockFile{APIVersion: "v1"}); err != nil {
+		t.Fatal(err)
+	}
+	err := RecordInstalledFiles(lockPath, "github.com/missing/repo", []InstalledFile{{RelPath: "a"}})
+	if err == nil {
+		t.Error("expected error when entry not found")
+	}
+}
+
+// Suppress import-unused warnings for fields used elsewhere.
+var _ = time.Time{}

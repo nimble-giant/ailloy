@@ -378,7 +378,7 @@ func TestIntegration_CastProject_DirectoryCreation(t *testing.T) {
 	withWorkflows = true
 	defer func() { withWorkflows = false }()
 
-	err := castProject(reader)
+	err := castProject(reader, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -455,7 +455,7 @@ func TestIntegration_CastProject_DefaultSkipsWorkflows(t *testing.T) {
 	reader := testMoldReader(t)
 	withWorkflows = false
 
-	err := castProject(reader)
+	err := castProject(reader, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -483,7 +483,7 @@ func TestIntegration_CastProject_WithWorkflowsFlag(t *testing.T) {
 	reader := testMoldReader(t)
 	withWorkflows = true
 
-	err := castProject(reader)
+	err := castProject(reader, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
