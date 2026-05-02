@@ -172,7 +172,7 @@ func openMoldReaderForCore(ref string, global bool) (*blanks.MoldReader, string,
 	if foundry.IsRemoteReference(ref) {
 		var resolveOpts []foundry.ResolveOption
 		if global {
-			resolveOpts = append(resolveOpts, foundry.WithoutLock())
+			resolveOpts = append(resolveOpts, foundry.WithLockPath(globalLockPath()))
 		}
 		fsys, root, err := foundry.ResolveWithRoot(ref, resolveOpts...)
 		if err != nil {
