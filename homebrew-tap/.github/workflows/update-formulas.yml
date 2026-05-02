@@ -1,0 +1,31 @@
+name: Update formulas
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ailloy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update ailloy formula
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/update-ailloy.sh
+
+      - name: Commit if changed
+        run: |
+          if [[ -n "$(git status --porcelain Formula/ailloy.rb)" ]]; then
+            version=$(grep -E '^\s*version "' Formula/ailloy.rb | head -1 | sed -E 's/.*version "([^"]+)".*/\1/')
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add Formula/ailloy.rb
+            git commit -m "ailloy ${version}"
+            git push
+          fi
