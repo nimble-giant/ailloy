@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/huh"
 
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -90,11 +91,13 @@ func (m Model) Close() Model {
 	return m
 }
 
-// editorState holds the active key being edited. Form fields are added in
-// Task 7.
+// editorState holds the active key being edited.
 type editorState struct {
-	active bool
-	key    string
+	active   bool
+	key      string
+	form     *huh.Form
+	rawValue *string
+	boolVal  *bool
 }
 
 // saveState holds the save-target prompt's transient state.

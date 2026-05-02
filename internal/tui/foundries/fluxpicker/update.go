@@ -1,7 +1,10 @@
 package fluxpicker
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
@@ -60,7 +63,21 @@ func (m Model) handleFilterKey(k tea.KeyMsg) (Model, tea.Cmd) {
 		if idx >= len(filtered) {
 			idx = 0
 		}
-		m.editor = editorState{active: true, key: filtered[idx].Name}
+		fv := filtered[idx]
+		raw := ""
+		if existing, ok := m.overrides[fv.Name]; ok {
+			raw = fmt.Sprint(existing)
+		}
+		bv := false
+		form := buildEditorForm(fv, &raw, &bv)
+		_ = form.Init()
+		m.editor = editorState{
+			active:   true,
+			key:      fv.Name,
+			form:     form,
+			rawValue: &raw,
+			boolVal:  &bv,
+		}
 		m.focus = focusEditor
 		m.filter.Blur()
 		return m, nil
@@ -93,13 +110,45 @@ func (m Model) handleFilterKey(k tea.KeyMsg) (Model, tea.Cmd) {
 	return m, cmd
 }
 
-// handleEditorKey is filled in by Task 7. For now, esc returns to filter.
+// handleEditorKey handles key events when the editor is focused.
 func (m Model) handleEditorKey(k tea.KeyMsg) (Model, tea.Cmd) {
-	if k.Type == tea.KeyEsc {
+	switch k.Type {
+	case tea.KeyEsc:
 		m.editor = editorState{}
 		m.focus = focusFilter
 		m.filter.Focus()
 		return m, nil
+	case tea.KeyEnter:
+		fv, ok := findVar(m.schema, m.editor.key)
+		if !ok {
+			m.err = ErrUnknownVar
+			return m, nil
+		}
+		raw := ""
+		if m.editor.rawValue != nil {
+			raw = *m.editor.rawValue
+		}
+		if fv.Type == "bool" {
+			if m.editor.boolVal != nil && *m.editor.boolVal {
+				raw = "true"
+			} else {
+				raw = "false"
+			}
+		}
+		m = commitEditorValue(m, fv, raw)
+		if m.err == nil {
+			m.editor = editorState{}
+			m.focus = focusFilter
+			m.filter.Focus()
+		}
+		return m, nil
+	}
+	if m.editor.form != nil {
+		next, cmd := m.editor.form.Update(k)
+		if f, ok := next.(*huh.Form); ok {
+			m.editor.form = f
+		}
+		return m, cmd
 	}
 	return m, nil
 }
