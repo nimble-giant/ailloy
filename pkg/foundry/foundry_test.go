@@ -67,6 +67,17 @@ func TestLockedSatisfies(t *testing.T) {
 	}
 }
 
+func TestWithForceLatest_SetsForceLatestFlag(t *testing.T) {
+	var cfg resolveConfig
+	WithForceLatest()(&cfg)
+	if !cfg.forceLatest {
+		t.Fatal("WithForceLatest should set forceLatest to true")
+	}
+	if cfg.skipLock {
+		t.Error("WithForceLatest should not affect skipLock — lock writes must still happen so the upgrade is persisted")
+	}
+}
+
 func TestWithoutLock_SkipsLockFileIO(t *testing.T) {
 	// Set up: chdir to a temp dir so any lock file write would land here.
 	dir := t.TempDir()

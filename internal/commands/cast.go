@@ -37,6 +37,7 @@ Use -g/--global to install into the user's home directory (~/) instead.`,
 var (
 	withWorkflows bool
 	castGlobal    bool
+	castForce     bool
 	castSetFlags  []string
 	castValFiles  []string
 )
@@ -46,6 +47,7 @@ func init() {
 
 	castCmd.Flags().BoolVarP(&castGlobal, "global", "g", false, "install into user home directory (~/) instead of current project")
 	castCmd.Flags().BoolVar(&withWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks")
+	castCmd.Flags().BoolVar(&castForce, "force", false, "ignore ailloy.lock and resolve to the latest available version")
 	castCmd.Flags().StringArrayVar(&castSetFlags, "set", nil, "override flux variable (format: key=value, can be repeated)")
 	castCmd.Flags().StringArrayVarP(&castValFiles, "values", "f", nil, "flux value files (can be repeated, later files override earlier)")
 }
@@ -65,6 +67,9 @@ func resolveMoldReader(args []string) (*blanks.MoldReader, error) {
 			var resolveOpts []foundry.ResolveOption
 			if castGlobal {
 				resolveOpts = append(resolveOpts, foundry.WithoutLock())
+			}
+			if castForce {
+				resolveOpts = append(resolveOpts, foundry.WithForceLatest())
 			}
 			fsys, root, err := foundry.ResolveWithRoot(args[0], resolveOpts...)
 			if err != nil {

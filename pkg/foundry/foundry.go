@@ -11,7 +11,8 @@ import (
 type ResolveOption func(*resolveConfig)
 
 type resolveConfig struct {
-	skipLock bool
+	skipLock    bool
+	forceLatest bool
 }
 
 // WithoutLock disables reading and writing the ailloy.lock file during resolution.
@@ -19,6 +20,16 @@ type resolveConfig struct {
 func WithoutLock() ResolveOption {
 	return func(c *resolveConfig) {
 		c.skipLock = true
+	}
+}
+
+// WithForceLatest bypasses the locked-version short-circuit so resolution
+// always consults the remote and picks the latest matching version. The
+// resolved version is still written back to the lock file (unlike WithoutLock),
+// so subsequent casts pick up the upgrade.
+func WithForceLatest() ResolveOption {
+	return func(c *resolveConfig) {
+		c.forceLatest = true
 	}
 }
 
@@ -52,9 +63,10 @@ func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, s
 		opt(&cfg)
 	}
 
-	// Read existing lock file.
+	// Read existing lock file. Skip the locked-version short-circuit when
+	// --force was passed so the remote is always consulted.
 	var resolved *ResolvedVersion
-	if !cfg.skipLock {
+	if !cfg.skipLock && !cfg.forceLatest {
 		lock, err := ReadLockFile(LockFileName)
 		if err != nil {
 			log.Printf("warning: reading lock file: %v", err)
