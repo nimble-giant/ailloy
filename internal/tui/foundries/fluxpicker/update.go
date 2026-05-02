@@ -174,7 +174,7 @@ func (m Model) handleSaveKey(k tea.KeyMsg) (Model, tea.Cmd) {
 			return m, nil
 		}
 		moldName := lastPathSegment(m.moldRef)
-		if _, err := persistOverrides(m.scope, moldName, target, m.overrides); err != nil {
+		if _, err := persistOverrides(moldName, target, m.overrides); err != nil {
 			m.err = err
 			return m, nil
 		}
@@ -186,9 +186,14 @@ func (m Model) handleSaveKey(k tea.KeyMsg) (Model, tea.Cmd) {
 
 // emitOverridesAndClose returns a Cmd that emits the FluxOverridesMsg
 // upstream. The App handles the message by closing the picker and routing
-// overrides to the active tab.
+// overrides to the active tab. The overrides map is shallow-copied so a
+// later OpenFor (which reassigns m.overrides) cannot leak edits into the
+// already-dispatched message.
 func emitOverridesAndClose(m Model, target SaveTarget) tea.Cmd {
-	overrides := m.overrides
+	overrides := make(map[string]any, len(m.overrides))
+	for k, v := range m.overrides {
+		overrides[k] = v
+	}
 	moldRef := m.moldRef
 	scope := m.scope
 	return func() tea.Msg {

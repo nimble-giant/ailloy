@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	yaml "github.com/goccy/go-yaml"
-
-	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 )
 
 func TestWriteFluxFile_CreatesFile(t *testing.T) {
@@ -58,12 +56,42 @@ func TestWriteFluxFile_MergesExisting(t *testing.T) {
 }
 
 func TestPersistOverrides_Session(t *testing.T) {
-	path, err := persistOverrides(data.ScopeProject, "agents", SaveTargetSession, map[string]any{"k": "v"})
+	path, err := persistOverrides("agents", SaveTargetSession, map[string]any{"k": "v"})
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if path != "" {
 		t.Fatalf("expected empty path for session target, got %q", path)
+	}
+}
+
+func TestPersistOverrides_ProjectWritesFile(t *testing.T) {
+	t.Chdir(t.TempDir())
+	path, err := persistOverrides("agents", SaveTargetProject, map[string]any{"agents.targets": []string{"opencode"}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if path != ".ailloy/flux/agents.yaml" {
+		t.Fatalf("path = %q want .ailloy/flux/agents.yaml", path)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected file at %s, got %v", path, err)
+	}
+}
+
+func TestPersistOverrides_GlobalWritesFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path, err := persistOverrides("agents", SaveTargetGlobal, map[string]any{"k": "v"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	want := filepath.Join(home, ".ailloy", "flux", "agents.yaml")
+	if path != want {
+		t.Fatalf("path = %q want %q", path, want)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected file at %s, got %v", path, err)
 	}
 }
 

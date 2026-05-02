@@ -7,15 +7,16 @@ import (
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
-
-	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 )
 
 // writeFluxFile writes overrides into a YAML file at path, merging with any
 // existing content (overrides win for keys present in both). Dotted override
-// keys are expanded into nested maps.
+// keys are expanded into nested maps. The write is atomic: the new contents
+// land in a sibling temp file and are renamed into place, so a crash mid-write
+// cannot leave the user's flux file truncated.
 func writeFluxFile(path string, overrides map[string]any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	existing := map[string]any{}
@@ -31,7 +32,29 @@ func writeFluxFile(path string, overrides map[string]any) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, out, 0o644)
+	tmp, err := os.CreateTemp(dir, ".flux-*.yaml")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(out); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Chmod(tmpPath, 0o644); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }
 
 // setDottedKey writes value into m at the nested location implied by a dotted
@@ -70,8 +93,7 @@ func resolveGlobalPath(moldName string) (string, error) {
 
 // persistOverrides routes overrides to the chosen save target. Returns the
 // path written (empty string for SaveTargetSession).
-func persistOverrides(scope data.Scope, moldName string, target SaveTarget, overrides map[string]any) (string, error) {
-	_ = scope // reserved for future use
+func persistOverrides(moldName string, target SaveTarget, overrides map[string]any) (string, error) {
 	switch target {
 	case SaveTargetSession:
 		return "", nil
@@ -85,7 +107,7 @@ func persistOverrides(scope data.Scope, moldName string, target SaveTarget, over
 		}
 		return path, writeFluxFile(path, overrides)
 	}
-	return "", fmt.Errorf("unknown save target %d", target)
+	return "", fmt.Errorf("unknown save target %v", target)
 }
 
 // lastPathSegment returns the last segment after '/'. For "official/agents"
