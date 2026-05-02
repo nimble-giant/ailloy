@@ -1,6 +1,8 @@
 package fluxpicker
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/textinput"
 
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
@@ -19,11 +21,14 @@ const (
 // Model is the state for the flux picker overlay. It is a value type to fit
 // Bubble Tea's pattern of pure Update functions.
 type Model struct {
-	open      bool
-	moldRef   string
-	scope     data.Scope
-	schema    []mold.FluxVar
-	defaults  map[string]any
+	open     bool
+	moldRef  string
+	scope    data.Scope
+	schema   []mold.FluxVar
+	defaults map[string]any
+	// overrides is keyed by the dotted FluxVar.Name (e.g. "agents.targets"),
+	// not by nested maps — kept flat so badge lookup and --set encoding stay
+	// trivial. defaults is YAML-shaped (nested), populated from flux.yaml.
 	overrides map[string]any
 	filter    textinput.Model
 	cursor    int
@@ -144,7 +149,7 @@ func hasDottedKey(m map[string]any, key string) bool {
 	if m == nil {
 		return false
 	}
-	parts := splitDots(key)
+	parts := strings.Split(key, ".")
 	cur := any(m)
 	for _, p := range parts {
 		mm, ok := cur.(map[string]any)
@@ -158,18 +163,4 @@ func hasDottedKey(m map[string]any, key string) bool {
 		cur = v
 	}
 	return true
-}
-
-// splitDots splits "a.b.c" into ["a","b","c"].
-func splitDots(s string) []string {
-	out := []string{}
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '.' {
-			out = append(out, s[start:i])
-			start = i + 1
-		}
-	}
-	out = append(out, s[start:])
-	return out
 }
