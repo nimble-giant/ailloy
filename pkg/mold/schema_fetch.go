@@ -21,8 +21,13 @@ func FetchSchemaFromSource(ctx context.Context, source string) ([]FluxVar, map[s
 		return nil, nil, errors.New("FetchSchemaFromSource: empty source")
 	}
 	// Local path?
-	if info, err := os.Stat(source); err == nil && info.IsDir() {
+	if info, err := os.Stat(source); err == nil {
+		if !info.IsDir() {
+			return nil, nil, fmt.Errorf("FetchSchemaFromSource: %q is not a directory", source)
+		}
 		return loadSchemaFromFS(os.DirFS(source))
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, nil, fmt.Errorf("FetchSchemaFromSource: stat %q: %w", source, err)
 	}
 	if ResolveSchemaFunc == nil {
 		return nil, nil, fmt.Errorf("FetchSchemaFromSource: no remote resolver registered for source %q", source)

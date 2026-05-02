@@ -2,9 +2,12 @@ package mold_test
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
@@ -63,5 +66,63 @@ func TestFetchSchemaFromSource_EmptySource(t *testing.T) {
 	_, _, err := mold.FetchSchemaFromSource(context.Background(), "")
 	if err == nil {
 		t.Fatal("expected error for empty source")
+	}
+}
+
+func TestFetchSchemaFromSource_FileNotDir(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "not-a-dir-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	_, _, err = mold.FetchSchemaFromSource(context.Background(), f.Name())
+	if err == nil {
+		t.Fatal("expected error when source is a file, not a dir")
+	}
+}
+
+func TestFetchSchemaFromSource_RemoteResolverDispatchAndCleanup(t *testing.T) {
+	prev := mold.ResolveSchemaFunc
+	t.Cleanup(func() { mold.ResolveSchemaFunc = prev })
+
+	cleanupCalls := 0
+	mold.ResolveSchemaFunc = func(ctx context.Context, source string) (fs.FS, func(), error) {
+		if source != "official/agents" {
+			t.Fatalf("unexpected source: %q", source)
+		}
+		return fstest.MapFS{
+			"flux.schema.yaml": &fstest.MapFile{Data: []byte("- name: k\n  type: string\n")},
+			"flux.yaml":        &fstest.MapFile{Data: []byte("k: v\n")},
+		}, func() { cleanupCalls++ }, nil
+	}
+
+	schema, defaults, err := mold.FetchSchemaFromSource(context.Background(), "official/agents")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(schema) != 1 || schema[0].Name != "k" {
+		t.Fatalf("schema = %+v", schema)
+	}
+	if defaults["k"] != "v" {
+		t.Fatalf("defaults = %+v", defaults)
+	}
+	if cleanupCalls != 1 {
+		t.Fatalf("cleanup calls = %d want 1", cleanupCalls)
+	}
+}
+
+func TestFetchSchemaFromSource_RemoteResolverError(t *testing.T) {
+	prev := mold.ResolveSchemaFunc
+	t.Cleanup(func() { mold.ResolveSchemaFunc = prev })
+
+	sentinel := errors.New("resolver boom")
+	mold.ResolveSchemaFunc = func(ctx context.Context, source string) (fs.FS, func(), error) {
+		return nil, nil, sentinel
+	}
+
+	_, _, err := mold.FetchSchemaFromSource(context.Background(), "remote/ref")
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v want wrap of sentinel", err)
 	}
 }
