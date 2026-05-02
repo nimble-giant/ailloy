@@ -18,20 +18,24 @@ func projectManifestPath() string {
 }
 
 // globalLockPath returns the lock path under the user's home directory.
-// Mirrors `cast --global`'s install location.
+// Mirrors `cast --global`'s install location. Returns "" if the home directory
+// cannot be resolved — callers treat that as "no lock," avoiding a silent fall
+// back to a relative path that could accidentally read or write the project's
+// lock during a global cast.
 func globalLockPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return foundry.LockFileName
+		return ""
 	}
 	return filepath.Join(home, foundry.LockFileName)
 }
 
 // globalManifestPath returns the installed-manifest path under the user's home.
+// Returns "" if the home directory cannot be resolved.
 func globalManifestPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return foundry.InstalledManifestPath
+		return ""
 	}
 	return filepath.Join(home, foundry.InstalledManifestPath)
 }

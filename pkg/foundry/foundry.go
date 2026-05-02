@@ -94,12 +94,18 @@ func shouldUseLock(path string) bool {
 }
 
 // Resolve is the main entry point for SCM-native mold resolution.
+// It parses a raw reference, optionally consults an existing ailloy.lock,
+// resolves the version from remote tags when not locked, fetches/caches the
+// mold, updates the lock if one already exists, and returns an fs.FS rooted
+// at the mold directory.
 func Resolve(rawRef string, opts ...ResolveOption) (fs.FS, error) {
 	fsys, _, err := ResolveWithRoot(rawRef, opts...)
 	return fsys, err
 }
 
-// ResolveWithRoot is like Resolve but also returns the on-disk root path.
+// ResolveWithRoot is like Resolve but also returns the on-disk root path of
+// the resolved mold. The root path is needed by callers that resolve sibling
+// directories (e.g., bundled ingots) during template rendering.
 func ResolveWithRoot(rawRef string, opts ...ResolveOption) (fs.FS, string, error) {
 	ref, err := ParseReference(rawRef)
 	if err != nil {
