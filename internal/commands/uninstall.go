@@ -3,8 +3,6 @@ package commands
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/styles"
@@ -22,8 +20,10 @@ var uninstallCmd = &cobra.Command{
 	Short: "Remove a casted mold from this project (or ~/ with -g)",
 	Long: `Uninstall a previously casted mold by source identifier (e.g. github.com/owner/repo).
 
-Removes the files listed in the mold's lockfile entry, prunes any empty
-directories, and drops the entry from ailloy.lock.
+Removes the files listed in the mold's installed manifest entry, prunes any
+empty directories, and drops the entry from .ailloy/installed.yaml. If
+ailloy.lock exists alongside the manifest, the matching lock entry is also
+removed.
 
 Files modified since they were cast are retained unless --force is given.
 Files claimed by another casted mold are retained automatically.`,
@@ -41,12 +41,12 @@ func init() {
 func runUninstall(_ *cobra.Command, args []string) error {
 	source := args[0]
 
-	lockPath, err := uninstallLockPath(uninstallGlobal)
-	if err != nil {
-		return err
+	manifestPath := manifestPathFor(uninstallGlobal)
+	if manifestPath == "" {
+		return fmt.Errorf("cannot determine installed manifest path")
 	}
 
-	res, err := foundry.UninstallMold(lockPath, source, foundry.UninstallOptions{
+	res, err := foundry.UninstallMold(manifestPath, source, foundry.UninstallOptions{
 		Force:  uninstallForce,
 		DryRun: uninstallDryRun,
 	})
@@ -88,15 +88,4 @@ func runUninstall(_ *cobra.Command, args []string) error {
 		fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("  Already absent: %d file(s)", len(res.NotFound))))
 	}
 	return nil
-}
-
-func uninstallLockPath(global bool) (string, error) {
-	if !global {
-		return foundry.LockFileName, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("cannot determine home directory: %w", err)
-	}
-	return filepath.Join(home, foundry.LockFileName), nil
 }

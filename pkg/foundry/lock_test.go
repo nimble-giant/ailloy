@@ -149,63 +149,26 @@ func TestLockFile_UpsertEntry_Update(t *testing.T) {
 	}
 }
 
-func TestLockFile_RoundTrip_WithFiles(t *testing.T) {
+func TestLockFile_OldFilesFieldIgnored(t *testing.T) {
+	// Pre-migration locks may have files: / fileHashes: keys. With the schema
+	// move, those fields no longer exist on LockEntry — YAML unmarshal must
+	// silently ignore them rather than failing.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ailloy.lock")
-
-	original := &LockFile{
-		APIVersion: "v1",
-		Molds: []LockEntry{
-			{
-				Name:    "nimble-mold",
-				Source:  "github.com/nimble-giant/nimble-mold",
-				Version: "v0.4.0",
-				Commit:  "abc123",
-				Files: []string{
-					"agents.md",
-					".claude/skills/brainstorm/SKILL.md",
-				},
-				FileHashes: map[string]string{
-					"agents.md": "deadbeef",
-				},
-			},
-		},
-	}
-
-	if err := WriteLockFile(path, original); err != nil {
-		t.Fatalf("WriteLockFile: %v", err)
-	}
-
-	loaded, err := ReadLockFile(path)
-	if err != nil {
-		t.Fatalf("ReadLockFile: %v", err)
-	}
-	if len(loaded.Molds) != 1 {
-		t.Fatalf("len(Molds) = %d, want 1", len(loaded.Molds))
-	}
-	if got := loaded.Molds[0].Files; len(got) != 2 || got[0] != "agents.md" {
-		t.Errorf("Files = %v, want [agents.md, .claude/...]", got)
-	}
-	if loaded.Molds[0].FileHashes["agents.md"] != "deadbeef" {
-		t.Errorf("FileHashes mismatch: %v", loaded.Molds[0].FileHashes)
-	}
-}
-
-func TestLockFile_LegacyEntry_NoFiles(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "ailloy.lock")
-
-	legacy := `apiVersion: v1
+	old := `apiVersion: v1
 molds:
-  - name: legacy-mold
-    source: github.com/example/legacy
-    version: v1.0.0
-    commit: deadbeef
+  - name: nimble-mold
+    source: github.com/nimble-giant/nimble-mold
+    version: v0.4.0
+    commit: abc123
+    files:
+      - agents.md
+    fileHashes:
+      agents.md: deadbeef
 `
-	if err := os.WriteFile(path, []byte(legacy), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(old), 0644); err != nil {
 		t.Fatal(err)
 	}
-
 	loaded, err := ReadLockFile(path)
 	if err != nil {
 		t.Fatalf("ReadLockFile: %v", err)
@@ -213,7 +176,7 @@ molds:
 	if len(loaded.Molds) != 1 {
 		t.Fatalf("len(Molds) = %d, want 1", len(loaded.Molds))
 	}
-	if loaded.Molds[0].Files != nil {
-		t.Errorf("legacy entry should have nil Files, got %v", loaded.Molds[0].Files)
+	if loaded.Molds[0].Version != "v0.4.0" || loaded.Molds[0].Commit != "abc123" {
+		t.Errorf("entry not parsed correctly: %+v", loaded.Molds[0])
 	}
 }

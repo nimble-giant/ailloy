@@ -127,7 +127,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 func uninstallCmd(it data.InventoryItem) tea.Cmd {
 	return func() tea.Msg {
-		res, err := foundry.UninstallMold(it.LockPath, it.Entry.Source, foundry.UninstallOptions{})
+		res, err := foundry.UninstallMold(it.ManifestPath, it.Entry.Source, foundry.UninstallOptions{})
 		return uninstallDoneMsg{source: it.Entry.Source, res: res, err: err}
 	}
 }

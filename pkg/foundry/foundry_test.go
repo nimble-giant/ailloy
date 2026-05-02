@@ -137,13 +137,13 @@ func TestWithLockPath_OverridesDefault(t *testing.T) {
 
 func TestRecordInstalledFiles(t *testing.T) {
 	dir := t.TempDir()
-	lockPath := filepath.Join(dir, "ailloy.lock")
+	manifestPath := filepath.Join(dir, ".ailloy", "installed.yaml")
 
-	seed := &LockFile{
+	seed := &InstalledManifest{
 		APIVersion: "v1",
-		Molds:      []LockEntry{{Name: "test", Source: "github.com/x/y", Version: "v1", Commit: "c1"}},
+		Molds:      []InstalledEntry{{Name: "test", Source: "github.com/x/y", Version: "v1", Commit: "c1"}},
 	}
-	if err := WriteLockFile(lockPath, seed); err != nil {
+	if err := WriteInstalledManifest(manifestPath, seed); err != nil {
 		t.Fatal(err)
 	}
 
@@ -153,11 +153,11 @@ func TestRecordInstalledFiles(t *testing.T) {
 		{RelPath: "a/dir/x.md", SHA256: "hash-a"},
 	}
 
-	if err := RecordInstalledFiles(lockPath, "github.com/x/y", files); err != nil {
+	if err := RecordInstalledFiles(manifestPath, "github.com/x/y", files); err != nil {
 		t.Fatalf("RecordInstalledFiles: %v", err)
 	}
 
-	loaded, err := ReadLockFile(lockPath)
+	loaded, err := ReadInstalledManifest(manifestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,20 +171,20 @@ func TestRecordInstalledFiles(t *testing.T) {
 	}
 }
 
-func TestRecordInstalledFiles_NoLockFile(t *testing.T) {
-	err := RecordInstalledFiles("/nonexistent/ailloy.lock", "github.com/x/y", []InstalledFile{{RelPath: "a"}})
+func TestRecordInstalledFiles_NoManifest(t *testing.T) {
+	err := RecordInstalledFiles("/nonexistent/.ailloy/installed.yaml", "github.com/x/y", []InstalledFile{{RelPath: "a"}})
 	if err == nil {
-		t.Error("expected error for missing lockfile")
+		t.Error("expected error for missing manifest")
 	}
 }
 
 func TestRecordInstalledFiles_EntryNotFound(t *testing.T) {
 	dir := t.TempDir()
-	lockPath := filepath.Join(dir, "ailloy.lock")
-	if err := WriteLockFile(lockPath, &LockFile{APIVersion: "v1"}); err != nil {
+	manifestPath := filepath.Join(dir, ".ailloy", "installed.yaml")
+	if err := WriteInstalledManifest(manifestPath, &InstalledManifest{APIVersion: "v1"}); err != nil {
 		t.Fatal(err)
 	}
-	err := RecordInstalledFiles(lockPath, "github.com/missing/repo", []InstalledFile{{RelPath: "a"}})
+	err := RecordInstalledFiles(manifestPath, "github.com/missing/repo", []InstalledFile{{RelPath: "a"}})
 	if err == nil {
 		t.Error("expected error when entry not found")
 	}

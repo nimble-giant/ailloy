@@ -24,29 +24,29 @@ func sha256Hex(content string) string {
 	return hex.EncodeToString(h[:])
 }
 
-func setupLock(t *testing.T, files []string, hashes map[string]string) string {
+func setupManifest(t *testing.T, files []string, hashes map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Chdir(dir)
-	lockPath := filepath.Join(dir, "ailloy.lock")
-	lock := &LockFile{
+	manifestPath := filepath.Join(dir, ".ailloy", "installed.yaml")
+	m := &InstalledManifest{
 		APIVersion: "v1",
-		Molds: []LockEntry{
+		Molds: []InstalledEntry{
 			{
 				Name:       "test-mold",
 				Source:     "github.com/x/y",
 				Version:    "v1",
 				Commit:     "c1",
-				Timestamp:  time.Now().UTC(),
+				CastAt:     time.Now().UTC(),
 				Files:      files,
 				FileHashes: hashes,
 			},
 		},
 	}
-	if err := WriteLockFile(lockPath, lock); err != nil {
+	if err := WriteInstalledManifest(manifestPath, m); err != nil {
 		t.Fatal(err)
 	}
-	return lockPath
+	return manifestPath
 }
 
 func TestUninstallMold_Clean(t *testing.T) {
@@ -54,11 +54,11 @@ func TestUninstallMold_Clean(t *testing.T) {
 		"agents.md":     sha256Hex("hello"),
 		"skills/x/y.md": sha256Hex("world"),
 	}
-	lockPath := setupLock(t, []string{"agents.md", "skills/x/y.md"}, hashes)
+	manifestPath := setupManifest(t, []string{"agents.md", "skills/x/y.md"}, hashes)
 	writeFileT(t, "agents.md", "hello")
 	writeFileT(t, "skills/x/y.md", "world")
 
-	res, err := UninstallMold(lockPath, "github.com/x/y", UninstallOptions{})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -72,18 +72,18 @@ func TestUninstallMold_Clean(t *testing.T) {
 		t.Error("empty skills/ dir not pruned")
 	}
 
-	loaded, _ := ReadLockFile(lockPath)
+	loaded, _ := ReadInstalledManifest(manifestPath)
 	if len(loaded.Molds) != 0 {
-		t.Errorf("entry not removed from lockfile, got %d", len(loaded.Molds))
+		t.Errorf("entry not removed from manifest, got %d", len(loaded.Molds))
 	}
 }
 
 func TestUninstallMold_ModifiedFile_Skipped(t *testing.T) {
 	hashes := map[string]string{"agents.md": sha256Hex("original content")}
-	lockPath := setupLock(t, []string{"agents.md"}, hashes)
+	manifestPath := setupManifest(t, []string{"agents.md"}, hashes)
 	writeFileT(t, "agents.md", "modified content")
 
-	res, err := UninstallMold(lockPath, "github.com/x/y", UninstallOptions{})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -97,10 +97,10 @@ func TestUninstallMold_ModifiedFile_Skipped(t *testing.T) {
 
 func TestUninstallMold_ModifiedFile_Force(t *testing.T) {
 	hashes := map[string]string{"agents.md": sha256Hex("original")}
-	lockPath := setupLock(t, []string{"agents.md"}, hashes)
+	manifestPath := setupManifest(t, []string{"agents.md"}, hashes)
 	writeFileT(t, "agents.md", "modified")
 
-	res, err := UninstallMold(lockPath, "github.com/x/y", UninstallOptions{Force: true})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{Force: true})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -111,9 +111,9 @@ func TestUninstallMold_ModifiedFile_Force(t *testing.T) {
 
 func TestUninstallMold_Missing(t *testing.T) {
 	hashes := map[string]string{"agents.md": sha256Hex("anything")}
-	lockPath := setupLock(t, []string{"agents.md"}, hashes)
+	manifestPath := setupManifest(t, []string{"agents.md"}, hashes)
 
-	res, err := UninstallMold(lockPath, "github.com/x/y", UninstallOptions{})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -124,10 +124,10 @@ func TestUninstallMold_Missing(t *testing.T) {
 
 func TestUninstallMold_DryRun(t *testing.T) {
 	hashes := map[string]string{"agents.md": sha256Hex("x")}
-	lockPath := setupLock(t, []string{"agents.md"}, hashes)
+	manifestPath := setupManifest(t, []string{"agents.md"}, hashes)
 	writeFileT(t, "agents.md", "x")
 
-	res, err := UninstallMold(lockPath, "github.com/x/y", UninstallOptions{DryRun: true})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{DryRun: true})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -137,30 +137,30 @@ func TestUninstallMold_DryRun(t *testing.T) {
 	if _, err := os.Stat("agents.md"); err != nil {
 		t.Error("dry-run should NOT remove the file")
 	}
-	loaded, _ := ReadLockFile(lockPath)
+	loaded, _ := ReadInstalledManifest(manifestPath)
 	if len(loaded.Molds) != 1 {
-		t.Error("dry-run should NOT modify the lockfile")
+		t.Error("dry-run should NOT modify the manifest")
 	}
 }
 
 func TestUninstallMold_SharedFile_Retained(t *testing.T) {
 	hash := sha256Hex("shared")
 	hashes := map[string]string{"agents.md": hash}
-	lockPath := setupLock(t, []string{"agents.md"}, hashes)
+	manifestPath := setupManifest(t, []string{"agents.md"}, hashes)
 	writeFileT(t, "agents.md", "shared")
 
-	lock, _ := ReadLockFile(lockPath)
-	lock.Molds = append(lock.Molds, LockEntry{
+	m, _ := ReadInstalledManifest(manifestPath)
+	m.Molds = append(m.Molds, InstalledEntry{
 		Name:       "other",
 		Source:     "github.com/x/other",
 		Files:      []string{"agents.md"},
 		FileHashes: map[string]string{"agents.md": hash},
 	})
-	if err := WriteLockFile(lockPath, lock); err != nil {
+	if err := WriteInstalledManifest(manifestPath, m); err != nil {
 		t.Fatal(err)
 	}
 
-	res, err := UninstallMold(lockPath, "github.com/x/y", UninstallOptions{})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -176,22 +176,50 @@ func TestUninstallMold_LegacyEntry_NoFiles(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 
-	lockPath := filepath.Join(dir, "ailloy.lock")
-	lock := &LockFile{
+	manifestPath := filepath.Join(dir, ".ailloy", "installed.yaml")
+	m := &InstalledManifest{
 		APIVersion: "v1",
-		Molds: []LockEntry{
+		Molds: []InstalledEntry{
 			{Name: "legacy", Source: "github.com/x/y", Version: "v1", Commit: "c1"},
 		},
 	}
-	if err := WriteLockFile(lockPath, lock); err != nil {
+	if err := WriteInstalledManifest(manifestPath, m); err != nil {
 		t.Fatal(err)
 	}
 
-	res, err := UninstallMold(lockPath, "github.com/x/y", UninstallOptions{})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{})
 	if err == nil {
 		t.Fatal("expected ErrLegacyEntry")
 	}
 	if !res.LegacyManifest {
 		t.Errorf("expected LegacyManifest=true, got %+v", res)
+	}
+}
+
+// Pre-existing project with both manifest and lock — uninstall should remove
+// the entry from both.
+func TestUninstallMold_DropsLockEntryToo(t *testing.T) {
+	hashes := map[string]string{"agents.md": sha256Hex("x")}
+	manifestPath := setupManifest(t, []string{"agents.md"}, hashes)
+	writeFileT(t, "agents.md", "x")
+
+	// Cwd is the project root; LockFileName resolves there. Seed the lock.
+	lock := &LockFile{
+		APIVersion: "v1",
+		Molds: []LockEntry{
+			{Name: "test-mold", Source: "github.com/x/y", Version: "v1", Commit: "c1", Timestamp: time.Now().UTC()},
+			{Name: "other", Source: "github.com/x/other", Version: "v1", Commit: "c2", Timestamp: time.Now().UTC()},
+		},
+	}
+	if err := WriteLockFile(LockFileName, lock); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{}); err != nil {
+		t.Fatalf("UninstallMold: %v", err)
+	}
+	loaded, _ := ReadLockFile(LockFileName)
+	if loaded == nil || len(loaded.Molds) != 1 || loaded.Molds[0].Source != "github.com/x/other" {
+		t.Errorf("lock entry not cleaned up: %+v", loaded)
 	}
 }
