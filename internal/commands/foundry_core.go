@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
@@ -107,15 +108,32 @@ func UpdateFoundriesCore(cfg *index.Config) ([]UpdateFoundryReport, error) {
 		targets = append([]target{{entry: &official, persisted: false}}, targets...)
 	}
 
+	// Network-only lookup. Fetcher writes each fetched index to disk on
+	// success, so resolving the tree also populates the on-disk cache that
+	// `foundry search` reads from.
+	networkLookup := func(source string) (*index.Index, error) {
+		url := index.NormalizeFoundryURL(source)
+		entry := &index.FoundryEntry{URL: url, Type: index.DetectType(url)}
+		return fetcher.FetchIndex(entry)
+	}
+
 	out := make([]UpdateFoundryReport, 0, len(targets))
 	for _, t := range targets {
 		report := UpdateFoundryReport{Name: t.entry.Name, URL: t.entry.URL, Persisted: t.persisted}
-		idx, err := fetcher.FetchIndex(t.entry)
-		if err != nil {
-			report.Err = err
-		} else {
-			report.MoldCount = len(idx.Molds)
+
+		r := index.NewResolver(networkLookup)
+		root, _, rerr := r.Resolve(t.entry.URL)
+		if rerr != nil {
+			report.Err = rerr
+			out = append(out, report)
+			continue
 		}
+		report.MoldCount = len(root.Index.Molds)
+
+		// Mirror the metadata Fetcher would have set on a direct call.
+		t.entry.LastUpdated = time.Now().UTC()
+		t.entry.Status = "ok"
+
 		out = append(out, report)
 	}
 	return out, nil
