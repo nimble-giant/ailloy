@@ -131,20 +131,32 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.active = (a.active + tabCount - 1) % tabCount
 			return a, nil
 		}
+
+		// Key events go only to the active tab.
+		var cmd tea.Cmd
+		switch a.active {
+		case TabDiscover:
+			a.discover, cmd = a.discover.Update(msg)
+		case TabInstalled:
+			a.installed, cmd = a.installed.Update(msg)
+		case TabFoundries:
+			a.registered, cmd = a.registered.Update(msg)
+		case TabHealth:
+			a.health, cmd = a.health.Update(msg)
+		}
+		return a, cmd
 	}
 
-	var cmd tea.Cmd
-	switch a.active {
-	case TabDiscover:
-		a.discover, cmd = a.discover.Update(msg)
-	case TabInstalled:
-		a.installed, cmd = a.installed.Update(msg)
-	case TabFoundries:
-		a.registered, cmd = a.registered.Update(msg)
-	case TabHealth:
-		a.health, cmd = a.health.Update(msg)
-	}
-	return a, cmd
+	// Non-key messages (window size, async results from each tab's Init)
+	// broadcast to every sub-model. Each tab filters on its own message
+	// types, so cross-talk is harmless and avoids lost loaded-msgs when
+	// the user isn't on the originating tab.
+	var dCmd, iCmd, rCmd, hCmd tea.Cmd
+	a.discover, dCmd = a.discover.Update(msg)
+	a.installed, iCmd = a.installed.Update(msg)
+	a.registered, rCmd = a.registered.Update(msg)
+	a.health, hCmd = a.health.Update(msg)
+	return a, tea.Batch(dCmd, iCmd, rCmd, hCmd)
 }
 
 func (a App) View() string {
