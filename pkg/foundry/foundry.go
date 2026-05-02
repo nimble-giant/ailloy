@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"os"
 	"path/filepath"
 	"sort"
 	"time"
@@ -61,58 +62,71 @@ func RecordInstalledFiles(lockPath, source string, files []InstalledFile) error 
 type ResolveOption func(*resolveConfig)
 
 type resolveConfig struct {
-	skipLock bool
+	// lockPath is the path to the lock file. The lock is *only* used (read &
+	// updated) when a file already exists at this path. Resolve never creates
+	// the lock — that is the job of `ailloy quench`.
+	lockPath string
 }
 
-// WithoutLock disables reading and writing the ailloy.lock file during resolution.
-// Use this for global installs where a project-local lock file is not appropriate.
-func WithoutLock() ResolveOption {
-	return func(c *resolveConfig) {
-		c.skipLock = true
+// applyResolveDefaults sets the default lockPath. Exposed for tests.
+func applyResolveDefaults(c *resolveConfig) {
+	if c.lockPath == "" {
+		c.lockPath = LockFileName
 	}
 }
 
+// WithLockPath overrides the lock file path used by Resolve. Use this for
+// global installs (which use a path under ~/) or in tests.
+func WithLockPath(path string) ResolveOption {
+	return func(c *resolveConfig) {
+		c.lockPath = path
+	}
+}
+
+// shouldUseLock returns true when a lock file exists at the configured path.
+// Lock reads/writes are gated on file presence — opt-in via `ailloy quench`.
+func shouldUseLock(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // Resolve is the main entry point for SCM-native mold resolution.
-// It parses a raw reference, checks the lock file, resolves the version
-// from remote tags, fetches/caches the mold, updates the lock, and returns
-// an fs.FS rooted at the mold directory.
 func Resolve(rawRef string, opts ...ResolveOption) (fs.FS, error) {
 	fsys, _, err := ResolveWithRoot(rawRef, opts...)
 	return fsys, err
 }
 
-// ResolveWithRoot is like Resolve but also returns the on-disk root path
-// of the resolved mold. The root path is needed by callers that resolve
-// sibling directories (e.g., bundled ingots) during template rendering.
+// ResolveWithRoot is like Resolve but also returns the on-disk root path.
 func ResolveWithRoot(rawRef string, opts ...ResolveOption) (fs.FS, string, error) {
 	ref, err := ParseReference(rawRef)
 	if err != nil {
 		return nil, "", fmt.Errorf("parsing reference: %w", err)
 	}
-
 	git := DefaultGitRunner()
 	return ResolveWith(ref, git, opts...)
 }
 
-// ResolveWith is like Resolve but accepts an injectable GitRunner (for testing).
-// It returns the resolved fs.FS and the on-disk root path.
+// ResolveWith resolves a parsed reference using the given GitRunner.
 func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, string, error) {
 	var cfg resolveConfig
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	applyResolveDefaults(&cfg)
 
-	// Read existing lock file.
+	useLock := shouldUseLock(cfg.lockPath)
+
+	// Read existing lock file if present.
 	var resolved *ResolvedVersion
-	if !cfg.skipLock {
-		lock, err := ReadLockFile(LockFileName)
+	if useLock {
+		lock, err := ReadLockFile(cfg.lockPath)
 		if err != nil {
 			log.Printf("warning: reading lock file: %v", err)
 		}
-
-		// Check lock for a pinned version.
 		if entry := lock.FindEntry(ref.CacheKey()); entry != nil && ref.Type != Branch && ref.Type != SHA {
-			// Use locked version if it satisfies the reference.
 			if lockedSatisfies(ref, entry) {
 				resolved = &ResolvedVersion{Tag: entry.Version, Commit: entry.Commit}
 				log.Printf("using locked version %s@%s", ref.CacheKey(), entry.Version)
@@ -120,7 +134,7 @@ func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, s
 		}
 	}
 
-	// Resolve version from remote if not locked.
+	// Resolve from remote if not locked.
 	if resolved == nil {
 		v, resolveErr := ResolveVersion(ref, git)
 		if resolveErr != nil {
@@ -134,15 +148,14 @@ func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, s
 	if err != nil {
 		return nil, "", fmt.Errorf("creating fetcher: %w", err)
 	}
-
 	fsys, root, err := fetcher.Fetch(ref, resolved)
 	if err != nil {
 		return nil, "", fmt.Errorf("fetching mold: %w", err)
 	}
 
-	// Update lock file.
-	if !cfg.skipLock {
-		if err := updateLock(ref, resolved); err != nil {
+	// Update lock only if it already exists.
+	if useLock {
+		if err := updateLockAt(cfg.lockPath, ref, resolved); err != nil {
 			log.Printf("warning: updating lock file: %v", err)
 		}
 	}
@@ -150,10 +163,6 @@ func ResolveWith(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, s
 	return fsys, root, nil
 }
 
-// lockedSatisfies checks whether the locked entry still satisfies the
-// requested reference. For Latest and Constraint types, the lock is always
-// used (user must delete lock to get newer versions). For Exact, the locked
-// version must match.
 func lockedSatisfies(ref *Reference, entry *LockEntry) bool {
 	switch ref.Type {
 	case Latest, Constraint:
@@ -165,17 +174,15 @@ func lockedSatisfies(ref *Reference, entry *LockEntry) bool {
 	}
 }
 
-// updateLock reads the current lock file, upserts the resolved entry, and
-// writes it back.
-func updateLock(ref *Reference, resolved *ResolvedVersion) error {
-	lock, err := ReadLockFile(LockFileName)
+// updateLockAt reads, upserts, and writes the lock at the given path.
+func updateLockAt(path string, ref *Reference, resolved *ResolvedVersion) error {
+	lock, err := ReadLockFile(path)
 	if err != nil {
 		lock = nil
 	}
 	if lock == nil {
 		lock = &LockFile{APIVersion: "v1"}
 	}
-
 	lock.UpsertEntry(LockEntry{
 		Name:      ref.Repo,
 		Source:    ref.CacheKey(),
@@ -184,6 +191,5 @@ func updateLock(ref *Reference, resolved *ResolvedVersion) error {
 		Subpath:   ref.Subpath,
 		Timestamp: time.Now().UTC(),
 	})
-
-	return WriteLockFile(LockFileName, lock)
+	return WriteLockFile(path, lock)
 }

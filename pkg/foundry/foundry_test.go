@@ -68,8 +68,7 @@ func TestLockedSatisfies(t *testing.T) {
 	}
 }
 
-func TestWithoutLock_SkipsLockFileIO(t *testing.T) {
-	// Set up: chdir to a temp dir so any lock file write would land here.
+func TestResolve_NoLockFile_DoesNotCreateLock(t *testing.T) {
 	dir := t.TempDir()
 	origDir, err := os.Getwd()
 	if err != nil {
@@ -80,8 +79,34 @@ func TestWithoutLock_SkipsLockFileIO(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(origDir) })
 
-	// Pre-create a lock file that would match our reference.
-	// Without WithoutLock, ResolveWith would read this and use the locked version.
+	// Apply default config — no opts.
+	var cfg resolveConfig
+	applyResolveDefaults(&cfg)
+
+	if cfg.lockPath != LockFileName {
+		t.Errorf("default lockPath = %q, want %q", cfg.lockPath, LockFileName)
+	}
+
+	// Simulate the lock-write decision: if no file at lockPath, no write should happen.
+	if _, err := os.Stat(cfg.lockPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no lock file in fresh dir, stat err = %v", err)
+	}
+	if shouldUseLock(cfg.lockPath) {
+		t.Errorf("shouldUseLock should return false when lock does not exist")
+	}
+}
+
+func TestResolve_LockExists_UsesIt(t *testing.T) {
+	dir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
 	lock := &LockFile{
 		APIVersion: "v1",
 		Molds: []LockEntry{{
@@ -96,26 +121,17 @@ func TestWithoutLock_SkipsLockFileIO(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Record the lock file's mod time before the resolve call.
-	infoBefore, err := os.Stat(filepath.Join(dir, LockFileName))
-	if err != nil {
-		t.Fatal(err)
+	if !shouldUseLock(LockFileName) {
+		t.Error("shouldUseLock should return true when lock exists")
 	}
+}
 
-	// Verify WithoutLock sets skipLock on the config.
+func TestWithLockPath_OverridesDefault(t *testing.T) {
 	var cfg resolveConfig
-	WithoutLock()(&cfg)
-	if !cfg.skipLock {
-		t.Fatal("WithoutLock should set skipLock to true")
-	}
-
-	// Verify the lock file was not modified (updateLock was not called).
-	infoAfter, err := os.Stat(filepath.Join(dir, LockFileName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if infoBefore.ModTime() != infoAfter.ModTime() {
-		t.Error("lock file was modified despite WithoutLock being set")
+	applyResolveDefaults(&cfg)
+	WithLockPath("/tmp/custom.lock")(&cfg)
+	if cfg.lockPath != "/tmp/custom.lock" {
+		t.Errorf("lockPath = %q, want /tmp/custom.lock", cfg.lockPath)
 	}
 }
 
