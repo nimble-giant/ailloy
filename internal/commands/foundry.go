@@ -329,6 +329,10 @@ func runFoundryUpdate(_ *cobra.Command, _ []string) error {
 		}
 		fmt.Println(" " + styles.SuccessStyle.Render("ok") +
 			styles.SubtleStyle.Render(fmt.Sprintf(" (%d molds)", r.MoldCount)))
+		for _, w := range r.Warnings {
+			fmt.Println(styles.SubtleStyle.Render(
+				fmt.Sprintf("    warning: nested foundry %q failed: %v", w.Source, w.Err)))
+		}
 	}
 
 	if err := index.SaveConfig(cfg); err != nil {

@@ -84,6 +84,7 @@ type UpdateFoundryReport struct {
 	MoldCount int
 	Persisted bool // false for the virtual default
 	Err       error
+	Warnings  []index.ResolutionWarning
 }
 
 // UpdateFoundriesCore fetches every effective foundry, persists status/timestamp
@@ -129,6 +130,7 @@ func UpdateFoundriesCore(cfg *index.Config) ([]UpdateFoundryReport, error) {
 			continue
 		}
 		report.MoldCount = len(root.Index.Molds)
+		report.Warnings = r.Warnings()
 
 		// Mirror the metadata Fetcher would have set on a direct call.
 		t.entry.LastUpdated = time.Now().UTC()
