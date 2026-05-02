@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
 )
 
@@ -249,5 +252,52 @@ molds:
 	}
 	if results[0].Name != "workflow-mold" {
 		t.Errorf("Name = %q, want workflow-mold", results[0].Name)
+	}
+}
+
+func TestSearchTraversesNestedFoundries(t *testing.T) {
+	parent := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "parent",
+		Molds:     []MoldEntry{{Name: "parent-mold", Source: "github.com/x/parent-mold", Description: "alpha"}},
+		Foundries: []FoundryRef{{Name: "child", Source: "github.com/x/child"}},
+	}
+	child := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "child",
+		Molds: []MoldEntry{{Name: "child-mold", Source: "github.com/x/child-mold", Description: "alpha"}},
+	}
+	lookup := func(source string) (*Index, error) {
+		switch canonicalizeSource(source) {
+		case "github.com/x/parent":
+			return parent, nil
+		case "github.com/x/child":
+			return child, nil
+		}
+		return nil, fmt.Errorf("not found: %s", source)
+	}
+
+	cfg := &Config{Foundries: []FoundryEntry{{Name: "parent", URL: "github.com/x/parent", Type: "git"}}}
+	results, err := searchWithLookup(cfg, "alpha", lookup)
+	if err != nil {
+		t.Fatalf("searchWithLookup: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("got %d results, want 2", len(results))
+	}
+	// Both molds should be namespaced as <foundry>/<mold>.
+	names := []string{results[0].Name, results[1].Name}
+	sort.Strings(names)
+	want := []string{"child/child-mold", "parent/parent-mold"}
+	if !reflect.DeepEqual(names, want) {
+		t.Errorf("names = %v, want %v", names, want)
+	}
+	// The child mold's Origin should reflect the resolution chain.
+	var childResult SearchResult
+	for _, r := range results {
+		if r.Name == "child/child-mold" {
+			childResult = r
+		}
+	}
+	if !strings.Contains(childResult.Origin, "via parent") {
+		t.Errorf("child Origin = %q, want it to contain 'via parent'", childResult.Origin)
 	}
 }
