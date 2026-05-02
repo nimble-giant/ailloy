@@ -31,3 +31,22 @@ func TestCurrentMold_HighlightedEntry(t *testing.T) {
 		t.Fatalf("scope = %v want ScopeProject (default)", scope)
 	}
 }
+
+func TestApplySessionOverrides_StoresEncoded(t *testing.T) {
+	m := Model{}
+	m = m.ApplySessionOverrides("official/x", map[string]any{
+		"agents.targets":  []string{"opencode"},
+		"agents.parallel": true,
+	})
+	got := m.pending["official/x"]
+	if len(got) != 2 {
+		t.Fatalf("len = %d want 2; got %v", len(got), got)
+	}
+	// Sorted; "agents.parallel" < "agents.targets"
+	if got[0] != "agents.parallel=true" {
+		t.Fatalf("got[0] = %q", got[0])
+	}
+	if got[1] != "agents.targets=[opencode]" {
+		t.Fatalf("got[1] = %q (note: %%v formatting on []string)", got[1])
+	}
+}

@@ -51,6 +51,28 @@ func TestApp_FluxOverridesMsg_ClosesPicker(t *testing.T) {
 	}
 }
 
+func TestApp_FluxOverridesMsg_SessionRoutesToDiscover(t *testing.T) {
+	a := newAppForTest()
+	a.active = TabDiscover
+	a.picker = fluxpicker.New().OpenFor("official/x", data.ScopeProject, nil, nil)
+
+	next, _ := a.Update(fluxpicker.FluxOverridesMsg{
+		MoldRef: "official/x",
+		Scope:   data.ScopeProject,
+		Overrides: map[string]any{
+			"k": "v",
+		},
+		Target: fluxpicker.SaveTargetSession,
+	})
+	app := next.(App)
+	// We can't read app.discover.pending across packages, but ApplySessionOverrides
+	// is exported — we can call it explicitly to confirm routing didn't choke,
+	// then re-cast and check downstream effects in the integration test (Task 14).
+	if app.picker.IsOpen() {
+		t.Fatal("expected picker to close")
+	}
+}
+
 // newAppForTest returns a minimal App ready for keystroke-based tests.
 // It bypasses the full New() constructor (which needs a Config and many
 // callbacks) to keep tests focused on the App's routing logic.

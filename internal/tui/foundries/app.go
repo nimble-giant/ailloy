@@ -148,8 +148,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// loop below.
 		a.picker, _ = a.picker.Update(m)
 	case fluxpicker.FluxOverridesMsg:
-		// Task 11 will route session-target overrides into discover/installed
-		// before close. For now, just close.
+		if m.Target == fluxpicker.SaveTargetSession {
+			switch a.active {
+			case TabDiscover:
+				a.discover = a.discover.ApplySessionOverrides(m.MoldRef, m.Overrides)
+			case TabInstalled:
+				a.installed = a.installed.ApplySessionOverrides(m.MoldRef, m.Overrides)
+			}
+		}
 		a.picker = a.picker.Close()
 		return a, nil
 	case tea.KeyMsg:
