@@ -43,8 +43,8 @@ Key CLI commands for working with molds:
 - **temper** (`validate`): Validate a mold or ingot package; use `--assay` (alias: `--lint`) to also render and assay output
 - **anneal** (`configure`): Configure flux variables interactively
 - **smelt** (`package`): Package a mold for distribution
-- **recast**: Re-render and update previously cast blanks
-- **quench**: Lock flux variables to prevent re-rendering
+- **recast**: Re-resolve installed molds to newer versions; refreshes `.ailloy/installed.yaml` and (if present) `ailloy.lock`
+- **quench**: Opt in to `ailloy.lock` by pinning everything in `.ailloy/installed.yaml`; supports `--verify` (CI drift check) and `--global`
 
 ## Usage
 
