@@ -96,7 +96,7 @@ Both subpaths share the same version tag and bare clone cache.
 - Tag releases with semver: `git tag v1.0.0 && git push --tags`
 - Use caret constraints (`@^1.0.0`) for consumers who want compatible updates
 - Breaking changes (new required flux vars, renamed output paths) should bump the major version
-- The `ailloy.lock` file pins consumers to exact commits — they won't get new versions unless they delete the lock or change the constraint
+- Consumers can opt in to commit-SHA pinning by running `ailloy quench` to create an `ailloy.lock` — once locked, they won't get new versions until they `recast` or delete the lock
 
 ### Private Repositories
 
@@ -482,11 +482,25 @@ Resolved molds are cached at `~/.ailloy/cache/` to avoid re-cloning on every inv
 
 On subsequent runs, if a version directory already exists and contains a `mold.yaml` (or `ingot.yaml`), the cached snapshot is used without re-extracting. The bare clone is still fetched to pick up new tags.
 
-## Lock File
+## Installed Manifest
 
-When a remote mold is resolved, an `ailloy.lock` file is created (or updated) in the current directory. This pins the exact version and commit SHA so that subsequent runs use the same resolution.
+Every `ailloy cast` and `ailloy ingot add` writes provenance for the installed mold into `.ailloy/installed.yaml`. This file is the source of truth for `recast` and `quench`, and should be committed to git.
 
-### Format
+```yaml
+apiVersion: v1
+molds:
+  - name: nimble-mold
+    source: github.com/nimble-giant/nimble-mold
+    version: v0.1.10
+    commit: 2347a626798553252668a15dc98dd020ab9a9c0c
+    castAt: 2026-02-21T19:30:00Z
+```
+
+## Lock File (opt-in)
+
+`ailloy.lock` is **opt-in**: it is created only by `ailloy quench`. Once the file exists, `cast`, `ingot add`, and `recast` keep it updated automatically. New projects get no lock until they quench; existing projects with an `ailloy.lock` continue to work — the lock is honored and updated as before.
+
+The lock pins each mold to an exact commit SHA. Because git is content-addressable, any tampering on the upstream side is rejected by git itself when the SHA is fetched. Local edits to rendered blanks are expected and not flagged as drift.
 
 ```yaml
 apiVersion: v1
@@ -498,17 +512,20 @@ molds:
     timestamp: 2026-02-21T19:30:00Z
 ```
 
-### Lock Behavior
+### Typical opt-in flow
 
-- **Locked + Latest/Constraint**: uses the locked version (run `ailloy recast` to re-resolve)
-- **Locked + Exact**: uses the lock if versions match, otherwise re-resolves
-- **Branch/SHA pins**: always re-resolve (lock is updated but not consulted)
+```bash
+ailloy cast github.com/nimble-giant/nimble-mold     # writes .ailloy/installed.yaml
+ailloy quench                                         # creates ailloy.lock pinning everything
+ailloy quench --verify                                # CI: exit non-zero if pins drift
+ailloy recast                                         # update everything; refreshes both files
+```
 
 ### Lifecycle Commands
 
 #### Recast (alias: upgrade)
 
-Re-resolve locked dependencies to their latest available versions:
+Re-resolve installed dependencies to their latest available versions. Recast drives off `.ailloy/installed.yaml`; if `ailloy.lock` exists, it is refreshed too.
 
 ```bash
 # Update all dependencies
@@ -519,19 +536,32 @@ ailloy recast nimble-mold
 
 # Preview changes without applying
 ailloy recast --dry-run
+
+# Operate on ~/.ailloy/installed.yaml and ~/ailloy.lock
+ailloy recast --global
 ```
 
-Recast fetches the latest semver tags from each dependency's remote, compares with the currently locked version, and updates `ailloy.lock` with the new resolution. A summary of changes is printed showing old and new versions.
+Recast fetches the latest semver tags from each dependency's remote, compares with the currently installed version, and updates the manifest (and lock, if present) with the new resolution. A summary of changes is printed showing old and new versions.
 
 #### Quench (alias: lock)
 
-Confirm that all dependencies are pinned to exact versions:
+Create or refresh `ailloy.lock` from the installed manifest, pinning every entry to an exact commit SHA.
 
 ```bash
+# Create or refresh ailloy.lock from .ailloy/installed.yaml
 ailloy quench
+
+# Update a single mold's pin (requires existing lock)
+ailloy quench nimble-mold
+
+# CI-friendly read-only check; exit non-zero on drift
+ailloy quench --verify
+
+# Operate on ~/.ailloy/installed.yaml and ~/ailloy.lock
+ailloy quench --global
 ```
 
-Quench verifies that every entry in `ailloy.lock` has an exact version and commit SHA pinned. Subsequent `cast` operations will use only these locked versions until the lock is updated via `recast`.
+Quench verifies manifest↔lock consistency before writing. Once the lock exists, subsequent `cast` and `ingot add` operations append to it automatically.
 
 ## Authentication
 
