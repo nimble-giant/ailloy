@@ -224,7 +224,7 @@ without any registration step.
 - `list` — List registered indexes and their status
 - `remove <name|url>` — Remove a registered index
 - `update` — Refresh all cached indexes
-- `install <name|url>` (alias: `cast-all`) — Cast every mold the foundry indexes (skips already-installed; `-g`, `--with-workflows`, `--dry-run`, `--force`)
+- `install <name|url>` (alias: `cast-all`) — Cast every mold the foundry indexes (skips already-installed; `-g`, `--with-workflows`, `--dry-run`, `--force`, `--claude-plugin`)
 
 </details>
 

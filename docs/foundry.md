@@ -170,8 +170,12 @@ ailloy foundry update
 
 # Cast every mold listed by a foundry (alias: cast-all)
 # Skips molds already in the target lockfile unless --force.
-# Supports -g/--global, --with-workflows, --dry-run, --force.
+# Supports -g/--global, --with-workflows, --dry-run, --force, --claude-plugin.
 ailloy foundry install foundry
+
+# Install every mold from a foundry as Claude Code plugins
+# (each plugin lands at .claude/plugins/<slug>/, named after its mold)
+ailloy foundry install foundry --claude-plugin
 
 # Remove a registered foundry index by name or URL
 ailloy foundry remove nimble-foundry

@@ -125,6 +125,7 @@ type InstallFoundryOptions struct {
 	WithWorkflows bool // include .github/ workflow blanks
 	DryRun        bool // report what would be installed; don't touch disk
 	Force         bool // re-cast even if already installed in the target lockfile
+	ClaudePlugin  bool // package each mold as a Claude Code plugin
 }
 
 // InstallFoundryReport is the per-mold result of an InstallFoundryCore run.
@@ -214,6 +215,7 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 		castRes, cerr := CastMold(ctx, m.Source, CastOptions{
 			Global:        opts.Global,
 			WithWorkflows: opts.WithWorkflows,
+			ClaudePlugin:  opts.ClaudePlugin,
 		})
 		if cerr != nil {
 			report.Err = cerr
