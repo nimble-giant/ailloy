@@ -31,7 +31,7 @@ Ailloy provides Helm-coded aliases for every core command, so you can use whiche
 | Dry-run / render templates | `helm template` | `ailloy forge` | `ailloy template` |
 | Lint / validate | `helm lint` | `ailloy temper` | `ailloy lint` |
 | Package for distribution | `helm package` | `ailloy smelt` | `ailloy package` |
-| Upgrade dependencies | `helm upgrade` | `ailloy recast` | `ailloy upgrade` |
+| Upgrade dependencies | `helm upgrade` | `ailloy recast` | — |
 | Lock dependency versions | — | `ailloy quench` | `ailloy lock` |
 | Interactive configuration | — | `ailloy anneal` | `ailloy configure` |
 | Scaffold a new package | `helm create` | `ailloy mold new` | `ailloy mold create` |
@@ -115,11 +115,7 @@ ailloy package ./my-mold
 ### Upgrade locked dependencies
 
 ```bash
-# Ailloy-native
 ailloy recast
-
-# Helm alias
-ailloy upgrade
 ```
 
 ### Scaffold a new mold
@@ -378,7 +374,7 @@ ailloy smelt ./my-mold            # or: ailloy package ./my-mold
 ailloy anneal ./my-mold -o vals.yaml  # or: ailloy configure ./my-mold -o vals.yaml
 
 # Upgrade locked dependencies
-ailloy recast                     # or: ailloy upgrade
+ailloy recast
 
 # Pin dependency versions
 ailloy quench                     # or: ailloy lock

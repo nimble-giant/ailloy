@@ -39,7 +39,7 @@ var (
 )
 
 var upgradeCmd = &cobra.Command{
-	Use:   "self-upgrade",
+	Use:   "upgrade",
 	Short: "Upgrade the ailloy CLI itself to the latest release",
 	Long: `Download and install the latest ailloy release in place.
 
