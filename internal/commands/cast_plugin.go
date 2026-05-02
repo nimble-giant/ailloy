@@ -15,16 +15,31 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/styles"
 )
 
-// castClaudePlugin renders the mold via the existing flux pipeline and packages
-// the result as a Claude Code plugin under .claude/plugins/<slug>/ (or
-// ~/.claude/plugins/<slug>/ when --global is set).
-func castClaudePlugin(reader *blanks.MoldReader) error {
-	fmt.Println(styles.WorkingBanner("Casting Ailloy mold as Claude Code plugin..."))
-	fmt.Println()
+// pluginPackageOpts configures a plugin packaging run independent of cast's
+// package-level flag state, so both the CLI and CastMold can invoke the same
+// pipeline with their respective options.
+type pluginPackageOpts struct {
+	Global          bool
+	WithWorkflows   bool
+	NameOverride    string
+	VersionOverride string
+}
 
-	manifest, err := reader.LoadManifest()
-	if err != nil {
-		return fmt.Errorf("failed to load mold manifest: %w", err)
+// pluginPackageResult summarizes a packaging run for callers that want to
+// surface the output location.
+type pluginPackageResult struct {
+	TargetDir    string
+	HadWorkflows bool
+	FileCount    int
+}
+
+// castClaudePlugin is the CLI entrypoint for `ailloy cast --claude-plugin`.
+// It prints the banner and success message; the underlying pipeline lives in
+// packageMoldAsClaudePlugin so foundry install / CastMold can share it.
+func castClaudePlugin(reader *blanks.MoldReader) error {
+	if !castSilent.Load() {
+		fmt.Println(styles.WorkingBanner("Casting Ailloy mold as Claude Code plugin..."))
+		fmt.Println()
 	}
 
 	flux, err := loadCastFlux(reader)
@@ -32,46 +47,74 @@ func castClaudePlugin(reader *blanks.MoldReader) error {
 		flux = make(map[string]any)
 	}
 
-	rendered, err := renderMoldFiles(reader, manifest, flux)
+	res, err := packageMoldAsClaudePlugin(reader, flux, pluginPackageOpts{
+		Global:          castGlobal,
+		WithWorkflows:   withWorkflows,
+		NameOverride:    castPluginName,
+		VersionOverride: castPluginVer,
+	})
 	if err != nil {
 		return err
+	}
+
+	if !castSilent.Load() {
+		if withWorkflows && res.HadWorkflows {
+			fmt.Println(styles.WarningStyle.Render("⚠️  --with-workflows has no effect with --claude-plugin: workflow blanks are not bundled into Claude Code plugins."))
+		}
+		fmt.Println()
+		fmt.Println(styles.SuccessStyle.Render("✅ Plugin written to ") + styles.CodeStyle.Render(res.TargetDir))
+		fmt.Println(styles.InfoStyle.Render("💡 Claude Code will discover the plugin at this path on its next start."))
+	}
+
+	return nil
+}
+
+// packageMoldAsClaudePlugin is the silent pipeline shared by the CLI and
+// CastMold. It loads the manifest, renders all blanks against the supplied
+// flux, and hands the result to plugin.Packager.
+func packageMoldAsClaudePlugin(reader *blanks.MoldReader, flux map[string]any, opts pluginPackageOpts) (pluginPackageResult, error) {
+	var res pluginPackageResult
+
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		return res, fmt.Errorf("loading mold manifest: %w", err)
+	}
+
+	rendered, err := renderMoldFiles(reader, manifest, flux)
+	if err != nil {
+		return res, err
 	}
 
 	pluginFiles, hadWorkflows := filterForPlugin(rendered)
-	if withWorkflows && hadWorkflows {
-		fmt.Println(styles.WarningStyle.Render("⚠️  --with-workflows has no effect with --claude-plugin: workflow blanks are not bundled into Claude Code plugins."))
-	}
+	res.HadWorkflows = hadWorkflows
 
 	readme, err := readMoldReadme(reader, flux)
 	if err != nil {
-		return err
+		return res, err
 	}
 
-	manifestInput, err := buildManifestInput(manifest)
+	manifestInput, err := buildManifestInput(manifest, opts.NameOverride, opts.VersionOverride)
 	if err != nil {
-		return err
+		return res, err
 	}
 
 	slug, err := slugifyPluginName(manifestInput.Name)
 	if err != nil {
-		return err
+		return res, err
 	}
 
-	targetDir, err := resolvePluginTargetDir(slug)
+	targetDir, err := resolvePluginTargetDir(slug, opts.Global)
 	if err != nil {
-		return err
+		return res, err
 	}
+	res.TargetDir = targetDir
 
 	p := &plugin.Packager{OutputDir: targetDir}
 	if err := p.Package(pluginFiles, manifestInput, readme); err != nil {
-		return err
+		return res, err
 	}
-
-	fmt.Println()
-	fmt.Println(styles.SuccessStyle.Render("✅ Plugin written to ") + styles.CodeStyle.Render(targetDir))
-	fmt.Println(styles.InfoStyle.Render("💡 Claude Code will discover the plugin at this path on its next start."))
-
-	return nil
+	res.FileCount = len(pluginFiles)
+	return res, nil
 }
 
 // renderMoldFiles runs the cast rendering pipeline (flux validation, ingot
@@ -160,9 +203,9 @@ func readMoldReadme(reader *blanks.MoldReader, flux map[string]any) ([]byte, err
 	return []byte(processed), nil
 }
 
-// buildManifestInput synthesizes the plugin manifest from the mold manifest
-// with optional flag overrides.
-func buildManifestInput(m *mold.Mold) (plugin.ManifestInput, error) {
+// buildManifestInput synthesizes the plugin manifest from the mold manifest,
+// applying optional name/version overrides.
+func buildManifestInput(m *mold.Mold, nameOverride, versionOverride string) (plugin.ManifestInput, error) {
 	out := plugin.ManifestInput{}
 	if m != nil {
 		out.Name = m.Name
@@ -170,11 +213,11 @@ func buildManifestInput(m *mold.Mold) (plugin.ManifestInput, error) {
 		out.Description = m.Description
 		out.Author = m.Author
 	}
-	if castPluginName != "" {
-		out.Name = castPluginName
+	if nameOverride != "" {
+		out.Name = nameOverride
 	}
-	if castPluginVer != "" {
-		out.Version = castPluginVer
+	if versionOverride != "" {
+		out.Version = versionOverride
 	}
 	if strings.TrimSpace(out.Name) == "" {
 		return out, fmt.Errorf("plugin requires a name; set 'name' in mold.yaml or pass --plugin-name")
@@ -206,10 +249,11 @@ func slugifyPluginName(name string) (string, error) {
 	return slug, nil
 }
 
-// resolvePluginTargetDir returns the absolute output directory for the plugin,
-// honoring --global.
-func resolvePluginTargetDir(slug string) (string, error) {
-	if castGlobal {
+// resolvePluginTargetDir returns the absolute output directory for the plugin.
+// When global is true, plugins go under ~/.claude/plugins/<slug>/; otherwise
+// .claude/plugins/<slug>/ in the working directory.
+func resolvePluginTargetDir(slug string, global bool) (string, error) {
+	if global {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("cannot determine home directory: %w", err)

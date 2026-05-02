@@ -269,6 +269,83 @@ func TestCastClaudePlugin_PluginNameOverride(t *testing.T) {
 	}
 }
 
+func TestCastMold_ClaudePluginRoutesToPackager(t *testing.T) {
+	resetCastFlags()
+	defer resetCastFlags()
+
+	tmp := t.TempDir()
+	moldDir := filepath.Join(tmp, "mold")
+	writeFixtureMoldToDisk(t, moldDir)
+
+	work := filepath.Join(tmp, "work")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, work)
+
+	res, err := CastMold(t.Context(), moldDir, CastOptions{ClaudePlugin: true})
+	if err != nil {
+		t.Fatalf("CastMold: %v", err)
+	}
+
+	relDir := filepath.Join(".claude", "plugins", "fixture-mold")
+	pluginDir := filepath.Join(work, relDir)
+	mustFile(t, filepath.Join(pluginDir, ".claude-plugin", "plugin.json"))
+	mustFile(t, filepath.Join(pluginDir, "commands", "hello.md"))
+
+	if len(res.Dirs) != 1 || res.Dirs[0] != relDir {
+		t.Errorf("res.Dirs = %v, want [%s]", res.Dirs, relDir)
+	}
+	if res.MoldName != "fixture-mold" {
+		t.Errorf("res.MoldName = %q, want fixture-mold", res.MoldName)
+	}
+	if len(res.FilesCast) != 0 {
+		t.Errorf("expected FilesCast to be empty for plugin output, got %d entries", len(res.FilesCast))
+	}
+}
+
+// writeFixtureMoldToDisk materializes the same fixture used by fixtureMoldReader
+// onto a real directory so CastMold (which takes a path/ref string) can read it.
+func writeFixtureMoldToDisk(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"mold.yaml": `apiVersion: v1
+kind: mold
+name: fixture-mold
+version: 1.2.3
+description: A fixture mold for CastMold ClaudePlugin tests
+author:
+  name: Fixture Author
+flux:
+  - name: greeting
+    type: string
+    required: false
+    default: Hello
+`,
+		"flux.yaml": `greeting: Hello
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+`,
+		"commands/hello.md": "# Hello\n{{ .greeting }}, world!\n",
+		"skills/demo.md":    "# Demo\n",
+		"AGENTS.md":         "# Agents\n",
+		"README.md":         "# README\n",
+	}
+	for rel, content := range files {
+		path := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // --- helpers ---
 
 // resetCastFlags resets cast's package-level flag vars to their zero values so

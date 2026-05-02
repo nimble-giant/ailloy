@@ -74,3 +74,17 @@ Re-running cast against an existing plugin replaces the contents of that single 
 
 - **`ailloy cast --claude-plugin`** — for users who want to install a mold as a Claude Code plugin. Goes through the full flux/template pipeline and bundles commands, skills, agents, hooks, AGENTS.md, and README.
 - **`ailloy plugin generate`** — author-facing tool that runs a separate transformation step on raw blanks. See [plugin.md](plugin.md).
+
+## Bulk install: every mold in a foundry as a plugin
+
+`ailloy foundry install <name|url> --claude-plugin` installs every mold listed by a foundry as its own Claude Code plugin. Each plugin lands at `.claude/plugins/<slug>/` (or `~/.claude/plugins/<slug>/` with `--global`), named after the mold.
+
+```bash
+# Install every mold from the verified default foundry as plugins
+ailloy foundry install nimble --claude-plugin
+
+# Or pass a foundry URL
+ailloy foundry install github.com/nimble-giant/nimble-foundry --claude-plugin --global
+```
+
+Per-plugin overrides (`--plugin-name`, `--plugin-version`) are not supported on the bulk path — each plugin's name and version come from its own `mold.yaml`. The lockfile-based skip-already-installed behavior (`--force`) does not apply to plugin output, since plugin installs do not write to the project lockfile.

@@ -83,6 +83,7 @@ var (
 	foundryInstallWithWorkflows bool
 	foundryInstallDryRun        bool
 	foundryInstallForce         bool
+	foundryInstallClaudePlugin  bool
 )
 
 var foundryInstallCmd = &cobra.Command{
@@ -115,6 +116,7 @@ func init() {
 	foundryInstallCmd.Flags().BoolVar(&foundryInstallWithWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks")
 	foundryInstallCmd.Flags().BoolVar(&foundryInstallDryRun, "dry-run", false, "list what would be installed without casting")
 	foundryInstallCmd.Flags().BoolVar(&foundryInstallForce, "force", false, "re-cast molds that are already installed")
+	foundryInstallCmd.Flags().BoolVar(&foundryInstallClaudePlugin, "claude-plugin", false, "package each mold as a Claude Code plugin under .claude/plugins/<slug>/")
 }
 
 func runFoundrySearch(_ *cobra.Command, args []string) error {
@@ -362,6 +364,7 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 		WithWorkflows: foundryInstallWithWorkflows,
 		DryRun:        foundryInstallDryRun,
 		Force:         foundryInstallForce,
+		ClaudePlugin:  foundryInstallClaudePlugin,
 	})
 	if err != nil {
 		return err

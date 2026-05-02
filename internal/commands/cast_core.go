@@ -21,6 +21,14 @@ type CastOptions struct {
 	ValueFiles    []string // -f layered flux value files
 	SetOverrides  []string // --set key=val overrides
 	OnProgress    func(stage, item string)
+
+	// ClaudePlugin packages the rendered mold as a Claude Code plugin under
+	// .claude/plugins/<slug>/ (or ~/.claude/plugins/<slug>/ when Global is set)
+	// instead of installing blanks at their cast destinations. When set,
+	// PluginName/PluginVersion override the values derived from mold.yaml.
+	ClaudePlugin  bool
+	PluginName    string
+	PluginVersion string
 }
 
 // CastResult summarizes a CastMold call for programmatic consumers.
@@ -67,6 +75,24 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 	flux, err := layerFluxForCore(reader, opts.ValueFiles, opts.SetOverrides)
 	if err != nil {
 		return res, err
+	}
+
+	if opts.ClaudePlugin {
+		pluginRes, perr := packageMoldAsClaudePlugin(reader, flux, pluginPackageOpts{
+			Global:          opts.Global,
+			WithWorkflows:   opts.WithWorkflows,
+			NameOverride:    opts.PluginName,
+			VersionOverride: opts.PluginVersion,
+		})
+		if perr != nil {
+			return res, perr
+		}
+		res.Dirs = []string{pluginRes.TargetDir}
+		if opts.Global {
+			home, _ := os.UserHomeDir()
+			res.GlobalRoot = home
+		}
+		return res, nil
 	}
 
 	destPrefix := ""
