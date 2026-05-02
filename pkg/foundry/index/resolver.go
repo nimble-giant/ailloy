@@ -88,6 +88,16 @@ func (r *Resolver) resolveNode(source string, parents []string) (*ResolvedFoundr
 		Parents: append([]string(nil), parents...),
 	}
 	r.visited[key] = node
+
+	childParents := append(append([]string(nil), parents...), idx.Name)
+	for _, ref := range idx.Foundries {
+		child, err := r.resolveNode(ref.Source, childParents)
+		if err != nil {
+			// Child fetch errors are handled in a later task — for now propagate.
+			return nil, err
+		}
+		node.Children = append(node.Children, child)
+	}
 	return node, nil
 }
 

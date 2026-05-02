@@ -65,3 +65,65 @@ func TestResolverFlatFoundry(t *testing.T) {
 		}
 	}
 }
+
+// fakeLookup builds an IndexLookup from a static map of canonical source → index.
+func fakeLookup(t *testing.T, m map[string]*Index) (IndexLookup, *int) {
+	t.Helper()
+	calls := 0
+	return func(source string) (*Index, error) {
+		calls++
+		key := canonicalizeSource(source)
+		idx, ok := m[key]
+		if !ok {
+			t.Fatalf("unexpected lookup for %q", source)
+		}
+		return idx, nil
+	}, &calls
+}
+
+func TestResolverChildRecursion(t *testing.T) {
+	root := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "root",
+		Molds: []MoldEntry{{Name: "alpha", Source: "github.com/x/alpha"}},
+		Foundries: []FoundryRef{
+			{Name: "child", Source: "github.com/x/child"},
+		},
+	}
+	child := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "child",
+		Molds: []MoldEntry{{Name: "gamma", Source: "github.com/x/gamma"}},
+	}
+	lookup, calls := fakeLookup(t, map[string]*Index{
+		"github.com/x/root":  root,
+		"github.com/x/child": child,
+	})
+
+	rf, molds, err := NewResolver(lookup).Resolve("github.com/x/root")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if *calls != 2 {
+		t.Errorf("lookup calls = %d, want 2", *calls)
+	}
+	if len(rf.Children) != 1 {
+		t.Fatalf("len(Children) = %d, want 1", len(rf.Children))
+	}
+	if rf.Children[0].Index.Name != "child" {
+		t.Errorf("Children[0].Index.Name = %q, want child", rf.Children[0].Index.Name)
+	}
+	if got := rf.Children[0].Parents; len(got) != 1 || got[0] != "root" {
+		t.Errorf("Children[0].Parents = %v, want [root]", got)
+	}
+	if len(molds) != 2 {
+		t.Fatalf("len(molds) = %d, want 2 (parent first, child second)", len(molds))
+	}
+	if molds[0].Entry.Name != "alpha" {
+		t.Errorf("molds[0] = %q, want alpha (parent first)", molds[0].Entry.Name)
+	}
+	if molds[1].Entry.Name != "gamma" {
+		t.Errorf("molds[1] = %q, want gamma (child second)", molds[1].Entry.Name)
+	}
+	if molds[1].Foundry.Index.Name != "child" {
+		t.Errorf("molds[1].Foundry = %q, want child", molds[1].Foundry.Index.Name)
+	}
+}
