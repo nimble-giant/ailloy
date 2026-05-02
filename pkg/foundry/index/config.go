@@ -111,6 +111,68 @@ func SaveConfigTo(cfg *Config, path string) error {
 	return nil
 }
 
+// OfficialFoundryEntry returns the canonical entry for the official
+// nimble-giant foundry. It is treated as a virtual default — always present
+// in list/search/update operations even when not persisted to config.
+func OfficialFoundryEntry() FoundryEntry {
+	return FoundryEntry{
+		Name: "foundry",
+		URL:  OfficialFoundryURL,
+		Type: DetectType(OfficialFoundryURL),
+	}
+}
+
+// EffectiveFoundries returns the configured foundries with the official
+// foundry prepended if it isn't already registered. The returned slice is
+// safe to iterate but should not be saved back to disk — only entries
+// originating from the user's config should be persisted.
+func (c *Config) EffectiveFoundries() []FoundryEntry {
+	for _, entry := range c.Foundries {
+		if IsOfficialFoundry(entry.URL) {
+			return c.Foundries
+		}
+	}
+	out := make([]FoundryEntry, 0, len(c.Foundries)+1)
+	out = append(out, OfficialFoundryEntry())
+	out = append(out, c.Foundries...)
+	return out
+}
+
+// FoundryForSource returns the foundry entry whose cached index lists a
+// mold matching the given source, or nil if none does. Iterates effective
+// foundries (verified default + user-registered); first match wins.
+func (c *Config) FoundryForSource(source string) *FoundryEntry {
+	cacheDir, err := IndexCacheDir()
+	if err != nil {
+		return nil
+	}
+	effective := c.EffectiveFoundries()
+	for i := range effective {
+		entry := effective[i]
+		idx, err := LoadCachedIndex(cacheDir, &entry)
+		if err != nil {
+			continue
+		}
+		for _, m := range idx.Molds {
+			if strings.EqualFold(m.Source, source) {
+				return &effective[i]
+			}
+		}
+	}
+	return nil
+}
+
+// HasOfficialFoundry reports whether the user's config contains an explicit
+// entry for the official foundry (i.e. not just the virtual default).
+func (c *Config) HasOfficialFoundry() bool {
+	for _, entry := range c.Foundries {
+		if IsOfficialFoundry(entry.URL) {
+			return true
+		}
+	}
+	return false
+}
+
 // AddFoundry adds a foundry entry, deduplicating by URL.
 // Returns true if the entry was added (not a duplicate).
 func (c *Config) AddFoundry(entry FoundryEntry) bool {
