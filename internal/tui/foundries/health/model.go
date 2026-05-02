@@ -64,7 +64,7 @@ func (m Model) View() string {
 		case data.SevWarn:
 			sev = "⚠"
 		}
-		b.WriteString(fmt.Sprintf("%s [%s] %s — %s\n", sev, f.Source, f.Title, f.Detail))
+		fmt.Fprintf(&b, "%s [%s] %s — %s\n", sev, f.Source, f.Title, f.Detail)
 	}
 	b.WriteString("\nr refresh\n")
 	return b.String()
