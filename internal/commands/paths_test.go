@@ -42,6 +42,9 @@ func TestLockAndManifestPathsByGlobalFlag(t *testing.T) {
 	if got := manifestPathFor(false); got != filepath.Join(".ailloy", "installed.yaml") {
 		t.Errorf("manifestPathFor(false) = %q", got)
 	}
+	if _, err := os.UserHomeDir(); err != nil {
+		t.Skipf("no home dir, skipping global-flag assertions: %v", err)
+	}
 	if got := lockPathFor(true); !filepath.IsAbs(got) {
 		t.Errorf("lockPathFor(true) = %q, want absolute path", got)
 	}
