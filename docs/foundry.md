@@ -180,6 +180,29 @@ ailloy remove foundry nimble-foundry
 
 Registered foundries are stored in `~/.ailloy/config.yaml`. Cached indexes are stored under `~/.ailloy/cache/indexes/`.
 
+The official nimble-giant foundry (`https://github.com/nimble-giant/foundry`) is always present as a built-in default — it appears in `ailloy foundry list` and is searched by `ailloy foundry search` even before you register any other foundries. It's marked `✓ verified` and cannot be removed; running `ailloy foundry add` against its URL upgrades it to a regular registered entry whose update timestamp and status are persisted.
+
+### Interactive TUI
+
+`ailloy foundries` opens a four-tab terminal UI for discovering, installing,
+managing, and auditing foundries and casted molds:
+
+- **Discover** — browse the catalog across every registered foundry, multi-select with `space`, install all selected with `enter`.
+- **Installed** — list every casted mold (project `./ailloy.lock` and global `~/ailloy.lock`); update with `u` or uninstall with `x`.
+- **Foundries** — add/remove/refresh registered foundries; the verified default is shown as a built-in entry that can't be removed.
+- **Health** — drift checks (orphaned molds, legacy install manifests) plus `assay` findings on rendered blank dirs.
+
+Switch tabs with `tab`/`shift-tab`, quit with `q`. The TUI requires a TTY; in
+scripts use `ailloy foundry list/search/...` and `ailloy uninstall` instead.
+
+### Uninstalling a casted mold
+
+`ailloy uninstall <source>` removes a previously casted mold. Files modified
+since they were cast are retained (the install manifest tracks SHA-256
+hashes); pass `--force` to override. Use `--dry-run` to preview, `-g/--global`
+to operate on `~/ailloy.lock`. Files claimed by another casted mold are
+retained automatically.
+
 ## Foundry Index Format
 
 A foundry index is a `foundry.yaml` file that catalogs available molds. It can live at the root of a git repository or be served as a static YAML file.
