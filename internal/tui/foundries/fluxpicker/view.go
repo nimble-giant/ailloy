@@ -7,6 +7,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const footerHint = "tab: commit filter   enter: save key   d: clear   R: reset all   s: save & close   esc: cancel"
+
 var (
 	pickerBox = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -47,6 +49,8 @@ func (m Model) View() string {
 		}
 		display := m.displayValueFor(fv.Name)
 		line := fmt.Sprintf("%s %-22s %-8s %s", badge, fv.Name, fv.Type, display)
+		// cursor starts at 0, so the top row is highlighted by default until
+		// the user moves it.
 		if i == m.cursor && m.focus == focusFilter {
 			line = highlight.Render("▸ " + line)
 		} else {
@@ -70,11 +74,12 @@ func (m Model) View() string {
 	}
 
 	if m.err != nil {
+		// Developer-facing tool — raw error text is intentional.
 		b.WriteString("\n" + errStyle.Render("error: "+m.err.Error()) + "\n")
 	}
 
 	b.WriteString("\n")
-	b.WriteString(footer.Render("tab: commit filter   enter: save key   d: clear   R: reset all   s: save & close   esc: cancel"))
+	b.WriteString(footer.Render(footerHint))
 
 	return pickerBox.Render(b.String())
 }
