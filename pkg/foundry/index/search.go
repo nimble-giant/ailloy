@@ -78,7 +78,7 @@ func searchIndexes(cfg *Config, query string) ([]SearchResult, error) {
 	var results []SearchResult
 	q := strings.ToLower(query)
 
-	for _, entry := range cfg.Foundries {
+	for _, entry := range cfg.EffectiveFoundries() {
 		idx, err := LoadCachedIndex(cacheDir, &entry)
 		if err != nil {
 			continue // Skip indexes that aren't cached yet.
