@@ -1,7 +1,10 @@
 package commands
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -51,15 +54,17 @@ func init() {
 }
 
 func runCast(_ *cobra.Command, args []string) error {
-	reader, err := resolveMoldReader(args)
+	reader, source, err := resolveMoldReader(args)
 	if err != nil {
 		return err
 	}
-	return castProject(reader)
+	return castProject(reader, source)
 }
 
 // resolveMoldReader creates a MoldReader from args or the embedded mold.
-func resolveMoldReader(args []string) (*blanks.MoldReader, error) {
+// The returned source is the foundry cache key (e.g. "github.com/owner/repo")
+// for remote references, or "" for local dirs and embedded molds.
+func resolveMoldReader(args []string) (*blanks.MoldReader, string, error) {
 	if len(args) >= 1 {
 		if foundry.IsRemoteReference(args[0]) {
 			var resolveOpts []foundry.ResolveOption
@@ -68,20 +73,25 @@ func resolveMoldReader(args []string) (*blanks.MoldReader, error) {
 			}
 			fsys, root, err := foundry.ResolveWithRoot(args[0], resolveOpts...)
 			if err != nil {
-				return nil, fmt.Errorf("resolving remote mold: %w", err)
+				return nil, "", fmt.Errorf("resolving remote mold: %w", err)
 			}
-			return blanks.NewMoldReaderFromFS(fsys, root), nil
+			source := ""
+			if ref, perr := foundry.ParseReference(args[0]); perr == nil {
+				source = ref.CacheKey()
+			}
+			return blanks.NewMoldReaderFromFS(fsys, root), source, nil
 		}
-		return blanks.NewMoldReaderFromPath(args[0])
+		reader, err := blanks.NewMoldReaderFromPath(args[0])
+		return reader, "", err
 	}
 	if smelt.HasEmbeddedMold() {
 		fsys, err := smelt.OpenEmbeddedMold()
 		if err != nil {
-			return nil, fmt.Errorf("opening embedded mold: %w", err)
+			return nil, "", fmt.Errorf("opening embedded mold: %w", err)
 		}
-		return blanks.NewMoldReader(fsys), nil
+		return blanks.NewMoldReader(fsys), "", nil
 	}
-	return nil, fmt.Errorf("mold directory is required: ailloy cast <mold-dir>")
+	return nil, "", fmt.Errorf("mold directory is required: ailloy cast <mold-dir>")
 }
 
 // loadCastFlux loads layered flux values using Helm-style precedence:
@@ -137,7 +147,7 @@ func resolveDestPrefix() (string, error) {
 	return homeDir, nil
 }
 
-func castProject(reader *blanks.MoldReader) error {
+func castProject(reader *blanks.MoldReader, source string) error {
 	// Welcome message
 	fmt.Println(styles.WorkingBanner("Casting Ailloy project structure..."))
 	fmt.Println()
@@ -234,6 +244,18 @@ func castProject(reader *blanks.MoldReader) error {
 	if destPrefix == "" {
 		if err := writeInstallState(dirs); err != nil {
 			log.Printf("warning: failed to write install state: %v", err)
+		}
+
+		// Backfill the lock entry's Files manifest so uninstall knows what to remove.
+		if source != "" {
+			installed := make([]foundry.InstalledFile, 0, len(filesToCast))
+			for _, f := range filesToCast {
+				sum, _ := hashFile(f.DestPath)
+				installed = append(installed, foundry.InstalledFile{RelPath: f.DestPath, SHA256: sum})
+			}
+			if err := foundry.RecordInstalledFiles(foundry.LockFileName, source, installed); err != nil {
+				log.Printf("warning: recording installed files: %v", err)
+			}
 		}
 	}
 
@@ -355,6 +377,20 @@ func cleanupEmptyDirs(dirs []string, destPrefix string) []string {
 		}
 	}
 	return remaining
+}
+
+// hashFile returns the hex-encoded sha256 of a file's contents.
+func hashFile(path string) (string, error) {
+	f, err := os.Open(path) // #nosec G304 -- path under user control by design
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // installState represents the .ailloy/state.yaml file that records where blanks were installed.
