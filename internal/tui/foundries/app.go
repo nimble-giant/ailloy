@@ -117,10 +117,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.String() {
 		case "ctrl+c", "q":
 			return a, tea.Quit
-		case "tab", "right":
+		case "tab", "right", "l":
 			a.active = (a.active + 1) % tabCount
 			return a, nil
-		case "shift+tab", "left":
+		case "shift+tab", "left", "h":
 			a.active = (a.active + tabCount - 1) % tabCount
 			return a, nil
 		}

@@ -5,8 +5,21 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
+	"github.com/nimble-giant/ailloy/pkg/styles"
+)
+
+var (
+	sevErrorStyle = lipgloss.NewStyle().Foreground(styles.Error).Bold(true)
+	sevWarnStyle  = lipgloss.NewStyle().Foreground(styles.Warning).Bold(true)
+	sevInfoStyle  = lipgloss.NewStyle().Foreground(styles.Info)
+	sourceStyle   = lipgloss.NewStyle().Foreground(styles.Primary1)
+	titleStyle    = lipgloss.NewStyle().Foreground(styles.Accent1).Bold(true)
+	detailStyle   = lipgloss.NewStyle().Foreground(styles.LightGray)
+	metaStyle     = lipgloss.NewStyle().Foreground(styles.Gray)
+	clearStyle    = lipgloss.NewStyle().Foreground(styles.Success).Bold(true)
 )
 
 // Model is the Health tab. Drift checks come from data.DriftFindings;
@@ -50,22 +63,28 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 func (m Model) View() string {
 	if m.loading {
-		return "Running health checks…"
+		return metaStyle.Render("Running health checks…")
 	}
 	if len(m.findings) == 0 {
-		return "All clear ✓\n\nr refresh"
+		return clearStyle.Render("All clear ✓") + "\n\n" + metaStyle.Render("r refresh")
 	}
 	var b strings.Builder
 	for _, f := range m.findings {
-		sev := "ℹ"
+		var sev string
 		switch f.Severity {
 		case data.SevError:
-			sev = "✗"
+			sev = sevErrorStyle.Render("✗")
 		case data.SevWarn:
-			sev = "⚠"
+			sev = sevWarnStyle.Render("⚠")
+		default:
+			sev = sevInfoStyle.Render("ℹ")
 		}
-		fmt.Fprintf(&b, "%s [%s] %s — %s\n", sev, f.Source, f.Title, f.Detail)
+		fmt.Fprintf(&b, "%s %s %s %s\n",
+			sev,
+			sourceStyle.Render("["+f.Source+"]"),
+			titleStyle.Render(f.Title),
+			detailStyle.Render("— "+f.Detail))
 	}
-	b.WriteString("\nr refresh\n")
+	b.WriteString("\n" + metaStyle.Render("r refresh") + "\n")
 	return b.String()
 }
