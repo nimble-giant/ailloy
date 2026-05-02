@@ -61,7 +61,7 @@ func TestValidatePluginFlags(t *testing.T) {
 	})
 	t.Run("with --as-plugin OK", func(t *testing.T) {
 		resetCastFlags()
-		castAsPluginFlag = true
+		castClaudePluginFlag = true
 		castPluginName = "x"
 		castPluginVer = "1.0.0"
 		if err := validatePluginFlags(); err != nil {
@@ -97,17 +97,17 @@ func TestFilterForPlugin(t *testing.T) {
 	}
 }
 
-func TestCastAsPlugin_FullPipeline(t *testing.T) {
+func TestCastClaudePlugin_FullPipeline(t *testing.T) {
 	resetCastFlags()
-	castAsPluginFlag = true
+	castClaudePluginFlag = true
 	defer resetCastFlags()
 
 	tmp := t.TempDir()
 	chdir(t, tmp)
 
 	reader := fixtureMoldReader()
-	if err := castAsPlugin(reader); err != nil {
-		t.Fatalf("castAsPlugin: %v", err)
+	if err := castClaudePlugin(reader); err != nil {
+		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
 	// Slug derived from mold name "fixture-mold".
@@ -141,9 +141,9 @@ func TestCastAsPlugin_FullPipeline(t *testing.T) {
 	}
 }
 
-func TestCastAsPlugin_FluxOverride(t *testing.T) {
+func TestCastClaudePlugin_FluxOverride(t *testing.T) {
 	resetCastFlags()
-	castAsPluginFlag = true
+	castClaudePluginFlag = true
 	castSetFlags = []string{"greeting=Howdy"}
 	defer resetCastFlags()
 
@@ -151,8 +151,8 @@ func TestCastAsPlugin_FluxOverride(t *testing.T) {
 	chdir(t, tmp)
 
 	reader := fixtureMoldReader()
-	if err := castAsPlugin(reader); err != nil {
-		t.Fatalf("castAsPlugin: %v", err)
+	if err := castClaudePlugin(reader); err != nil {
+		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
 	pluginDir := filepath.Join(tmp, ".claude", "plugins", "fixture-mold")
@@ -162,9 +162,9 @@ func TestCastAsPlugin_FluxOverride(t *testing.T) {
 	}
 }
 
-func TestCastAsPlugin_WithWorkflowsWarnsAndSkips(t *testing.T) {
+func TestCastClaudePlugin_WithWorkflowsWarnsAndSkips(t *testing.T) {
 	resetCastFlags()
-	castAsPluginFlag = true
+	castClaudePluginFlag = true
 	withWorkflows = true
 	defer resetCastFlags()
 
@@ -172,8 +172,8 @@ func TestCastAsPlugin_WithWorkflowsWarnsAndSkips(t *testing.T) {
 	chdir(t, tmp)
 
 	reader := fixtureMoldReader()
-	if err := castAsPlugin(reader); err != nil {
-		t.Fatalf("castAsPlugin: %v", err)
+	if err := castClaudePlugin(reader); err != nil {
+		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
 	pluginDir := filepath.Join(tmp, ".claude", "plugins", "fixture-mold")
@@ -185,9 +185,9 @@ func TestCastAsPlugin_WithWorkflowsWarnsAndSkips(t *testing.T) {
 	}
 }
 
-func TestCastAsPlugin_RecastReplacesContents(t *testing.T) {
+func TestCastClaudePlugin_RecastReplacesContents(t *testing.T) {
 	resetCastFlags()
-	castAsPluginFlag = true
+	castClaudePluginFlag = true
 	defer resetCastFlags()
 
 	tmp := t.TempDir()
@@ -210,8 +210,8 @@ func TestCastAsPlugin_RecastReplacesContents(t *testing.T) {
 	}
 
 	reader := fixtureMoldReader()
-	if err := castAsPlugin(reader); err != nil {
-		t.Fatalf("castAsPlugin: %v", err)
+	if err := castClaudePlugin(reader); err != nil {
+		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
 	if _, err := os.Stat(filepath.Join(pluginDir, "stale.md")); !os.IsNotExist(err) {
@@ -221,9 +221,9 @@ func TestCastAsPlugin_RecastReplacesContents(t *testing.T) {
 	mustFile(t, filepath.Join(pluginDir, "commands", "hello.md"))
 }
 
-func TestCastAsPlugin_GlobalRoutesToHome(t *testing.T) {
+func TestCastClaudePlugin_GlobalRoutesToHome(t *testing.T) {
 	resetCastFlags()
-	castAsPluginFlag = true
+	castClaudePluginFlag = true
 	castGlobal = true
 	defer resetCastFlags()
 
@@ -231,17 +231,17 @@ func TestCastAsPlugin_GlobalRoutesToHome(t *testing.T) {
 	t.Setenv("HOME", tmp)
 
 	reader := fixtureMoldReader()
-	if err := castAsPlugin(reader); err != nil {
-		t.Fatalf("castAsPlugin: %v", err)
+	if err := castClaudePlugin(reader); err != nil {
+		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
 	pluginDir := filepath.Join(tmp, ".claude", "plugins", "fixture-mold")
 	mustFile(t, filepath.Join(pluginDir, ".claude-plugin", "plugin.json"))
 }
 
-func TestCastAsPlugin_PluginNameOverride(t *testing.T) {
+func TestCastClaudePlugin_PluginNameOverride(t *testing.T) {
 	resetCastFlags()
-	castAsPluginFlag = true
+	castClaudePluginFlag = true
 	castPluginName = "Custom Plugin Name"
 	castPluginVer = "9.9.9"
 	defer resetCastFlags()
@@ -250,8 +250,8 @@ func TestCastAsPlugin_PluginNameOverride(t *testing.T) {
 	chdir(t, tmp)
 
 	reader := fixtureMoldReader()
-	if err := castAsPlugin(reader); err != nil {
-		t.Fatalf("castAsPlugin: %v", err)
+	if err := castClaudePlugin(reader); err != nil {
+		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
 	// Override slugified to "custom-plugin-name".
@@ -278,7 +278,7 @@ func resetCastFlags() {
 	castGlobal = false
 	castSetFlags = nil
 	castValFiles = nil
-	castAsPluginFlag = false
+	castClaudePluginFlag = false
 	castPluginName = ""
 	castPluginVer = ""
 }

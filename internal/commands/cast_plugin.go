@@ -15,10 +15,10 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/styles"
 )
 
-// castAsPlugin renders the mold via the existing flux pipeline and packages the
-// result as a Claude Code plugin under .claude/plugins/<slug>/ (or
+// castClaudePlugin renders the mold via the existing flux pipeline and packages
+// the result as a Claude Code plugin under .claude/plugins/<slug>/ (or
 // ~/.claude/plugins/<slug>/ when --global is set).
-func castAsPlugin(reader *blanks.MoldReader) error {
+func castClaudePlugin(reader *blanks.MoldReader) error {
 	fmt.Println(styles.WorkingBanner("Casting Ailloy mold as Claude Code plugin..."))
 	fmt.Println()
 
