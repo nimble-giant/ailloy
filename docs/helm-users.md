@@ -16,7 +16,8 @@ This guide maps what you already know to Ailloy terminology, shows every command
 | `--set` / `-f` | `--set` / `-f` | Same flags, same layering semantics |
 | Repository | Foundry | Where packages are discovered and resolved from |
 | Subchart / Dependency | Ingot | Reusable template partials included via `{{ingot "name"}}` |
-| `Chart.lock` | `ailloy.lock` | Pins dependencies to exact versions and commits |
+| `Chart.lock` | `ailloy.lock` (opt-in, via `ailloy quench`) | Pins dependencies to exact versions and commits |
+| — | `.ailloy/installed.yaml` | Always-on manifest of cast molds — provenance for `recast` / `quench` |
 | — | Output mapping | Maps source directories to destination paths (no Helm equivalent) |
 | — | Anneal | Interactive configuration wizard (no Helm equivalent) |
 
@@ -237,10 +238,21 @@ helm package ./my-chart             ailloy smelt ./my-mold     ailloy package ./
 
 ### Dependencies and lock files
 
-Both tools pin dependency versions in a lock file. Ailloy's `ailloy.lock` captures the exact commit SHA alongside the version:
+Both tools pin dependency versions in a lock file, but Ailloy's `ailloy.lock` is **opt-in** rather than auto-generated. Cast always writes a provenance manifest at `.ailloy/installed.yaml` (commit it to git like `package.json`), but the lock file is created only when you run `ailloy quench`. Once it exists, `cast`, `ingot add`, and `recast` keep it in sync automatically. `ailloy quench --verify` is the CI-friendly drift check.
 
 ```yaml
-# ailloy.lock
+# .ailloy/installed.yaml — always written by cast/ingot add
+apiVersion: v1
+molds:
+  - name: nimble-mold
+    source: github.com/nimble-giant/nimble-mold
+    version: v0.1.10
+    commit: 2347a626798553252668a15dc98dd020ab9a9c0c
+    castAt: 2026-02-21T19:30:00Z
+```
+
+```yaml
+# ailloy.lock — created only by `ailloy quench`
 apiVersion: v1
 molds:
   - name: nimble-mold
