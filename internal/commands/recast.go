@@ -12,25 +12,28 @@ import (
 var recastCmd = &cobra.Command{
 	Use:     "recast [name]",
 	Aliases: []string{"upgrade"},
-	Short:   "Re-resolve dependencies to newer versions",
-	Long: `Re-resolve dependencies to newer versions (alias: upgrade).
+	Short:   "Re-resolve installed molds to newer versions",
+	Long: `Re-resolve installed molds to newer versions (alias: upgrade).
 
-Fetches the latest available versions for all locked dependencies (or a single
-named dependency) from their SCM sources and updates ailloy.lock.
+Reads .ailloy/installed.yaml and refreshes each mold to its latest matching
+version. If ailloy.lock exists, also updates lock entries in lockstep.
 
 Use --dry-run to preview changes without applying them.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runRecast,
 }
 
-var recastDryRun bool
+var (
+	recastDryRun bool
+	recastGlobal bool
+)
 
 func init() {
 	rootCmd.AddCommand(recastCmd)
 	recastCmd.Flags().BoolVar(&recastDryRun, "dry-run", false, "preview changes without applying")
+	recastCmd.Flags().BoolVarP(&recastGlobal, "global", "g", false, "operate on the global manifest/lock under ~/")
 }
 
-// recastChange records a version change for a single dependency.
 type recastChange struct {
 	Name       string
 	Source     string
@@ -41,24 +44,27 @@ type recastChange struct {
 }
 
 func runRecast(_ *cobra.Command, args []string) error {
-	lock, err := foundry.ReadLockFile(foundry.LockFileName)
+	manifestPath := manifestPathFor(recastGlobal)
+	lockPath := lockPathFor(recastGlobal)
+
+	manifest, err := foundry.ReadInstalledManifest(manifestPath)
 	if err != nil {
-		return fmt.Errorf("reading lock file: %w", err)
+		return fmt.Errorf("reading installed manifest: %w", err)
 	}
-	if lock == nil || len(lock.Molds) == 0 {
-		return fmt.Errorf("no lock file found — run %s first", styles.CodeStyle.Render("ailloy cast"))
+	if manifest == nil || len(manifest.Molds) == 0 {
+		return fmt.Errorf("no installed manifest at %s — run %s first",
+			styles.CodeStyle.Render(manifestPath),
+			styles.CodeStyle.Render("ailloy cast"))
 	}
 
-	// Filter to a single dependency if name provided.
-	var entries []foundry.LockEntry
+	// Optional name filter.
+	entries := manifest.Molds
 	if len(args) == 1 {
-		entry := lock.FindEntryByName(args[0])
-		if entry == nil {
-			return fmt.Errorf("dependency %q not found in lock file", args[0])
+		match := manifest.FindByName(args[0])
+		if match == nil {
+			return fmt.Errorf("mold %q not found in installed manifest", args[0])
 		}
-		entries = []foundry.LockEntry{*entry}
-	} else {
-		entries = lock.Molds
+		entries = []foundry.InstalledEntry{*match}
 	}
 
 	if recastDryRun {
@@ -71,24 +77,24 @@ func runRecast(_ *cobra.Command, args []string) error {
 	git := foundry.DefaultGitRunner()
 	var changes []recastChange
 
+	// Read existing lock (if any) so we can update it in lockstep.
+	existingLock, _ := foundry.ReadLockFile(lockPath)
+
 	for _, entry := range entries {
-		ref, err := foundry.ReferenceFromEntry(&entry)
+		ref, err := referenceFromInstalledEntry(&entry)
 		if err != nil {
-			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("⚠️"), entry.Name, err)
+			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, err)
 			continue
 		}
-
 		resolved, err := foundry.ResolveVersion(ref, git)
 		if err != nil {
-			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("⚠️"), entry.Name, err)
+			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, err)
 			continue
 		}
-
 		if resolved.Tag == entry.Version && resolved.Commit == entry.Commit {
 			fmt.Println(styles.InfoStyle.Render("  ") + entry.Name + " is already up to date (" + styles.CodeStyle.Render(entry.Version) + ")")
 			continue
 		}
-
 		changes = append(changes, recastChange{
 			Name:       entry.Name,
 			Source:     entry.Source,
@@ -99,21 +105,30 @@ func runRecast(_ *cobra.Command, args []string) error {
 		})
 
 		if !recastDryRun {
-			// Invalidate cached version so next cast fetches fresh content.
-			fetcher, fErr := foundry.NewFetcher(git)
-			if fErr == nil {
-				// Fetch the new version into cache.
+			fetcher, ferr := foundry.NewFetcher(git)
+			if ferr == nil {
 				_, _, _ = fetcher.Fetch(ref, resolved)
 			}
 
-			lock.UpsertEntry(foundry.LockEntry{
-				Name:      entry.Name,
-				Source:    entry.Source,
-				Version:   resolved.Tag,
-				Commit:    resolved.Commit,
-				Subpath:   entry.Subpath,
-				Timestamp: time.Now().UTC(),
+			manifest.UpsertEntry(foundry.InstalledEntry{
+				Name:    entry.Name,
+				Source:  entry.Source,
+				Subpath: entry.Subpath,
+				Version: resolved.Tag,
+				Commit:  resolved.Commit,
+				CastAt:  time.Now().UTC(),
 			})
+
+			if existingLock != nil {
+				existingLock.UpsertEntry(foundry.LockEntry{
+					Name:      entry.Name,
+					Source:    entry.Source,
+					Version:   resolved.Tag,
+					Commit:    resolved.Commit,
+					Subpath:   entry.Subpath,
+					Timestamp: time.Now().UTC(),
+				})
+			}
 		}
 	}
 
@@ -123,14 +138,17 @@ func runRecast(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Write updated lock file.
 	if !recastDryRun {
-		if err := foundry.WriteLockFile(foundry.LockFileName, lock); err != nil {
-			return fmt.Errorf("writing lock file: %w", err)
+		if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
+			return fmt.Errorf("writing installed manifest: %w", err)
+		}
+		if existingLock != nil {
+			if err := foundry.WriteLockFile(lockPath, existingLock); err != nil {
+				return fmt.Errorf("writing lock file: %w", err)
+			}
 		}
 	}
 
-	// Print change summary.
 	fmt.Println()
 	if recastDryRun {
 		fmt.Println(styles.InfoStyle.Render("Changes that would be applied:"))
@@ -153,6 +171,5 @@ func runRecast(_ *cobra.Command, args []string) error {
 	} else {
 		fmt.Println(styles.SuccessBanner("Recast complete!"))
 	}
-
 	return nil
 }
