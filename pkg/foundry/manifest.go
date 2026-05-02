@@ -13,14 +13,19 @@ import (
 const InstalledManifestPath = ".ailloy/installed.yaml"
 
 // InstalledEntry records a mold that was cast into the project.
-// Provenance only — does not hash rendered files (those are user-customizable).
+// Files / FileHashes are populated by RecordInstalledFiles and consumed by
+// UninstallMold so the uninstall flow knows what to remove and can detect
+// post-cast modifications. They are intentionally on the manifest (not the
+// lock) so uninstall keeps working when ailloy.lock has not been opted into.
 type InstalledEntry struct {
-	Name    string    `yaml:"name"`
-	Source  string    `yaml:"source"`
-	Subpath string    `yaml:"subpath,omitempty"`
-	Version string    `yaml:"version"`
-	Commit  string    `yaml:"commit"`
-	CastAt  time.Time `yaml:"castAt"`
+	Name       string            `yaml:"name"`
+	Source     string            `yaml:"source"`
+	Subpath    string            `yaml:"subpath,omitempty"`
+	Version    string            `yaml:"version"`
+	Commit     string            `yaml:"commit"`
+	CastAt     time.Time         `yaml:"castAt"`
+	Files      []string          `yaml:"files,omitempty"`
+	FileHashes map[string]string `yaml:"fileHashes,omitempty"`
 }
 
 // InstalledManifest is the on-disk manifest of cast molds.

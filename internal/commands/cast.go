@@ -286,15 +286,26 @@ func castProject(reader *blanks.MoldReader, source string) error {
 		if err := writeInstallState(dirs); err != nil {
 			log.Printf("warning: failed to write install state: %v", err)
 		}
+	}
 
-		// Backfill the lock entry's Files manifest so uninstall knows what to remove.
-		if source != "" {
+	// Backfill the manifest entry's Files list so uninstall knows what to remove.
+	// The manifest is always written (regardless of --global), so this works
+	// for both project and global installs.
+	if source != "" {
+		manifestPath := manifestPathFor(castGlobal)
+		if manifestPath != "" {
 			installed := make([]foundry.InstalledFile, 0, len(filesToCast))
 			for _, f := range filesToCast {
 				sum, _ := hashFile(f.DestPath)
-				installed = append(installed, foundry.InstalledFile{RelPath: f.DestPath, SHA256: sum})
+				rel := f.DestPath
+				if destPrefix != "" {
+					if r, rerr := filepath.Rel(destPrefix, f.DestPath); rerr == nil {
+						rel = r
+					}
+				}
+				installed = append(installed, foundry.InstalledFile{RelPath: rel, SHA256: sum})
 			}
-			if err := foundry.RecordInstalledFiles(foundry.LockFileName, source, installed); err != nil {
+			if err := foundry.RecordInstalledFiles(manifestPath, source, installed); err != nil {
 				log.Printf("warning: recording installed files: %v", err)
 			}
 		}

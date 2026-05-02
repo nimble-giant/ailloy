@@ -58,9 +58,13 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 	log.SetOutput(io.Discard)
 	defer log.SetOutput(prevLog)
 
-	reader, source, err := openMoldReaderForCore(ref, opts.Global)
+	reader, remoteResult, err := openMoldReaderForCore(ref, opts.Global)
 	if err != nil {
 		return res, err
+	}
+	source := ""
+	if remoteResult != nil {
+		source = remoteResult.Ref.CacheKey()
 	}
 	res.Source = source
 
@@ -150,14 +154,30 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 		return res, fmt.Errorf("copying files: %w", err)
 	}
 
-	if destPrefix == "" && source != "" {
-		installed := make([]foundry.InstalledFile, 0, len(filesToCast))
-		for _, f := range filesToCast {
-			sum, _ := hashFile(f.DestPath)
-			installed = append(installed, foundry.InstalledFile{RelPath: f.DestPath, SHA256: sum})
+	if remoteResult != nil {
+		manifestPath := manifestPathFor(opts.Global)
+		if manifestPath != "" {
+			// Upsert the manifest entry with provenance, then backfill Files
+			// + FileHashes. Mirrors what cast.go does via recordInstalled +
+			// RecordInstalledFiles.
+			if err := recordInstalled(remoteResult, opts.Global); err != nil {
+				log.Printf("warning: failed to update installed manifest: %v", err)
+			} else {
+				installed := make([]foundry.InstalledFile, 0, len(filesToCast))
+				for _, f := range filesToCast {
+					sum, _ := hashFile(f.DestPath)
+					rel := f.DestPath
+					if destPrefix != "" {
+						if r, rerr := filepath.Rel(destPrefix, f.DestPath); rerr == nil {
+							rel = r
+						}
+					}
+					installed = append(installed, foundry.InstalledFile{RelPath: rel, SHA256: sum})
+				}
+				res.FilesCast = installed
+				_ = foundry.RecordInstalledFiles(manifestPath, source, installed)
+			}
 		}
-		res.FilesCast = installed
-		_ = foundry.RecordInstalledFiles(foundry.LockFileName, source, installed)
 	}
 
 	return res, nil
@@ -165,27 +185,26 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 
 // openMoldReaderForCore is the CastMold-flavored counterpart to
 // resolveMoldReader; it accepts a single ref string instead of args.
-func openMoldReaderForCore(ref string, global bool) (*blanks.MoldReader, string, error) {
+// The returned *foundry.ResolveResult is populated for remote refs (so the
+// caller can record provenance in the installed manifest) and nil for local
+// refs.
+func openMoldReaderForCore(ref string, global bool) (*blanks.MoldReader, *foundry.ResolveResult, error) {
 	if ref == "" {
-		return nil, "", fmt.Errorf("ref required")
+		return nil, nil, fmt.Errorf("ref required")
 	}
 	if foundry.IsRemoteReference(ref) {
 		var resolveOpts []foundry.ResolveOption
 		if global {
 			resolveOpts = append(resolveOpts, foundry.WithLockPath(globalLockPath()))
 		}
-		fsys, root, err := foundry.ResolveWithRoot(ref, resolveOpts...)
+		fsys, result, err := foundry.ResolveWithMetadata(ref, resolveOpts...)
 		if err != nil {
-			return nil, "", fmt.Errorf("resolving remote mold: %w", err)
+			return nil, nil, fmt.Errorf("resolving remote mold: %w", err)
 		}
-		source := ""
-		if parsed, perr := foundry.ParseReference(ref); perr == nil {
-			source = parsed.CacheKey()
-		}
-		return blanks.NewMoldReaderFromFS(fsys, root), source, nil
+		return blanks.NewMoldReaderFromFS(fsys, result.Root), result, nil
 	}
 	reader, err := blanks.NewMoldReaderFromPath(ref)
-	return reader, "", err
+	return reader, nil, err
 }
 
 // layerFluxForCore mirrors loadCastFlux but is parameterized so CastMold

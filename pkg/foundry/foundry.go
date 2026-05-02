@@ -12,25 +12,28 @@ import (
 
 // InstalledFile carries the metadata recorded for one cast file.
 type InstalledFile struct {
-	RelPath string // path relative to the lockfile dir, forward-slash separated
+	RelPath string // path relative to the manifest dir, forward-slash separated
 	SHA256  string // hex-encoded sha256 of file content at install time
 }
 
 // RecordInstalledFiles backfills the Files list and FileHashes map on the
-// lock entry whose Source matches. Hashes are sha256 hex of the file content
-// at install time, used by UninstallMold to detect user modifications.
-func RecordInstalledFiles(lockPath, source string, files []InstalledFile) error {
-	lock, err := ReadLockFile(lockPath)
+// installed-manifest entry whose Source matches. Hashes are sha256 hex of the
+// file content at install time, used by UninstallMold to detect user
+// modifications. Provenance lives on the manifest (always written by cast)
+// rather than the lock so uninstall stays available when the user has not
+// opted into ailloy.lock.
+func RecordInstalledFiles(manifestPath, source string, files []InstalledFile) error {
+	m, err := ReadInstalledManifest(manifestPath)
 	if err != nil {
-		return fmt.Errorf("reading lock file: %w", err)
+		return fmt.Errorf("reading installed manifest: %w", err)
 	}
-	if lock == nil {
-		return fmt.Errorf("lock file %s does not exist", lockPath)
+	if m == nil {
+		return fmt.Errorf("installed manifest %s does not exist", manifestPath)
 	}
 
-	entry := lock.FindEntry(source)
+	entry := m.FindBySource(source)
 	if entry == nil {
-		return fmt.Errorf("no lock entry for source %q", source)
+		return fmt.Errorf("no installed manifest entry for source %q", source)
 	}
 
 	seen := make(map[string]struct{}, len(files))
@@ -55,7 +58,7 @@ func RecordInstalledFiles(lockPath, source string, files []InstalledFile) error 
 		entry.FileHashes = nil
 	}
 
-	return WriteLockFile(lockPath, lock)
+	return WriteInstalledManifest(manifestPath, m)
 }
 
 // ResolveOption configures optional behaviour for Resolve.

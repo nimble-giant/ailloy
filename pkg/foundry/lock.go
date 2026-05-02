@@ -13,15 +13,16 @@ import (
 const LockFileName = "ailloy.lock"
 
 // LockEntry records the resolved version of a single mold dependency.
+// File-level provenance (which files were rendered and their hashes) lives
+// on InstalledEntry, not here — that keeps uninstall working when the lock
+// is not opted into.
 type LockEntry struct {
-	Name       string            `yaml:"name"`
-	Source     string            `yaml:"source"`
-	Version    string            `yaml:"version"`
-	Commit     string            `yaml:"commit"`
-	Subpath    string            `yaml:"subpath,omitempty"`
-	Timestamp  time.Time         `yaml:"timestamp"`
-	Files      []string          `yaml:"files,omitempty"`
-	FileHashes map[string]string `yaml:"fileHashes,omitempty"`
+	Name      string    `yaml:"name"`
+	Source    string    `yaml:"source"`
+	Version   string    `yaml:"version"`
+	Commit    string    `yaml:"commit"`
+	Subpath   string    `yaml:"subpath,omitempty"`
+	Timestamp time.Time `yaml:"timestamp"`
 }
 
 // LockFile is the on-disk lock file format.
