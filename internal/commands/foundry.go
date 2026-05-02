@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -73,6 +74,26 @@ var foundryUpdateCmd = &cobra.Command{
 	RunE:  runFoundryUpdate,
 }
 
+var (
+	foundryInstallGlobal        bool
+	foundryInstallWithWorkflows bool
+	foundryInstallDryRun        bool
+	foundryInstallForce         bool
+)
+
+var foundryInstallCmd = &cobra.Command{
+	Use:     "install <name|url>",
+	Aliases: []string{"cast-all"},
+	Short:   "Cast every mold listed by a foundry",
+	Long: `Cast every mold listed by the named foundry.
+
+The foundry is looked up by name or URL across the effective foundries
+(verified default + registered). Molds already present in the target
+lockfile are skipped unless --force is given.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runFoundryInstall,
+}
+
 func init() {
 	rootCmd.AddCommand(foundryCmd)
 	foundryCmd.AddCommand(foundrySearchCmd)
@@ -81,9 +102,15 @@ func init() {
 	foundryCmd.AddCommand(foundryListCmd)
 	foundryCmd.AddCommand(foundryRemoveCmd)
 	foundryCmd.AddCommand(foundryUpdateCmd)
+	foundryCmd.AddCommand(foundryInstallCmd)
 
 	foundrySearchCmd.Flags().BoolVar(&searchIndexOnly, "index-only", false, "only search registered foundry indexes")
 	foundrySearchCmd.Flags().BoolVar(&searchGitHubOnly, "github-only", false, "only search GitHub Topics")
+
+	foundryInstallCmd.Flags().BoolVarP(&foundryInstallGlobal, "global", "g", false, "install each mold under ~/ instead of the current project")
+	foundryInstallCmd.Flags().BoolVar(&foundryInstallWithWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks")
+	foundryInstallCmd.Flags().BoolVar(&foundryInstallDryRun, "dry-run", false, "list what would be installed without casting")
+	foundryInstallCmd.Flags().BoolVar(&foundryInstallForce, "force", false, "re-cast molds that are already installed")
 }
 
 func runFoundrySearch(_ *cobra.Command, args []string) error {
@@ -313,4 +340,65 @@ func nameFromFoundryURL(url string) string {
 		}
 	}
 	return "foundry"
+}
+
+func runFoundryInstall(_ *cobra.Command, args []string) error {
+	nameOrURL := args[0]
+
+	cfg, err := index.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	fmt.Println(styles.WorkingBanner("Casting every mold from " + nameOrURL + "..."))
+	fmt.Println()
+
+	reports, err := InstallFoundryCore(context.Background(), cfg, nameOrURL, InstallFoundryOptions{
+		Global:        foundryInstallGlobal,
+		WithWorkflows: foundryInstallWithWorkflows,
+		DryRun:        foundryInstallDryRun,
+		Force:         foundryInstallForce,
+	})
+	if err != nil {
+		return err
+	}
+
+	var (
+		installed int
+		skipped   int
+		failed    int
+	)
+	for _, r := range reports {
+		fmt.Printf("  %s", styles.AccentStyle.Render(r.Name))
+		switch {
+		case r.Err != nil:
+			failed++
+			fmt.Println(" " + styles.ErrorStyle.Render("error"))
+			fmt.Println(styles.SubtleStyle.Render("    " + r.Err.Error()))
+		case r.Skipped:
+			skipped++
+			extra := ""
+			if r.Version != "" {
+				extra = " " + styles.SubtleStyle.Render(r.Version)
+			}
+			fmt.Println(" " + styles.InfoStyle.Render("skipped (already installed)") + extra)
+		case foundryInstallDryRun:
+			fmt.Println(" " + styles.InfoStyle.Render("would install"))
+		default:
+			installed++
+			fmt.Println(" " + styles.SuccessStyle.Render("ok"))
+		}
+	}
+
+	fmt.Println()
+	summary := fmt.Sprintf("installed %d · skipped %d · failed %d", installed, skipped, failed)
+	if foundryInstallDryRun {
+		summary = fmt.Sprintf("would install %d · skipped %d · failed %d", len(reports)-skipped-failed, skipped, failed)
+	}
+	fmt.Println(styles.SuccessStyle.Render(summary))
+
+	if failed > 0 {
+		return fmt.Errorf("%d mold(s) failed to install", failed)
+	}
+	return nil
 }

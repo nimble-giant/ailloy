@@ -1,10 +1,14 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
 )
 
@@ -112,5 +116,112 @@ func UpdateFoundriesCore(cfg *index.Config) ([]UpdateFoundryReport, error) {
 		}
 		out = append(out, report)
 	}
+	return out, nil
+}
+
+// InstallFoundryOptions controls a bulk install across every mold in a foundry.
+type InstallFoundryOptions struct {
+	Global        bool // pass --global to each cast
+	WithWorkflows bool // include .github/ workflow blanks
+	DryRun        bool // report what would be installed; don't touch disk
+	Force         bool // re-cast even if already installed in the target lockfile
+}
+
+// InstallFoundryReport is the per-mold result of an InstallFoundryCore run.
+type InstallFoundryReport struct {
+	Name    string
+	Source  string
+	Skipped bool   // true when already installed and !Force
+	Err     error  // non-nil if cast failed for this mold
+	Version string // populated on success or skip (from CastResult / lockfile)
+}
+
+// ErrFoundryNotFound is returned when nameOrURL doesn't match any effective
+// foundry in cfg.
+var ErrFoundryNotFound = errors.New("foundry not found")
+
+// InstallFoundryCore casts every mold listed in the named foundry's cached
+// index. The foundry lookup is by name or URL against cfg.EffectiveFoundries(),
+// so the verified built-in default works without a prior `foundry add`.
+//
+// Molds already present in the target lockfile are skipped unless
+// opts.Force. The first git fetch may take a while; subsequent calls reuse
+// the cache.
+func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string, opts InstallFoundryOptions) ([]InstallFoundryReport, error) {
+	cacheDir, err := index.IndexCacheDir()
+	if err != nil {
+		return nil, err
+	}
+
+	var match *index.FoundryEntry
+	for _, e := range cfg.EffectiveFoundries() {
+		if strings.EqualFold(e.Name, nameOrURL) || strings.EqualFold(e.URL, nameOrURL) {
+			matchCopy := e
+			match = &matchCopy
+			break
+		}
+	}
+	if match == nil {
+		return nil, fmt.Errorf("%w: %q", ErrFoundryNotFound, nameOrURL)
+	}
+
+	idx, err := index.LoadCachedIndex(cacheDir, match)
+	if err != nil {
+		// Try to populate the cache once before giving up.
+		git := defaultGitRunner()
+		fetcher, ferr := index.NewFetcher(git)
+		if ferr != nil {
+			return nil, fmt.Errorf("loading cached index for %s: %w", match.Name, err)
+		}
+		if _, fetchErr := fetcher.FetchIndex(match); fetchErr != nil {
+			return nil, fmt.Errorf("fetching foundry index %s: %w", match.Name, fetchErr)
+		}
+		idx, err = index.LoadCachedIndex(cacheDir, match)
+		if err != nil {
+			return nil, fmt.Errorf("loading cached index for %s: %w", match.Name, err)
+		}
+	}
+
+	// Read target lockfile to spot already-installed sources.
+	lockPath := foundry.LockFileName
+	if opts.Global {
+		if home, herr := os.UserHomeDir(); herr == nil {
+			lockPath = filepath.Join(home, foundry.LockFileName)
+		}
+	}
+	installed := map[string]string{}
+	if lock, _ := foundry.ReadLockFile(lockPath); lock != nil {
+		for _, e := range lock.Molds {
+			installed[strings.ToLower(e.Source)] = e.Version
+		}
+	}
+
+	out := make([]InstallFoundryReport, 0, len(idx.Molds))
+	for _, m := range idx.Molds {
+		report := InstallFoundryReport{Name: m.Name, Source: m.Source}
+
+		if v, already := installed[strings.ToLower(m.Source)]; already && !opts.Force {
+			report.Skipped = true
+			report.Version = v
+			out = append(out, report)
+			continue
+		}
+		if opts.DryRun {
+			out = append(out, report)
+			continue
+		}
+
+		castRes, cerr := CastMold(ctx, m.Source, CastOptions{
+			Global:        opts.Global,
+			WithWorkflows: opts.WithWorkflows,
+		})
+		if cerr != nil {
+			report.Err = cerr
+		} else {
+			report.Version = castRes.MoldName // best-effort; real version sits in lockfile
+		}
+		out = append(out, report)
+	}
+
 	return out, nil
 }

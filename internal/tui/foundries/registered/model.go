@@ -42,10 +42,20 @@ type UpdateFoundryReport struct {
 	Err       error
 }
 
-// AddFn / RemoveFn / UpdateFn are injected operations.
+// InstallReport mirrors the parent's per-mold install result.
+type InstallReport struct {
+	Name    string
+	Source  string
+	Skipped bool
+	Err     error
+	Version string
+}
+
+// AddFn / RemoveFn / UpdateFn / InstallFn are injected operations.
 type AddFn func(cfg *index.Config, url string) (AddFoundryResult, error)
 type RemoveFn func(cfg *index.Config, nameOrURL string) (index.FoundryEntry, error)
 type UpdateFn func(cfg *index.Config) ([]UpdateFoundryReport, error)
+type InstallFn func(cfg *index.Config, nameOrURL string) ([]InstallReport, error)
 
 // ErrCannotRemoveDefault must be returned by RemoveFn when the user tries
 // to remove the virtual official foundry.
@@ -57,6 +67,7 @@ type Model struct {
 	add     AddFn
 	remove  RemoveFn
 	update  UpdateFn
+	install InstallFn
 	cursor  int
 	addMode bool
 	addInp  textinput.Model
@@ -78,11 +89,17 @@ type removeDoneMsg struct {
 	err  error
 }
 
-func New(cfg *index.Config, add AddFn, remove RemoveFn, update UpdateFn) Model {
+type installDoneMsg struct {
+	name    string
+	reports []InstallReport
+	err     error
+}
+
+func New(cfg *index.Config, add AddFn, remove RemoveFn, update UpdateFn, install InstallFn) Model {
 	ti := textinput.New()
 	ti.Placeholder = "https://github.com/owner/foundry"
 	ti.Prompt = "URL: "
-	return Model{cfg: cfg, add: add, remove: remove, update: update, addInp: ti}
+	return Model{cfg: cfg, add: add, remove: remove, update: update, install: install, addInp: ti}
 }
 
 func (m Model) Init() tea.Cmd { return nil }
@@ -165,9 +182,46 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 		case "r":
 			return m, m.updateCmd()
+		case "i":
+			eff := m.cfg.EffectiveFoundries()
+			if m.cursor < len(eff) {
+				m.flash = "installing every mold from " + eff[m.cursor].Name + "..."
+				return m, m.installCmd(eff[m.cursor].Name)
+			}
 		}
+	case installDoneMsg:
+		switch {
+		case msg.err != nil:
+			m.flash = "install error: " + msg.err.Error()
+		default:
+			ok, skipped, failed := 0, 0, 0
+			for _, r := range msg.reports {
+				switch {
+				case r.Err != nil:
+					failed++
+				case r.Skipped:
+					skipped++
+				default:
+					ok++
+				}
+			}
+			m.flash = fmt.Sprintf("installed %d · skipped %d · failed %d (from %s)", ok, skipped, failed, msg.name)
+		}
+		return m, nil
 	}
 	return m, nil
+}
+
+func (m Model) installCmd(name string) tea.Cmd {
+	install := m.install
+	cfg := m.cfg
+	return func() tea.Msg {
+		if install == nil {
+			return installDoneMsg{name: name, err: fmt.Errorf("no install function configured")}
+		}
+		reports, err := install(cfg, name)
+		return installDoneMsg{name: name, reports: reports, err: err}
+	}
 }
 
 func (m Model) updateCmd() tea.Cmd {
@@ -245,6 +299,6 @@ func (m Model) View() string {
 			urlStyle.Render(e.URL),
 			builtIn)
 	}
-	b.WriteString("\n" + metaStyle.Render("a add · d remove · r refresh · j/k move") + "\n")
+	b.WriteString("\n" + metaStyle.Render("a add · d remove · r refresh · i install all · j/k move") + "\n")
 	return b.String()
 }

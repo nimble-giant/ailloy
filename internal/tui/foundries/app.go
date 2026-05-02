@@ -97,12 +97,25 @@ func New(deps Deps) App {
 		_, err := deps.UpdateFoundries(cfg)
 		return err
 	}
+	regInstall := func(cfg *index.Config, nameOrURL string) ([]registered.InstallReport, error) {
+		if deps.InstallFoundry == nil {
+			return nil, errMissingDep
+		}
+		reports, err := deps.InstallFoundry(context.Background(), cfg, nameOrURL, InstallFoundryOptions{})
+		out := make([]registered.InstallReport, 0, len(reports))
+		for _, r := range reports {
+			out = append(out, registered.InstallReport{
+				Name: r.Name, Source: r.Source, Skipped: r.Skipped, Err: r.Err, Version: r.Version,
+			})
+		}
+		return out, err
+	}
 
 	return App{
 		cfg:        cfg,
 		discover:   discover.New(cfg, discoverCast, discoverUpdate),
 		installed:  installed.New(cfg, installedCast),
-		registered: registered.New(cfg, regAdd, regRemove, regUpdate),
+		registered: registered.New(cfg, regAdd, regRemove, regUpdate, regInstall),
 		health:     health.New(cfg),
 	}
 }
