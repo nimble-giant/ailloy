@@ -13,6 +13,19 @@ import (
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
+	"github.com/nimble-giant/ailloy/pkg/styles"
+)
+
+var (
+	headingStyle    = lipgloss.NewStyle().Foreground(styles.Primary1).Bold(true)
+	cursorStyle     = lipgloss.NewStyle().Foreground(styles.Accent1).Bold(true)
+	moldNameStyle   = lipgloss.NewStyle().Foreground(styles.Accent1).Bold(true)
+	verifiedStyle   = lipgloss.NewStyle().Foreground(styles.Success).Bold(true)
+	descStyle       = lipgloss.NewStyle().Foreground(styles.LightGray)
+	metaStyle       = lipgloss.NewStyle().Foreground(styles.Gray)
+	statusOKStyle   = lipgloss.NewStyle().Foreground(styles.Success)
+	statusErrStyle  = lipgloss.NewStyle().Foreground(styles.Error).Bold(true)
+	statusWaitStyle = lipgloss.NewStyle().Foreground(styles.Warning)
 )
 
 // CastOptions decouples this package from internal/commands. The parent
@@ -184,10 +197,10 @@ func (m *Model) applyFilter() {
 
 func (m Model) View() string {
 	if m.loading {
-		return "Loading catalog…"
+		return metaStyle.Render("Loading catalog…")
 	}
 	if m.loadErr != nil {
-		return "Error: " + m.loadErr.Error()
+		return statusErrStyle.Render("Error: " + m.loadErr.Error())
 	}
 
 	var b strings.Builder
@@ -196,9 +209,12 @@ func (m Model) View() string {
 	if m.filter.Value() == "" {
 		recent := data.Recent(m.catalog, 7*24*time.Hour, 10)
 		if len(recent) > 0 {
-			b.WriteString(lipgloss.NewStyle().Bold(true).Render("Recent (last 7 days)") + "\n")
+			b.WriteString(headingStyle.Render("Recent (last 7 days)") + "\n")
 			for _, e := range recent {
-				fmt.Fprintf(&b, "  · %s — %s\n", e.Name, e.Description)
+				fmt.Fprintf(&b, "  %s %s %s\n",
+					metaStyle.Render("·"),
+					moldNameStyle.Render(e.Name),
+					descStyle.Render("— "+e.Description))
 			}
 			b.WriteString("\n")
 		}
@@ -209,24 +225,37 @@ func (m Model) View() string {
 	for i, e := range visible {
 		mark := "[ ]"
 		if m.selected[e.Source] {
-			mark = "[x]"
+			mark = cursorStyle.Render("[x]")
 		}
 		caret := "  "
 		if i == m.cursor {
-			caret = "▶ "
+			caret = cursorStyle.Render("▶ ")
 		}
 		verified := ""
 		if e.Verified {
-			verified = " ✓"
+			verified = " " + verifiedStyle.Render("✓")
 		}
 		status := ""
 		if s, ok := m.castStat[e.Source]; ok {
-			status = "  (" + s + ")"
+			switch s {
+			case "ok":
+				status = "  " + statusOKStyle.Render("("+s+")")
+			case "casting":
+				status = "  " + statusWaitStyle.Render("("+s+")")
+			default:
+				status = "  " + statusErrStyle.Render("("+s+")")
+			}
 		}
-		fmt.Fprintf(&b, "%s%s %s%s — %s%s\n", caret, mark, e.Name, verified, e.Description, status)
+		fmt.Fprintf(&b, "%s%s %s%s %s%s\n",
+			caret, mark,
+			moldNameStyle.Render(e.Name),
+			verified,
+			descStyle.Render("— "+e.Description),
+			status)
 	}
 
-	fmt.Fprintf(&b, "\n%d selected · %d shown · %d total\n", len(m.selected), len(visible), len(m.catalog))
-	b.WriteString("space toggle · enter cast all · / search · c clear · r refresh · j/k move\n")
+	fmt.Fprintf(&b, "\n%s\n", metaStyle.Render(fmt.Sprintf("%d selected · %d shown · %d total",
+		len(m.selected), len(visible), len(m.catalog))))
+	b.WriteString(metaStyle.Render("space toggle · enter cast all · / search · c clear · r refresh · j/k move") + "\n")
 	return b.String()
 }

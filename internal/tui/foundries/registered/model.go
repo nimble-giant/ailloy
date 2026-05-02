@@ -7,7 +7,23 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
+	"github.com/nimble-giant/ailloy/pkg/styles"
+)
+
+var (
+	headingStyle   = lipgloss.NewStyle().Foreground(styles.Primary1).Bold(true)
+	cursorStyle    = lipgloss.NewStyle().Foreground(styles.Accent1).Bold(true)
+	foundryNameSty = lipgloss.NewStyle().Foreground(styles.Primary1).Bold(true)
+	verifiedStyle  = lipgloss.NewStyle().Foreground(styles.Success).Bold(true)
+	typeStyle      = lipgloss.NewStyle().Foreground(styles.Info)
+	urlStyle       = lipgloss.NewStyle().Foreground(styles.Gray)
+	builtInStyle   = lipgloss.NewStyle().Foreground(styles.LightGray).Italic(true)
+	flashOK        = lipgloss.NewStyle().Foreground(styles.Success)
+	flashErr       = lipgloss.NewStyle().Foreground(styles.Error).Bold(true)
+	flashInfo      = lipgloss.NewStyle().Foreground(styles.Info)
+	metaStyle      = lipgloss.NewStyle().Foreground(styles.Gray)
 )
 
 // AddFoundryResult mirrors the parent's type so this package doesn't import commands.
@@ -193,29 +209,42 @@ func (m Model) removeCmd(urlOrName string) tea.Cmd {
 func (m Model) View() string {
 	var b strings.Builder
 	if m.flash != "" {
-		b.WriteString(m.flash + "\n\n")
+		style := flashInfo
+		switch {
+		case strings.Contains(m.flash, "error") || strings.Contains(m.flash, "cannot"):
+			style = flashErr
+		case strings.HasPrefix(m.flash, "added") || strings.HasPrefix(m.flash, "removed") || strings.HasPrefix(m.flash, "updated"):
+			style = flashOK
+		}
+		b.WriteString(style.Render(m.flash) + "\n\n")
 	}
 	if m.addMode {
-		b.WriteString(m.addInp.View() + "\n\n(enter to add, esc to cancel)\n")
+		b.WriteString(m.addInp.View() + "\n\n" + metaStyle.Render("(enter to add, esc to cancel)") + "\n")
 		return b.String()
 	}
-	b.WriteString("Registered foundries:\n\n")
+	b.WriteString(headingStyle.Render("Registered foundries:") + "\n\n")
 	hasOfficial := m.cfg.HasOfficialFoundry()
 	for i, e := range m.cfg.EffectiveFoundries() {
 		caret := "  "
 		if i == m.cursor {
-			caret = "▶ "
+			caret = cursorStyle.Render("▶ ")
 		}
 		verified := ""
 		if index.IsOfficialFoundry(e.URL) {
-			verified = " ✓ verified"
+			verified = " " + verifiedStyle.Render("✓ verified")
 		}
 		builtIn := ""
 		if !hasOfficial && index.IsOfficialFoundry(e.URL) {
-			builtIn = "  (built-in default)"
+			builtIn = "  " + builtInStyle.Render("(built-in default)")
 		}
-		fmt.Fprintf(&b, "%s%s%s  [%s]  %s%s\n", caret, e.Name, verified, e.Type, e.URL, builtIn)
+		fmt.Fprintf(&b, "%s%s%s  %s  %s%s\n",
+			caret,
+			foundryNameSty.Render(e.Name),
+			verified,
+			typeStyle.Render("["+e.Type+"]"),
+			urlStyle.Render(e.URL),
+			builtIn)
 	}
-	b.WriteString("\na add · d remove · r refresh · j/k move\n")
+	b.WriteString("\n" + metaStyle.Render("a add · d remove · r refresh · j/k move") + "\n")
 	return b.String()
 }

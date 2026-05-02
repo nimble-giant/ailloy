@@ -6,9 +6,24 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
+	"github.com/nimble-giant/ailloy/pkg/styles"
+)
+
+var (
+	headingStyle  = lipgloss.NewStyle().Foreground(styles.Primary1).Bold(true)
+	cursorStyle   = lipgloss.NewStyle().Foreground(styles.Accent1).Bold(true)
+	moldNameStyle = lipgloss.NewStyle().Foreground(styles.Accent1).Bold(true)
+	verifiedStyle = lipgloss.NewStyle().Foreground(styles.Success).Bold(true)
+	scopeStyle    = lipgloss.NewStyle().Foreground(styles.Primary2)
+	versionStyle  = lipgloss.NewStyle().Foreground(styles.Info)
+	metaStyle     = lipgloss.NewStyle().Foreground(styles.Gray)
+	warnStyle     = lipgloss.NewStyle().Foreground(styles.Warning)
+	flashOK       = lipgloss.NewStyle().Foreground(styles.Success)
+	flashErr      = lipgloss.NewStyle().Foreground(styles.Error).Bold(true)
 )
 
 // CastOptions decouples this package from internal/commands.
@@ -130,36 +145,46 @@ func (m Model) updateCmd(it data.InventoryItem) tea.Cmd {
 
 func (m Model) View() string {
 	if m.loading {
-		return "Loading inventory…"
+		return metaStyle.Render("Loading inventory…")
 	}
 	if m.loadErr != nil {
-		return "Error: " + m.loadErr.Error()
+		return flashErr.Render("Error: " + m.loadErr.Error())
 	}
 	var b strings.Builder
 	if m.flash != "" {
-		b.WriteString(m.flash + "\n\n")
+		style := flashOK
+		if strings.Contains(m.flash, "error") {
+			style = flashErr
+		}
+		b.WriteString(style.Render(m.flash) + "\n\n")
 	}
-	b.WriteString("Casted molds (Installed):\n\n")
+	b.WriteString(headingStyle.Render("Casted molds (Installed):") + "\n\n")
 	if len(m.items) == 0 {
-		b.WriteString("(none — Discover tab to install)\n")
+		b.WriteString(metaStyle.Render("(none — Discover tab to install)") + "\n")
 		return b.String()
 	}
 	for i, it := range m.items {
 		caret := "  "
 		if i == m.cursor {
-			caret = "▶ "
+			caret = cursorStyle.Render("▶ ")
 		}
 		legacy := ""
 		if it.Entry.Files == nil {
-			legacy = "  ⚠ legacy (re-cast to enable safe uninstall)"
+			legacy = "  " + warnStyle.Render("⚠ legacy (re-cast to enable safe uninstall)")
 		}
 		verified := ""
 		if it.Verified {
-			verified = " ✓"
+			verified = " " + verifiedStyle.Render("✓")
 		}
-		fmt.Fprintf(&b, "%s%s%s  %s  [%s]  %s%s\n",
-			caret, it.Entry.Name, verified, it.Entry.Version, it.Scope, it.Entry.Source, legacy)
+		fmt.Fprintf(&b, "%s%s%s  %s  %s  %s%s\n",
+			caret,
+			moldNameStyle.Render(it.Entry.Name),
+			verified,
+			versionStyle.Render(it.Entry.Version),
+			scopeStyle.Render("["+string(it.Scope)+"]"),
+			metaStyle.Render(it.Entry.Source),
+			legacy)
 	}
-	b.WriteString("\nu update · x uninstall · r refresh · j/k move\n")
+	b.WriteString("\n" + metaStyle.Render("u update · x uninstall · r refresh · j/k move") + "\n")
 	return b.String()
 }
