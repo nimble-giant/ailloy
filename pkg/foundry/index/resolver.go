@@ -1,6 +1,9 @@
 package index
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // canonicalizeSource normalizes a foundry source URL so equivalent inputs map
 // to the same key. Used as the visited-set key during transitive resolution.
@@ -69,8 +72,28 @@ func (r *Resolver) Resolve(rootSource string) (*ResolvedFoundry, []ResolvedMold,
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := r.checkNameCollisions(); err != nil {
+		return nil, nil, err
+	}
 	molds := flattenMolds(root, make(map[string]bool))
 	return root, molds, nil
+}
+
+// checkNameCollisions returns an error if any two distinct source URLs in the
+// visited tree declare the same foundry Name (the namespace key).
+func (r *Resolver) checkNameCollisions() error {
+	nameToSources := make(map[string][]string)
+	for src, node := range r.visited {
+		nameToSources[node.Index.Name] = append(nameToSources[node.Index.Name], src)
+	}
+	for name, sources := range nameToSources {
+		if len(sources) <= 1 {
+			continue
+		}
+		return fmt.Errorf("foundry name %q is declared by multiple sources: %s",
+			name, strings.Join(sources, ", "))
+	}
+	return nil
 }
 
 func (r *Resolver) resolveNode(source string, parents []string) (*ResolvedFoundry, error) {

@@ -1,6 +1,9 @@
 package index
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCanonicalizeSource(t *testing.T) {
 	tests := []struct {
@@ -173,6 +176,35 @@ func TestResolverSelfCycle(t *testing.T) {
 	}
 	if len(rf.Children) != 1 || rf.Children[0] != rf {
 		t.Errorf("self-cycle not short-circuited: %+v", rf.Children)
+	}
+}
+
+func TestResolverNameCollision(t *testing.T) {
+	root := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "root",
+		Foundries: []FoundryRef{
+			{Name: "x", Source: "github.com/a/x"},
+			{Name: "x", Source: "github.com/b/x"},
+		},
+	}
+	a := &Index{APIVersion: "v1", Kind: "foundry-index", Name: "dup"}
+	b := &Index{APIVersion: "v1", Kind: "foundry-index", Name: "dup"}
+	lookup, _ := fakeLookup(t, map[string]*Index{
+		"github.com/x/root": root,
+		"github.com/a/x":    a,
+		"github.com/b/x":    b,
+	})
+
+	_, _, err := NewResolver(lookup).Resolve("github.com/x/root")
+	if err == nil {
+		t.Fatal("expected name-collision error, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, `"dup"`) {
+		t.Errorf("error %q should name the conflicting foundry name", msg)
+	}
+	if !strings.Contains(msg, "github.com/a/x") || !strings.Contains(msg, "github.com/b/x") {
+		t.Errorf("error %q should name both source URLs", msg)
 	}
 }
 
