@@ -74,7 +74,7 @@ func TestFetchSchemaFromSource_FileNotDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	_ = f.Close()
 
 	_, _, err = mold.FetchSchemaFromSource(context.Background(), f.Name())
 	if err == nil {
