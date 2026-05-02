@@ -44,6 +44,10 @@ var foundryAddCmd = &cobra.Command{
 The URL can be a git repository containing a foundry.yaml at its root,
 or a raw URL to a YAML file (detected by .yaml/.yml extension).
 
+Bare references like "github.com/owner/repo" default to https://, the
+same way ailloy cast resolves shorthand sources. Explicit https://,
+http://, and git@ schemes are kept as-is.
+
 The index is fetched, validated, and cached locally. The registration
 is saved to ~/.ailloy/config.yaml.`,
 	Args: cobra.ExactArgs(1),
