@@ -256,6 +256,15 @@ func (m *Model) applyFilter() {
 	}
 }
 
+// CurrentMold returns the highlighted catalog entry's mold reference and the
+// scope to use when casting. Returns ok=false when no entry is highlighted.
+func (m Model) CurrentMold() (ref string, scope data.Scope, ok bool) {
+	if m.cursor < 0 || m.cursor >= len(m.filtered) {
+		return "", "", false
+	}
+	return m.filtered[m.cursor].Source, data.ScopeProject, true
+}
+
 func (m Model) View() string {
 	if m.loading {
 		return metaStyle.Render("Loading catalog…")

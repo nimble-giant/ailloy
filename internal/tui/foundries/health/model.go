@@ -61,6 +61,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	return m, nil
 }
 
+// CurrentMold returns ok=false; the health tab has no per-mold context.
+func (m Model) CurrentMold() (ref string, scope data.Scope, ok bool) {
+	return "", "", false
+}
+
 func (m Model) View() string {
 	if m.loading {
 		return metaStyle.Render("Running health checks…")

@@ -6,12 +6,19 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/discover"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/health"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/installed"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/registered"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
 )
+
+// MoldContexter is implemented by tabs that can identify a "currently
+// highlighted" mold. The flux picker uses this to scope its operations.
+type MoldContexter interface {
+	CurrentMold() (ref string, scope data.Scope, ok bool)
+}
 
 type discoverCtx = context.Context
 
@@ -196,3 +203,11 @@ func (a App) View() string {
 	b.WriteString(statusBar.Render("tab/shift-tab to switch · q quit"))
 	return b.String()
 }
+
+// Interface compliance — these will fail to compile if any tab drifts.
+var (
+	_ MoldContexter = discover.Model{}
+	_ MoldContexter = installed.Model{}
+	_ MoldContexter = registered.Model{}
+	_ MoldContexter = health.Model{}
+)

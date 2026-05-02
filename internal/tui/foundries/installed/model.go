@@ -143,6 +143,16 @@ func (m Model) updateCmd(it data.InventoryItem) tea.Cmd {
 	}
 }
 
+// CurrentMold returns the highlighted installed mold's source and its scope
+// (project or global). Returns ok=false when no item is highlighted.
+func (m Model) CurrentMold() (ref string, scope data.Scope, ok bool) {
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return "", "", false
+	}
+	it := m.items[m.cursor]
+	return it.Entry.Source, it.Scope, true
+}
+
 func (m Model) View() string {
 	if m.loading {
 		return metaStyle.Render("Loading inventory…")
