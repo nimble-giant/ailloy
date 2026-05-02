@@ -296,7 +296,6 @@ molds:
     source: github.com/my-org/mold
     description: "AI workflow blanks"
     tags: ["workflows", "claude"]
-    version: "v1.0.0"
 ```
 
 ### Fields
@@ -313,7 +312,6 @@ molds:
 | `molds[].source` | Yes | Mold source reference (`host/owner/repo`) |
 | `molds[].description` | No | Short description for search results |
 | `molds[].tags` | No | Searchable tags/categories |
-| `molds[].version` | No | Latest known version (informational only) |
 
 ### Hosting a Foundry Index
 

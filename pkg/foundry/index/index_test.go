@@ -27,7 +27,6 @@ molds:
     source: github.com/test/my-mold
     description: "A test mold"
     tags: ["test", "example"]
-    version: v1.0.0
 `,
 			want: Index{
 				APIVersion:  "v1",
@@ -41,7 +40,6 @@ molds:
 						Source:      "github.com/test/my-mold",
 						Description: "A test mold",
 						Tags:        []string{"test", "example"},
-						Version:     "v1.0.0",
 					},
 				},
 			},

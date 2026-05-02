@@ -29,7 +29,6 @@ type MoldEntry struct {
 	Source      string   `yaml:"source"`
 	Description string   `yaml:"description,omitempty"`
 	Tags        []string `yaml:"tags,omitempty"`
-	Version     string   `yaml:"version,omitempty"`
 }
 
 // ParseIndex parses raw YAML bytes into an Index.
