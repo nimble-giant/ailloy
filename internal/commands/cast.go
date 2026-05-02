@@ -93,25 +93,27 @@ func validatePluginFlags() error {
 	return nil
 }
 
+// resolvedRemote holds metadata about the most recently resolved remote mold.
+// Used to populate the installed manifest after a successful cast.
+var resolvedRemote *foundry.ResolveResult
+
 // resolveMoldReader creates a MoldReader from args or the embedded mold.
 // The returned source is the foundry cache key (e.g. "github.com/owner/repo")
 // for remote references, or "" for local dirs and embedded molds.
 func resolveMoldReader(args []string) (*blanks.MoldReader, string, error) {
+	resolvedRemote = nil
 	if len(args) >= 1 {
 		if foundry.IsRemoteReference(args[0]) {
 			var resolveOpts []foundry.ResolveOption
 			if castGlobal {
 				resolveOpts = append(resolveOpts, foundry.WithLockPath(globalLockPath()))
 			}
-			fsys, root, err := foundry.ResolveWithRoot(args[0], resolveOpts...)
+			fsys, result, err := foundry.ResolveWithMetadata(args[0], resolveOpts...)
 			if err != nil {
 				return nil, "", fmt.Errorf("resolving remote mold: %w", err)
 			}
-			source := ""
-			if ref, perr := foundry.ParseReference(args[0]); perr == nil {
-				source = ref.CacheKey()
-			}
-			return blanks.NewMoldReaderFromFS(fsys, root), source, nil
+			resolvedRemote = result
+			return blanks.NewMoldReaderFromFS(fsys, result.Root), result.Ref.CacheKey(), nil
 		}
 		reader, err := blanks.NewMoldReaderFromPath(args[0])
 		return reader, "", err
@@ -271,6 +273,13 @@ func castProject(reader *blanks.MoldReader, source string) error {
 
 	// Drop directories that ended up empty after skipped renders (#145).
 	dirs = cleanupEmptyDirs(dirs, destPrefix)
+
+	// Record the cast in the installed manifest (provenance for `recast` / `quench`).
+	if resolvedRemote != nil {
+		if err := recordInstalled(resolvedRemote, castGlobal); err != nil {
+			log.Printf("warning: failed to update installed manifest: %v", err)
+		}
+	}
 
 	// Record where blanks were installed (non-fatal if this fails).
 	if destPrefix == "" {
@@ -572,4 +581,29 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 	}
 
 	return nil
+}
+
+// recordInstalled upserts the just-cast mold into the installed manifest.
+func recordInstalled(result *foundry.ResolveResult, global bool) error {
+	path := manifestPathFor(global)
+	if path == "" {
+		return nil // global path unresolvable — silently skip rather than write to cwd
+	}
+	manifest, err := foundry.ReadInstalledManifest(path)
+	if err != nil {
+		// Fall back to a fresh manifest on parse error so we don't lose the cast record.
+		manifest = nil
+	}
+	if manifest == nil {
+		manifest = &foundry.InstalledManifest{APIVersion: "v1"}
+	}
+	manifest.UpsertEntry(foundry.InstalledEntry{
+		Name:    result.Ref.Repo,
+		Source:  result.Ref.CacheKey(),
+		Subpath: result.Ref.Subpath,
+		Version: result.Resolved.Tag,
+		Commit:  result.Resolved.Commit,
+		CastAt:  time.Now().UTC(),
+	})
+	return foundry.WriteInstalledManifest(path, manifest)
 }
