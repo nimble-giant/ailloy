@@ -2,6 +2,8 @@ package commands
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/styles"
@@ -9,68 +11,208 @@ import (
 )
 
 var quenchCmd = &cobra.Command{
-	Use:     "quench",
+	Use:     "quench [reference]",
 	Aliases: []string{"lock"},
-	Short:   "Pin all dependencies to exact versions",
-	Long: `Pin all dependencies to their current exact versions (alias: lock).
+	Short:   "Pin installed molds to exact versions (creates ailloy.lock)",
+	Long: `Pin installed molds to exact versions and verify integrity (alias: lock).
 
-Ensures all dependencies in ailloy.lock are pinned to exact version and commit
-SHAs. Subsequent cast operations will use only these locked versions until
-the lock is updated via recast.`,
+Creates or refreshes ailloy.lock by pinning each mold in .ailloy/installed.yaml
+to its current resolved version and commit. Once ailloy.lock exists, subsequent
+'cast', 'ingot add', and 'recast' will keep it in sync automatically.
+
+Pass a reference to quench a single mold. Use --verify to check existing pins
+without writing.`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runQuench,
 }
 
+var (
+	quenchVerify bool
+	quenchGlobal bool
+	quenchRescan bool
+)
+
 func init() {
 	rootCmd.AddCommand(quenchCmd)
+	quenchCmd.Flags().BoolVar(&quenchVerify, "verify", false, "check pins without writing (CI-friendly)")
+	quenchCmd.Flags().BoolVarP(&quenchGlobal, "global", "g", false, "operate on the global manifest/lock under ~/")
+	quenchCmd.Flags().BoolVar(&quenchRescan, "rescan", false, "best-effort scan for previously cast molds without an installed manifest")
 }
 
-func runQuench(_ *cobra.Command, _ []string) error {
-	lock, err := foundry.ReadLockFile(foundry.LockFileName)
-	if err != nil {
-		return fmt.Errorf("reading lock file: %w", err)
-	}
-	if lock == nil || len(lock.Molds) == 0 {
-		return fmt.Errorf("no lock file found — run %s first to resolve dependencies", styles.CodeStyle.Render("ailloy cast"))
+func runQuench(_ *cobra.Command, args []string) error {
+	if quenchRescan {
+		return runRescan(quenchGlobal)
 	}
 
-	fmt.Println(styles.WorkingBanner("Quenching dependencies..."))
+	manifestPath := manifestPathFor(quenchGlobal)
+	lockPath := lockPathFor(quenchGlobal)
+
+	manifest, err := foundry.ReadInstalledManifest(manifestPath)
+	if err != nil {
+		return fmt.Errorf("reading installed manifest: %w", err)
+	}
+	if manifest == nil || len(manifest.Molds) == 0 {
+		return fmt.Errorf("no installed manifest found at %s — run %s first",
+			styles.CodeStyle.Render(manifestPath),
+			styles.CodeStyle.Render("ailloy cast"))
+	}
+
+	// Filter to a single ref if provided.
+	entries := manifest.Molds
+	if len(args) == 1 {
+		ref, err := foundry.ParseReference(args[0])
+		if err != nil {
+			return fmt.Errorf("parsing reference: %w", err)
+		}
+		match := manifest.FindBySource(ref.CacheKey())
+		if match == nil {
+			return fmt.Errorf("mold %q not found in installed manifest — run %s first",
+				args[0],
+				styles.CodeStyle.Render("ailloy cast "+args[0]))
+		}
+		entries = []foundry.InstalledEntry{*match}
+	}
+
+	if quenchVerify {
+		fmt.Println(styles.WorkingBanner("Verifying pins..."))
+	} else {
+		fmt.Println(styles.WorkingBanner("Quenching dependencies..."))
+	}
 	fmt.Println()
 
-	// Verify each entry has exact version and commit pinned.
-	allPinned := true
-	for _, entry := range lock.Molds {
-		if entry.Version == "" || entry.Commit == "" {
-			fmt.Printf("  %s %s is missing version or commit pin\n",
-				styles.WarningStyle.Render("!"),
-				entry.Name,
-			)
-			allPinned = false
+	// Verification phase: manifest <-> lock consistency.
+	existingLock, _ := foundry.ReadLockFile(lockPath)
+	failures := verifyManifestAgainstLock(entries, existingLock)
+	for _, msg := range failures {
+		fmt.Printf("  %s %s\n", styles.WarningStyle.Render("!"), msg)
+	}
+	if len(failures) > 0 && quenchVerify {
+		fmt.Println()
+		return fmt.Errorf("verification failed (%d issue(s))", len(failures))
+	}
+
+	if quenchVerify {
+		fmt.Println()
+		fmt.Println(styles.SuccessStyle.Render("All pins verified."))
+		return nil
+	}
+
+	// Resolve current versions and write a fresh lock.
+	git := foundry.DefaultGitRunner()
+	newLock := &foundry.LockFile{APIVersion: "v1"}
+	for _, entry := range entries {
+		ref, err := referenceFromInstalledEntry(&entry)
+		if err != nil {
+			fmt.Printf("  %s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, err)
 			continue
 		}
-
-		commitShort := entry.Commit
+		resolved, err := foundry.ResolveVersion(ref, git)
+		if err != nil {
+			fmt.Printf("  %s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, err)
+			continue
+		}
+		newLock.UpsertEntry(foundry.LockEntry{
+			Name:      entry.Name,
+			Source:    entry.Source,
+			Version:   resolved.Tag,
+			Commit:    resolved.Commit,
+			Subpath:   entry.Subpath,
+			Timestamp: time.Now().UTC(),
+		})
+		commitShort := resolved.Commit
 		if len(commitShort) > 7 {
 			commitShort = commitShort[:7]
 		}
 		fmt.Printf("  %s  %s @ %s\n",
 			styles.FoxBullet(entry.Name),
-			styles.CodeStyle.Render(entry.Version),
+			styles.CodeStyle.Render(resolved.Tag),
 			styles.CodeStyle.Render(commitShort),
 		)
 	}
 
-	fmt.Println()
-
-	if !allPinned {
-		return fmt.Errorf("some dependencies are not fully pinned — run %s to re-resolve", styles.CodeStyle.Render("ailloy recast"))
+	// If quench was scoped to a single ref AND a lock already exists, merge into it.
+	if len(args) == 1 && existingLock != nil {
+		for _, e := range newLock.Molds {
+			existingLock.UpsertEntry(e)
+		}
+		newLock = existingLock
 	}
 
-	fmt.Printf("%s All %d dependencies are pinned to exact versions.\n",
-		styles.SuccessStyle.Render("Locked:"),
-		len(lock.Molds),
-	)
-	fmt.Println()
-	fmt.Printf("Run %s to update to newer versions.\n", styles.CodeStyle.Render("ailloy recast"))
+	if err := foundry.WriteLockFile(lockPath, newLock); err != nil {
+		return fmt.Errorf("writing lock file: %w", err)
+	}
 
+	fmt.Println()
+	fmt.Printf("%s %d dependencies pinned in %s.\n",
+		styles.SuccessStyle.Render("Locked:"),
+		len(newLock.Molds),
+		styles.CodeStyle.Render(lockPath),
+	)
+	fmt.Printf("Run %s to update to newer versions.\n", styles.CodeStyle.Render("ailloy recast"))
+	return nil
+}
+
+// verifyManifestAgainstLock returns human-readable failure messages.
+func verifyManifestAgainstLock(entries []foundry.InstalledEntry, lock *foundry.LockFile) []string {
+	var failures []string
+	if lock == nil {
+		return nil // no lock to verify against — first quench scenario
+	}
+	for _, entry := range entries {
+		locked := lock.FindEntry(entry.Source)
+		if locked == nil {
+			failures = append(failures, fmt.Sprintf("%s is in installed manifest but missing from lock", entry.Name))
+			continue
+		}
+		if locked.Commit != entry.Commit {
+			failures = append(failures,
+				fmt.Sprintf("%s commit drift: manifest=%s lock=%s",
+					entry.Name,
+					shortSHA(entry.Commit),
+					shortSHA(locked.Commit),
+				))
+		}
+		if locked.Version == "" || locked.Commit == "" {
+			failures = append(failures, fmt.Sprintf("%s lock entry is missing version or commit", entry.Name))
+		}
+	}
+	return failures
+}
+
+func shortSHA(s string) string {
+	if len(s) > 7 {
+		return s[:7]
+	}
+	return s
+}
+
+// referenceFromInstalledEntry reconstructs a Latest-typed Reference for re-resolution.
+func referenceFromInstalledEntry(entry *foundry.InstalledEntry) (*foundry.Reference, error) {
+	parts := strings.SplitN(entry.Source, "/", 3)
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("invalid source %q: expected host/owner/repo", entry.Source)
+	}
+	return &foundry.Reference{
+		Host:    parts[0],
+		Owner:   parts[1],
+		Repo:    parts[2],
+		Subpath: entry.Subpath,
+		Type:    foundry.Latest,
+	}, nil
+}
+
+// runRescan is a best-effort migration helper for users who have previously
+// cast blanks but no installed manifest. v1 implementation: print guidance
+// only — directing users to re-cast each mold once.
+func runRescan(_ bool) error {
+	fmt.Println(styles.WorkingBanner("Rescan: detecting previously cast molds..."))
+	fmt.Println()
+	fmt.Println(styles.WarningStyle.Render("Rescan is a placeholder in this release."))
+	fmt.Println("Until a fuller scan is implemented, please re-run " +
+		styles.CodeStyle.Render("ailloy cast <ref>") +
+		" once for each mold you previously installed.")
+	fmt.Println("Each cast will populate " +
+		styles.CodeStyle.Render(".ailloy/installed.yaml") +
+		" automatically.")
 	return nil
 }
