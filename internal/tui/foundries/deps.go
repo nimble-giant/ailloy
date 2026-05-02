@@ -52,6 +52,26 @@ type RemoveFoundryFunc func(cfg *index.Config, nameOrURL string) (index.FoundryE
 // UpdateFoundriesFunc fetches every effective foundry's index.
 type UpdateFoundriesFunc func(cfg *index.Config) ([]UpdateFoundryReport, error)
 
+// InstallFoundryReport mirrors commands.InstallFoundryReport.
+type InstallFoundryReport struct {
+	Name    string
+	Source  string
+	Skipped bool
+	Err     error
+	Version string
+}
+
+// InstallFoundryOptions mirrors commands.InstallFoundryOptions.
+type InstallFoundryOptions struct {
+	Global        bool
+	WithWorkflows bool
+	DryRun        bool
+	Force         bool
+}
+
+// InstallFoundryFunc casts every mold listed by a foundry.
+type InstallFoundryFunc func(ctx context.Context, cfg *index.Config, nameOrURL string, opts InstallFoundryOptions) ([]InstallFoundryReport, error)
+
 // Deps wires platform-level operations into the TUI without forcing the
 // tui package to import internal/commands (which would create a cycle).
 // commands/foundries.go populates this when constructing the App.
@@ -60,4 +80,5 @@ type Deps struct {
 	AddFoundry      AddFoundryFunc
 	RemoveFoundry   RemoveFoundryFunc
 	UpdateFoundries UpdateFoundriesFunc
+	InstallFoundry  InstallFoundryFunc
 }

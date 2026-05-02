@@ -67,6 +67,21 @@ func runFoundries(_ *cobra.Command, _ []string) error {
 			}
 			return out, err
 		},
+		InstallFoundry: func(ctx context.Context, cfg *index.Config, nameOrURL string, opts foundries.InstallFoundryOptions) ([]foundries.InstallFoundryReport, error) {
+			rs, err := InstallFoundryCore(ctx, cfg, nameOrURL, InstallFoundryOptions{
+				Global:        opts.Global,
+				WithWorkflows: opts.WithWorkflows,
+				DryRun:        opts.DryRun,
+				Force:         opts.Force,
+			})
+			out := make([]foundries.InstallFoundryReport, 0, len(rs))
+			for _, r := range rs {
+				out = append(out, foundries.InstallFoundryReport{
+					Name: r.Name, Source: r.Source, Skipped: r.Skipped, Err: r.Err, Version: r.Version,
+				})
+			}
+			return out, err
+		},
 	}
 	app := foundries.New(deps)
 	prog := tea.NewProgram(app, tea.WithAltScreen())

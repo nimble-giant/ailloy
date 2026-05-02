@@ -168,6 +168,11 @@ ailloy foundry list
 # Refresh all cached foundry indexes from their sources
 ailloy foundry update
 
+# Cast every mold listed by a foundry (alias: cast-all)
+# Skips molds already in the target lockfile unless --force.
+# Supports -g/--global, --with-workflows, --dry-run, --force.
+ailloy foundry install foundry
+
 # Remove a registered foundry index by name or URL
 ailloy foundry remove nimble-foundry
 
@@ -232,6 +237,7 @@ space toggle · enter cast all · / search · c clear · r refresh · j/k move
 | Installed | `x` | uninstall current row |
 | Foundries | `a` | open add-foundry input |
 | Foundries | `d` | remove current foundry |
+| Foundries | `i` | install every mold listed by current foundry (skips already-installed) |
 
 The TUI requires a TTY; piping `ailloy foundries` to a file errors out with a
 hint to use the scriptable equivalents (`ailloy foundry list/search/...` and
