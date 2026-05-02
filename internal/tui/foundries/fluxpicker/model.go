@@ -141,6 +141,13 @@ func (m Model) ResetOverrides() Model {
 	return m
 }
 
+// SetFetching marks the picker as awaiting an asynchronous schema fetch.
+// The View renders a spinner-style placeholder when this is true.
+func (m Model) SetFetching(v bool) Model {
+	m.fetching = v
+	return m
+}
+
 // BadgeStateFor returns the badge to render next to a key. The defaults map
 // uses dotted-path lookup (e.g. "agents.targets" → defaults["agents"]["targets"]).
 func (m Model) BadgeStateFor(key string) BadgeState {

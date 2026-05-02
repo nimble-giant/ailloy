@@ -35,6 +35,12 @@ func (m Model) View() string {
 	b.WriteString(m.filter.View())
 	b.WriteString("\n\n")
 
+	if m.fetching {
+		b.WriteString("fetching schema…\n\n")
+	} else if len(m.schema) == 0 && m.err == nil {
+		b.WriteString(footer.Render("(no flux variables defined for this mold)") + "\n\n")
+	}
+
 	rows := m.filteredKeys()
 	for i, fv := range rows {
 		badge := " "

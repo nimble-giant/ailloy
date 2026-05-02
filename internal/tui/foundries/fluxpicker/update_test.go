@@ -211,3 +211,28 @@ func TestEsc_NoChanges_ClosesPicker(t *testing.T) {
 		t.Fatal("expected picker to close with no overrides")
 	}
 }
+
+func TestUpdate_SchemaFetchedMsgPopulatesState(t *testing.T) {
+	m := New().OpenFor("ref", data.ScopeProject, nil, nil)
+	m = m.SetFetching(true)
+	schema := []mold.FluxVar{{Name: "k", Type: "string"}}
+	m, _ = m.Update(SchemaFetchedMsg{MoldRef: "ref", Schema: schema})
+	if len(m.schema) != 1 || m.schema[0].Name != "k" {
+		t.Fatalf("schema not applied: %+v", m.schema)
+	}
+	if m.fetching {
+		t.Fatal("expected fetching=false after message")
+	}
+}
+
+func TestUpdate_SchemaFetchedMsg_IgnoresMismatchedRef(t *testing.T) {
+	m := New().OpenFor("a", data.ScopeProject, nil, nil)
+	m = m.SetFetching(true)
+	m, _ = m.Update(SchemaFetchedMsg{MoldRef: "b", Schema: []mold.FluxVar{{Name: "k"}}})
+	if len(m.schema) != 0 {
+		t.Fatalf("expected schema unchanged, got %+v", m.schema)
+	}
+	if !m.fetching {
+		t.Fatal("expected fetching to remain true on ref mismatch")
+	}
+}

@@ -30,11 +30,12 @@ type OpenPickerMsg struct {
 	Scope   data.Scope
 }
 
-// schemaFetchedMsg is dispatched when async schema fetch completes.
-// (Promoted to exported SchemaFetchedMsg in Task 13.)
-type schemaFetchedMsg struct {
-	moldRef  string
-	schema   []mold.FluxVar
-	defaults map[string]any
-	err      error
+// SchemaFetchedMsg is dispatched when async schema fetch completes. The App
+// fires this in response to OpenFor and the picker stitches the result into
+// its Model when MoldRef matches the current target.
+type SchemaFetchedMsg struct {
+	MoldRef  string
+	Schema   []mold.FluxVar
+	Defaults map[string]any
+	Err      error
 }

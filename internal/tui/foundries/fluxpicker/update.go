@@ -18,11 +18,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
-	case schemaFetchedMsg:
-		if msg.moldRef == m.moldRef {
-			m.schema = msg.schema
-			m.defaults = msg.defaults
-			m.err = msg.err
+	case SchemaFetchedMsg:
+		if msg.MoldRef == m.moldRef {
+			m.schema = msg.Schema
+			m.defaults = msg.Defaults
+			m.err = msg.Err
+			m.fetching = false
 		}
 		return m, nil
 	}
