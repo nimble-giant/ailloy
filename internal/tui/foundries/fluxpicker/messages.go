@@ -24,12 +24,6 @@ type FluxOverridesMsg struct {
 	Target    SaveTarget
 }
 
-// OpenPickerMsg requests that the picker open scoped to a particular mold.
-type OpenPickerMsg struct {
-	MoldRef string
-	Scope   data.Scope
-}
-
 // SchemaFetchedMsg is dispatched when async schema fetch completes. The App
 // fires this in response to OpenFor and the picker stitches the result into
 // its Model when MoldRef matches the current target.
