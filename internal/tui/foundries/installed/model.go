@@ -157,8 +157,8 @@ func (m Model) View() string {
 		if it.Verified {
 			verified = " ✓"
 		}
-		b.WriteString(fmt.Sprintf("%s%s%s  %s  [%s]  %s%s\n",
-			caret, it.Entry.Name, verified, it.Entry.Version, it.Scope, it.Entry.Source, legacy))
+		fmt.Fprintf(&b, "%s%s%s  %s  [%s]  %s%s\n",
+			caret, it.Entry.Name, verified, it.Entry.Version, it.Scope, it.Entry.Source, legacy)
 	}
 	b.WriteString("\nu update · x uninstall · r refresh · j/k move\n")
 	return b.String()

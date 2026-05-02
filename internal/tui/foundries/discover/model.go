@@ -198,7 +198,7 @@ func (m Model) View() string {
 		if len(recent) > 0 {
 			b.WriteString(lipgloss.NewStyle().Bold(true).Render("Recent (last 7 days)") + "\n")
 			for _, e := range recent {
-				b.WriteString(fmt.Sprintf("  · %s — %s\n", e.Name, e.Description))
+				fmt.Fprintf(&b, "  · %s — %s\n", e.Name, e.Description)
 			}
 			b.WriteString("\n")
 		}
@@ -223,10 +223,10 @@ func (m Model) View() string {
 		if s, ok := m.castStat[e.Source]; ok {
 			status = "  (" + s + ")"
 		}
-		b.WriteString(fmt.Sprintf("%s%s %s%s — %s%s\n", caret, mark, e.Name, verified, e.Description, status))
+		fmt.Fprintf(&b, "%s%s %s%s — %s%s\n", caret, mark, e.Name, verified, e.Description, status)
 	}
 
-	b.WriteString(fmt.Sprintf("\n%d selected · %d shown · %d total\n", len(m.selected), len(visible), len(m.catalog)))
+	fmt.Fprintf(&b, "\n%d selected · %d shown · %d total\n", len(m.selected), len(visible), len(m.catalog))
 	b.WriteString("space toggle · enter cast all · / search · c clear · r refresh · j/k move\n")
 	return b.String()
 }

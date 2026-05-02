@@ -214,7 +214,7 @@ func (m Model) View() string {
 		if !hasOfficial && index.IsOfficialFoundry(e.URL) {
 			builtIn = "  (built-in default)"
 		}
-		b.WriteString(fmt.Sprintf("%s%s%s  [%s]  %s%s\n", caret, e.Name, verified, e.Type, e.URL, builtIn))
+		fmt.Fprintf(&b, "%s%s%s  [%s]  %s%s\n", caret, e.Name, verified, e.Type, e.URL, builtIn)
 	}
 	b.WriteString("\na add · d remove · r refresh · j/k move\n")
 	return b.String()
