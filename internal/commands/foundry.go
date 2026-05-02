@@ -84,6 +84,7 @@ var (
 	foundryInstallDryRun        bool
 	foundryInstallForce         bool
 	foundryInstallClaudePlugin  bool
+	foundryInstallShallow       bool
 )
 
 var foundryInstallCmd = &cobra.Command{
@@ -117,6 +118,7 @@ func init() {
 	foundryInstallCmd.Flags().BoolVar(&foundryInstallDryRun, "dry-run", false, "list what would be installed without casting")
 	foundryInstallCmd.Flags().BoolVar(&foundryInstallForce, "force", false, "re-cast molds that are already installed")
 	foundryInstallCmd.Flags().BoolVar(&foundryInstallClaudePlugin, "claude-plugin", false, "package each mold as a Claude Code plugin under .claude/plugins/<slug>/")
+	foundryInstallCmd.Flags().BoolVar(&foundryInstallShallow, "shallow", false, "install only the named foundry's direct molds (skip nested foundries)")
 }
 
 func runFoundrySearch(_ *cobra.Command, args []string) error {
@@ -395,6 +397,7 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 		DryRun:        foundryInstallDryRun,
 		Force:         foundryInstallForce,
 		ClaudePlugin:  foundryInstallClaudePlugin,
+		Shallow:       foundryInstallShallow,
 	})
 	if err != nil {
 		return err
