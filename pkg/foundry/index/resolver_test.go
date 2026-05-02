@@ -127,3 +127,98 @@ func TestResolverChildRecursion(t *testing.T) {
 		t.Errorf("molds[1].Foundry = %q, want child", molds[1].Foundry.Index.Name)
 	}
 }
+
+func TestResolverCycle(t *testing.T) {
+	a := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "a",
+		Foundries: []FoundryRef{{Name: "b", Source: "github.com/x/b"}},
+	}
+	b := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "b",
+		Foundries: []FoundryRef{{Name: "a", Source: "github.com/x/a"}},
+	}
+	lookup, calls := fakeLookup(t, map[string]*Index{
+		"github.com/x/a": a,
+		"github.com/x/b": b,
+	})
+
+	rf, _, err := NewResolver(lookup).Resolve("github.com/x/a")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if *calls != 2 {
+		t.Errorf("lookup calls = %d, want 2 (each fetched once)", *calls)
+	}
+	if len(rf.Children) != 1 || rf.Children[0].Index.Name != "b" {
+		t.Fatalf("rf.Children layout unexpected: %+v", rf.Children)
+	}
+	// b's child "a" should resolve back to the root, not a fresh node.
+	if len(rf.Children[0].Children) != 1 || rf.Children[0].Children[0] != rf {
+		t.Errorf("expected b.Children[0] to be the root a (cycle short-circuit)")
+	}
+}
+
+func TestResolverSelfCycle(t *testing.T) {
+	a := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "a",
+		Foundries: []FoundryRef{{Name: "a", Source: "github.com/x/a"}},
+	}
+	lookup, calls := fakeLookup(t, map[string]*Index{"github.com/x/a": a})
+	rf, _, err := NewResolver(lookup).Resolve("github.com/x/a")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if *calls != 1 {
+		t.Errorf("lookup calls = %d, want 1", *calls)
+	}
+	if len(rf.Children) != 1 || rf.Children[0] != rf {
+		t.Errorf("self-cycle not short-circuited: %+v", rf.Children)
+	}
+}
+
+func TestResolverDiamond(t *testing.T) {
+	p := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "p",
+		Foundries: []FoundryRef{
+			{Name: "b", Source: "github.com/x/b"},
+			{Name: "c", Source: "github.com/x/c"},
+		},
+	}
+	b := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "b",
+		Foundries: []FoundryRef{{Name: "d", Source: "github.com/x/d"}},
+	}
+	c := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "c",
+		Foundries: []FoundryRef{{Name: "d", Source: "github.com/x/d"}},
+	}
+	d := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "d",
+		Molds: []MoldEntry{{Name: "delta", Source: "github.com/x/delta"}},
+	}
+	lookup, calls := fakeLookup(t, map[string]*Index{
+		"github.com/x/p": p, "github.com/x/b": b, "github.com/x/c": c, "github.com/x/d": d,
+	})
+
+	rf, molds, err := NewResolver(lookup).Resolve("github.com/x/p")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if *calls != 4 {
+		t.Errorf("lookup calls = %d, want 4 (d fetched once)", *calls)
+	}
+	// d appears as a child of both b and c, but is the same node.
+	if rf.Children[0].Children[0] != rf.Children[1].Children[0] {
+		t.Errorf("expected b's d and c's d to be the same ResolvedFoundry instance")
+	}
+	// Mold "delta" should appear exactly once in the flat list.
+	deltas := 0
+	for _, m := range molds {
+		if m.Entry.Name == "delta" {
+			deltas++
+		}
+	}
+	if deltas != 1 {
+		t.Errorf("delta appeared %d times in flat molds, want 1", deltas)
+	}
+}
