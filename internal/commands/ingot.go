@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -110,7 +111,7 @@ func runIngotAdd(_ *cobra.Command, args []string) error {
 	fmt.Println(styles.WorkingBanner("Adding ingot..."))
 	fmt.Println()
 
-	fsys, err := foundry.Resolve(ref)
+	fsys, result, err := foundry.ResolveWithMetadata(ref)
 	if err != nil {
 		return fmt.Errorf("resolving ingot: %w", err)
 	}
@@ -157,6 +158,10 @@ func runIngotAdd(_ *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(styles.SuccessStyle.Render("Ingot added: ") + styles.AccentStyle.Render(ingot.Name+" "+ingot.Version))
 	fmt.Println(styles.InfoStyle.Render("Installed to: ") + styles.CodeStyle.Render(destDir))
+
+	if err := recordInstalled(result, false); err != nil {
+		log.Printf("warning: failed to update installed manifest: %v", err)
+	}
 
 	return nil
 }
