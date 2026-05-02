@@ -206,6 +206,24 @@ func (c *Config) FindFoundry(nameOrURL string) *FoundryEntry {
 	return nil
 }
 
+// NormalizeFoundryURL ensures a foundry URL has an explicit protocol so that
+// `ailloy foundry add github.com/owner/repo` works the same as the fully
+// qualified `https://github.com/owner/repo`. SSH shorthand (git@host:path) and
+// URLs that already carry a scheme are returned unchanged.
+func NormalizeFoundryURL(url string) string {
+	trimmed := strings.TrimSpace(url)
+	if trimmed == "" {
+		return trimmed
+	}
+	if strings.HasPrefix(trimmed, "git@") {
+		return trimmed
+	}
+	if strings.Contains(trimmed, "://") {
+		return trimmed
+	}
+	return "https://" + trimmed
+}
+
 // DetectType determines whether a URL is a git repo or a raw YAML file.
 func DetectType(url string) string {
 	lower := strings.ToLower(url)
