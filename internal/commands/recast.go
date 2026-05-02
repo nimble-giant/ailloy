@@ -106,8 +106,15 @@ func runRecast(_ *cobra.Command, args []string) error {
 
 		if !recastDryRun {
 			fetcher, ferr := foundry.NewFetcher(git)
-			if ferr == nil {
-				_, _, _ = fetcher.Fetch(ref, resolved)
+			if ferr != nil {
+				fmt.Printf("%s skipping %s: fetcher: %v\n", styles.WarningStyle.Render("!"), entry.Name, ferr)
+				changes = changes[:len(changes)-1]
+				continue
+			}
+			if _, _, fetchErr := fetcher.Fetch(ref, resolved); fetchErr != nil {
+				fmt.Printf("%s skipping %s: fetch: %v\n", styles.WarningStyle.Render("!"), entry.Name, fetchErr)
+				changes = changes[:len(changes)-1]
+				continue
 			}
 
 			manifest.UpsertEntry(foundry.InstalledEntry{
