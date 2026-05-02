@@ -39,7 +39,7 @@ func castClaudePlugin(reader *blanks.MoldReader) error {
 
 	pluginFiles, hadWorkflows := filterForPlugin(rendered)
 	if withWorkflows && hadWorkflows {
-		fmt.Println(styles.WarningStyle.Render("⚠️  --with-workflows has no effect with --as-plugin: workflow blanks are not bundled into Claude Code plugins."))
+		fmt.Println(styles.WarningStyle.Render("⚠️  --with-workflows has no effect with --claude-plugin: workflow blanks are not bundled into Claude Code plugins."))
 	}
 
 	readme, err := readMoldReadme(reader, flux)

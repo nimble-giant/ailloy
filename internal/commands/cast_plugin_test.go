@@ -45,21 +45,21 @@ func TestSlugifyPluginName(t *testing.T) {
 }
 
 func TestValidatePluginFlags(t *testing.T) {
-	t.Run("name without --as-plugin errors", func(t *testing.T) {
+	t.Run("name without --claude-plugin errors", func(t *testing.T) {
 		resetCastFlags()
 		castPluginName = "x"
 		if err := validatePluginFlags(); err == nil {
 			t.Error("expected error, got nil")
 		}
 	})
-	t.Run("version without --as-plugin errors", func(t *testing.T) {
+	t.Run("version without --claude-plugin errors", func(t *testing.T) {
 		resetCastFlags()
 		castPluginVer = "1.0.0"
 		if err := validatePluginFlags(); err == nil {
 			t.Error("expected error, got nil")
 		}
 	})
-	t.Run("with --as-plugin OK", func(t *testing.T) {
+	t.Run("with --claude-plugin OK", func(t *testing.T) {
 		resetCastFlags()
 		castClaudePluginFlag = true
 		castPluginName = "x"
@@ -319,7 +319,7 @@ func fixtureMoldReader() *blanks.MoldReader {
 kind: mold
 name: fixture-mold
 version: 1.2.3
-description: A fixture mold for testing cast --as-plugin
+description: A fixture mold for testing cast --claude-plugin
 author:
   name: Fixture Author
 flux:
