@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.6.19](https://github.com/nimble-giant/ailloy/compare/v0.6.18...v0.6.19) (2026-05-02)
+
+
+### Features
+
+* add --as-plugin flag to cast for claude code plugin output ([3964197](https://github.com/nimble-giant/ailloy/commit/3964197780c02c2a44e139e20089c2f2aeaac64d))
+* add ailloy uninstall command ([7ec6f09](https://github.com/nimble-giant/ailloy/commit/7ec6f094b2b62cddfc287fe9feaf38246c760c80))
+* add Files manifest to LockEntry ([210d82d](https://github.com/nimble-giant/ailloy/commit/210d82d7ded2ccfca359ad606965a0032e54c5d7))
+* add FoundryForSource lookup helper ([fb29e1b](https://github.com/nimble-giant/ailloy/commit/fb29e1b9be12f0c65cccfe949072aa12e6281a55))
+* add Homebrew installer ([a5af99d](https://github.com/nimble-giant/ailloy/commit/a5af99d0c4080f01f0de31b7e400c821bc37e79d))
+* add installed manifest types and YAML I/O ([dcf85a7](https://github.com/nimble-giant/ailloy/commit/dcf85a73c273986d9f4fc60d1c89cbd3e938aa09))
+* add interactive ailloy foundries TUI ([0b2e4c4](https://github.com/nimble-giant/ailloy/commit/0b2e4c4b662f17a6ae5e36c767a6f44559f3e0e9))
+* add UninstallMold with manifest-based safe deletion ([356575a](https://github.com/nimble-giant/ailloy/commit/356575a29a2199c1b6547b45041833858a5e485b))
+* add UpsertEntry/FindBySource/FindByName to manifest ([e3073eb](https://github.com/nimble-giant/ailloy/commit/e3073ebfa6f9515a71612ce426c8290b2371e0a6))
+* brand the foundries TUI with Ailloy palette + vim h/l for tabs ([d4f9b2b](https://github.com/nimble-giant/ailloy/commit/d4f9b2b3f00e07122234363abddc9362585e6af4))
+* default to https when adding a foundry without a protocol ([d9168b7](https://github.com/nimble-giant/ailloy/commit/d9168b7a4b9fd37f6fe5e339bcfab3cf084b972a))
+* drive recast from installed manifest, update lock if present ([b5b6606](https://github.com/nimble-giant/ailloy/commit/b5b66066a49da6884c4c9a40bd54da740468ba06))
+* install every mold in a foundry via CLI and TUI ([cbcc17b](https://github.com/nimble-giant/ailloy/commit/cbcc17b3221c358047512f07932e61f59474b939))
+* record ingot installs in installed manifest ([4c924ed](https://github.com/nimble-giant/ailloy/commit/4c924ed1881ae62433e0d4018d925c0e60d06451))
+* record installed files and hashes during cast ([184a0a5](https://github.com/nimble-giant/ailloy/commit/184a0a58609a8dfd54b76063b8798b570c4e407e))
+* rewrite quench as opt-in pin/verify driven by installed manifest ([f616520](https://github.com/nimble-giant/ailloy/commit/f616520cef23e336cc1d4877f19322946305cb75))
+* show installed badge on Discover rows ([1e2605d](https://github.com/nimble-giant/ailloy/commit/1e2605d75c7ef6170d221ed1c2959c0eaf096770))
+* thread --claude-plugin through CastMold and foundry install ([2f86aa9](https://github.com/nimble-giant/ailloy/commit/2f86aa9ea18e6e688d40b7fd16b989f1faec6b71))
+* write installed manifest after successful cast ([2950aed](https://github.com/nimble-giant/ailloy/commit/2950aed074c665947996aa8ea20385e06aa036f1))
+
+
+### Bug Fixes
+
+* adapt cast --as-plugin to buildIngotResolver(flux, root) signature ([7744364](https://github.com/nimble-giant/ailloy/commit/7744364b33a136fe0024d797e485a93be66c1cff))
+* appease golangci-lint errcheck and staticcheck ([9d22274](https://github.com/nimble-giant/ailloy/commit/9d22274e661c1b450bd8df180640e29547f63beb))
+* auto-fetch foundry indexes when Discover catalog is empty ([6546a39](https://github.com/nimble-giant/ailloy/commit/6546a39ec86e413b8aa6dbd9104b6c790b4fbe3a))
+* broadcast non-key messages to all tabs ([41010c7](https://github.com/nimble-giant/ailloy/commit/41010c7485ff17cdd629b8770cb7eb41d359da21))
+* clean up empty directories left by skipped renders ([1081164](https://github.com/nimble-giant/ailloy/commit/1081164c918ba8252fccce0dfdf0ec702050dcc4)), closes [#145](https://github.com/nimble-giant/ailloy/issues/145)
+* fetch tags when refreshing the foundry bare clone ([dc92250](https://github.com/nimble-giant/ailloy/commit/dc922502d96387d8335d76fd1067ce15c5a90da2))
+* globalLockPath returns empty when home is unresolvable ([53dbd07](https://github.com/nimble-giant/ailloy/commit/53dbd073815f85cbaf83653e7295ea60f0e21b07))
+* include the verified default in foundry searches ([fa29d19](https://github.com/nimble-giant/ailloy/commit/fa29d1916638a77402417e36982033a620f167c6))
+* log corrupt-manifest reset and clarify Metadata error contract ([7b13c7b](https://github.com/nimble-giant/ailloy/commit/7b13c7baf620b8c80dc7c58d3752260f796285b1))
+* report scoped pin count and drop placeholder --rescan flag ([5d8baee](https://github.com/nimble-giant/ailloy/commit/5d8baeef569f71c999fa3242e4f31e9de4261937))
+* require existing lock for scoped quench and stop double-reporting drift ([a4cf8b0](https://github.com/nimble-giant/ailloy/commit/a4cf8b007519a277a27976aabf4784e40cfecad5))
+* silence cast output during TUI installs ([ba08742](https://github.com/nimble-giant/ailloy/commit/ba087424ca515ffc2253be187f26a8bacd3b67d3))
+* skip recast manifest update when fetch fails ([c0dc828](https://github.com/nimble-giant/ailloy/commit/c0dc828f5aa58d9282d5a950a177f1852326994c))
+
 ## [0.6.18](https://github.com/nimble-giant/ailloy/compare/v0.6.17...v0.6.18) (2026-05-01)
 
 
