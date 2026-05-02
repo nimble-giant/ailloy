@@ -21,6 +21,7 @@ var rootCmd = &cobra.Command{
 
 // SetVersionInfo sets the version information injected via ldflags at build time.
 func SetVersionInfo(version, commit, date string) {
+	upgradeCurrentVersion = version
 	if commit != "unknown" && date != "unknown" {
 		rootCmd.Version = fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)
 	} else {
