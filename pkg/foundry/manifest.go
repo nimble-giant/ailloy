@@ -46,6 +46,43 @@ func ReadInstalledManifest(path string) (*InstalledManifest, error) {
 	return &m, nil
 }
 
+// UpsertEntry adds or updates an entry by source.
+func (m *InstalledManifest) UpsertEntry(entry InstalledEntry) {
+	for i := range m.Molds {
+		if m.Molds[i].Source == entry.Source {
+			m.Molds[i] = entry
+			return
+		}
+	}
+	m.Molds = append(m.Molds, entry)
+}
+
+// FindBySource returns the entry matching the given source, or nil.
+func (m *InstalledManifest) FindBySource(source string) *InstalledEntry {
+	if m == nil {
+		return nil
+	}
+	for i := range m.Molds {
+		if m.Molds[i].Source == source {
+			return &m.Molds[i]
+		}
+	}
+	return nil
+}
+
+// FindByName returns the entry matching the given name, or nil.
+func (m *InstalledManifest) FindByName(name string) *InstalledEntry {
+	if m == nil {
+		return nil
+	}
+	for i := range m.Molds {
+		if m.Molds[i].Name == name {
+			return &m.Molds[i]
+		}
+	}
+	return nil
+}
+
 // WriteInstalledManifest marshals and writes the manifest, creating parent dirs.
 func WriteInstalledManifest(path string, m *InstalledManifest) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil { //#nosec G301
