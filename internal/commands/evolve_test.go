@@ -1,26 +1,20 @@
 package commands
 
 import (
+	"strings"
 	"testing"
 )
 
-func TestEvolveAnimationFrames(t *testing.T) {
-	full, sil := evolveAnimationFrames()
-	if len(full) == 0 || len(sil) == 0 {
-		t.Fatalf("expected non-empty animation frames, got full=%d sil=%d", len(full), len(sil))
+func TestEvolveAnimationArt(t *testing.T) {
+	art := evolveAnimationArt()
+	if art == "" {
+		t.Fatal("expected non-empty evolution art")
 	}
-	if len(full) != len(sil) {
-		t.Errorf("full and silhouette frames must have equal line count: full=%d sil=%d", len(full), len(sil))
+	if strings.HasPrefix(art, "\n") {
+		t.Errorf("art should not start with a leading newline; cursor-up math depends on the rendered height matching the line count")
 	}
-	for i, line := range full {
-		if line == "" {
-			t.Errorf("full frame line %d is empty", i)
-		}
-	}
-	for i, line := range sil {
-		if line == "" {
-			t.Errorf("silhouette frame line %d is empty", i)
-		}
+	if lines := strings.Count(art, "\n") + 1; lines < 5 {
+		t.Errorf("expected multi-line mascot art (>=5 lines), got %d", lines)
 	}
 }
 
