@@ -21,6 +21,7 @@ var (
 	cursorStyle     = lipgloss.NewStyle().Foreground(styles.Accent1).Bold(true)
 	moldNameStyle   = lipgloss.NewStyle().Foreground(styles.Accent1).Bold(true)
 	verifiedStyle   = lipgloss.NewStyle().Foreground(styles.Success).Bold(true)
+	installedStyle  = lipgloss.NewStyle().Foreground(styles.Info).Bold(true)
 	descStyle       = lipgloss.NewStyle().Foreground(styles.LightGray)
 	metaStyle       = lipgloss.NewStyle().Foreground(styles.Gray)
 	statusOKStyle   = lipgloss.NewStyle().Foreground(styles.Success)
@@ -56,6 +57,7 @@ type Model struct {
 	update      UpdateFn
 	catalog     []data.CatalogEntry
 	filtered    []data.CatalogEntry
+	installed   map[string]string // source -> installed version (for the "installed" badge)
 	selected    map[string]bool
 	cursor      int
 	filter      textinput.Model
@@ -68,6 +70,10 @@ type Model struct {
 type catalogLoadedMsg struct {
 	catalog []data.CatalogEntry
 	err     error
+}
+
+type inventoryLoadedMsg struct {
+	installed map[string]string // source -> version
 }
 
 type catalogFetchedMsg struct{ err error }
@@ -85,22 +91,40 @@ func New(cfg *index.Config, cast CastFn, update UpdateFn) Model {
 	ti.Placeholder = "filter (name / desc / tag / source)"
 	ti.Prompt = "/ "
 	return Model{
-		cfg:      cfg,
-		cast:     cast,
-		update:   update,
-		selected: map[string]bool{},
-		filter:   ti,
-		loading:  true,
-		castStat: map[string]string{},
+		cfg:       cfg,
+		cast:      cast,
+		update:    update,
+		installed: map[string]string{},
+		selected:  map[string]bool{},
+		filter:    ti,
+		loading:   true,
+		castStat:  map[string]string{},
 	}
 }
 
-func (m Model) Init() tea.Cmd { return loadCatalogCmd(m.cfg) }
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(loadCatalogCmd(m.cfg), loadInventoryCmd(m.cfg))
+}
 
 func loadCatalogCmd(cfg *index.Config) tea.Cmd {
 	return func() tea.Msg {
 		c, err := data.LoadCatalog(cfg)
 		return catalogLoadedMsg{catalog: c, err: err}
+	}
+}
+
+func loadInventoryCmd(cfg *index.Config) tea.Cmd {
+	return func() tea.Msg {
+		items, _ := data.LoadInventory(cfg)
+		out := make(map[string]string, len(items))
+		for _, it := range items {
+			// First scope wins (project before global). Both are useful info,
+			// but the badge just signals "you have this".
+			if _, exists := out[it.Entry.Source]; !exists {
+				out[it.Entry.Source] = it.Entry.Version
+			}
+		}
+		return inventoryLoadedMsg{installed: out}
 	}
 }
 
@@ -123,13 +147,17 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case catalogFetchedMsg:
 		// After fetch (success or error), reload from cache.
 		return m, loadCatalogCmd(m.cfg)
+	case inventoryLoadedMsg:
+		m.installed = msg.installed
+		return m, nil
 	case castDoneMsg:
 		if msg.err != nil {
 			m.castStat[msg.source] = "err: " + msg.err.Error()
 		} else {
 			m.castStat[msg.source] = "ok"
 		}
-		return m, nil
+		// Refresh inventory so the "installed" badge updates immediately.
+		return m, loadInventoryCmd(m.cfg)
 	case tea.KeyMsg:
 		if m.filter.Focused() {
 			switch msg.String() {
@@ -174,7 +202,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		case "r":
 			m.loading = true
-			return m, loadCatalogCmd(m.cfg)
+			return m, tea.Batch(loadCatalogCmd(m.cfg), loadInventoryCmd(m.cfg))
 		}
 	}
 	return m, nil
@@ -268,6 +296,14 @@ func (m Model) View() string {
 		if e.Verified {
 			verified = " " + verifiedStyle.Render("✓")
 		}
+		installedTag := ""
+		if v, ok := m.installed[e.Source]; ok {
+			label := "● installed"
+			if v != "" {
+				label = "● installed " + v
+			}
+			installedTag = " " + installedStyle.Render(label)
+		}
 		status := ""
 		if s, ok := m.castStat[e.Source]; ok {
 			switch s {
@@ -279,10 +315,11 @@ func (m Model) View() string {
 				status = "  " + statusErrStyle.Render("("+s+")")
 			}
 		}
-		fmt.Fprintf(&b, "%s%s %s%s %s%s\n",
+		fmt.Fprintf(&b, "%s%s %s%s%s %s%s\n",
 			caret, mark,
 			moldNameStyle.Render(e.Name),
 			verified,
+			installedTag,
 			descStyle.Render("— "+e.Description),
 			status)
 	}
