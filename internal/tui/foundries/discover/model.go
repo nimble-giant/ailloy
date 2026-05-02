@@ -265,6 +265,12 @@ func (m Model) CurrentMold() (ref string, scope data.Scope, ok bool) {
 	return m.filtered[m.cursor].Source, data.ScopeProject, true
 }
 
+// NewWithFiltered constructs a Model directly with a known filtered slice
+// and cursor — exported for cross-package tests in the foundries app.
+func NewWithFiltered(entries []data.CatalogEntry, cursor int) Model {
+	return Model{filtered: entries, cursor: cursor}
+}
+
 func (m Model) View() string {
 	if m.loading {
 		return metaStyle.Render("Loading catalog…")
