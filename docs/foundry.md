@@ -184,24 +184,92 @@ The official nimble-giant foundry (`https://github.com/nimble-giant/foundry`) is
 
 ### Interactive TUI
 
-`ailloy foundries` opens a four-tab terminal UI for discovering, installing,
-managing, and auditing foundries and casted molds:
+`ailloy foundries` opens a four-tab Bubble Tea terminal UI for discovering,
+installing, managing, and auditing foundries and casted molds (ailloys).
+On first run it auto-fetches every registered foundry's index so the
+verified default is browsable immediately — no `foundry update` required.
 
-- **Discover** — browse the catalog across every registered foundry, multi-select with `space`, install all selected with `enter`.
-- **Installed** — list every casted mold (project `./ailloy.lock` and global `~/ailloy.lock`); update with `u` or uninstall with `x`.
-- **Foundries** — add/remove/refresh registered foundries; the verified default is shown as a built-in entry that can't be removed.
-- **Health** — drift checks (orphaned molds, legacy install manifests) plus `assay` findings on rendered blank dirs.
+```text
+Discover   Installed   Foundries   Health
 
-Switch tabs with `tab`/`shift-tab`, quit with `q`. The TUI requires a TTY; in
-scripts use `ailloy foundry list/search/...` and `ailloy uninstall` instead.
+/ filter (name / desc / tag / source)
+
+Recent (last 7 days)
+  · plugin-to-mold — Scaffolds a multi-target ailloy mold ...
+
+▶ [x] nimble-mold  ✓  ● installed v0.4.0  — Distributable, reusable, and agnostic AI workflow blanks
+  [ ] replicated-launch  ✓  — Full Replicated integration: SDK, releases, CI/CD ...
+  [ ] replicated-ce  ✓  — Helm chart reviews, support triage, and knowledge base
+  ...
+
+1 selected · 9 shown · 9 total
+space toggle · enter cast all · / search · c clear · r refresh · j/k move
+```
+
+#### Tabs
+
+| Tab | What it does |
+| --- | --- |
+| **Discover** | Browse the merged catalog across every effective foundry. Multi-select with `space`, install all selected with `enter`. Live filter with `/`. The "Recent" section highlights molds whose foundry was indexed in the last 7 days (top 10). Already-installed molds show a blue `● installed <version>` badge. |
+| **Installed** | List every casted mold across project (`./ailloy.lock`) and global (`~/ailloy.lock`) scope. `u` re-casts to the latest version; `x` uninstalls (uses the install manifest, skips files modified since cast). Pre-manifest legacy entries display a yellow warning. |
+| **Foundries** | Add (`a`), remove (`d`), or refresh (`r`) registered foundry indexes. The verified default is rendered as a built-in entry and can't be removed. |
+| **Health** | Drift checks (orphaned molds whose foundry no longer indexes them, legacy install manifests) plus `assay` findings against the rendered blank directories from `.ailloy/state.yaml`. `r` re-runs the checks. |
+
+#### Key bindings
+
+| Scope | Keys | Action |
+| --- | --- | --- |
+| Global | `tab` / `→` / `l` | next tab |
+| Global | `shift+tab` / `←` / `h` | previous tab |
+| Global | `q` / `ctrl+c` | quit |
+| Per tab | `j` / `↓`, `k` / `↑` | move cursor |
+| Per tab | `r` | refresh that tab |
+| Discover | `/` | focus filter (esc/enter to leave) |
+| Discover | `space` | toggle selection on current row |
+| Discover | `enter` | cast all selected molds (sequential) |
+| Discover | `c` | clear selection |
+| Installed | `u` | re-cast to latest (update) |
+| Installed | `x` | uninstall current row |
+| Foundries | `a` | open add-foundry input |
+| Foundries | `d` | remove current foundry |
+
+The TUI requires a TTY; piping `ailloy foundries` to a file errors out with a
+hint to use the scriptable equivalents (`ailloy foundry list/search/...` and
+`ailloy uninstall`).
 
 ### Uninstalling a casted mold
 
-`ailloy uninstall <source>` removes a previously casted mold. Files modified
-since they were cast are retained (the install manifest tracks SHA-256
-hashes); pass `--force` to override. Use `--dry-run` to preview, `-g/--global`
-to operate on `~/ailloy.lock`. Files claimed by another casted mold are
-retained automatically.
+```bash
+# Project scope (./ailloy.lock):
+ailloy uninstall github.com/nimble-giant/nimble-mold
+
+# Preview without touching disk:
+ailloy uninstall github.com/nimble-giant/nimble-mold --dry-run
+
+# Global scope (~/ailloy.lock):
+ailloy uninstall -g github.com/nimble-giant/nimble-mold
+
+# Force-delete files modified since cast:
+ailloy uninstall github.com/nimble-giant/nimble-mold --force
+```
+
+When a mold is cast, its `LockEntry` records every file written and a
+SHA-256 of each file's content at install time. Uninstall walks that
+manifest and:
+
+- Deletes files whose on-disk content still matches the recorded hash.
+- Skips files whose hash differs (you've edited them) — listed under
+  "Skipped (modified)". Pass `--force` to delete anyway.
+- Retains files claimed by another casted mold (rare, e.g. shared
+  `AGENTS.md`) — listed under "Retained".
+- Reports files already missing under "Already absent".
+- Prunes any parent directories left empty.
+- Removes the entry from the lockfile (or leaves an empty lockfile when
+  it was the last entry — never deletes the file outright).
+
+Lockfile entries written before this manifest existed lack the `files:`
+list. Uninstall on those errors with a friendly hint to re-cast first
+(re-casting backfills the manifest).
 
 ## Foundry Index Format
 
