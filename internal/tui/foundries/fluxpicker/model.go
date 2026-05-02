@@ -96,3 +96,80 @@ type editorState struct {
 type saveState struct {
 	active bool
 }
+
+// BadgeState describes the visual badge to draw next to a key in the list.
+type BadgeState int
+
+const (
+	BadgeUnset BadgeState = iota
+	BadgeDefault
+	BadgeSet
+)
+
+// SetOverride records a session override.
+func (m Model) SetOverride(key string, value any) Model {
+	if m.overrides == nil {
+		m.overrides = map[string]any{}
+	}
+	m.overrides[key] = value
+	return m
+}
+
+// ClearOverride removes a session override.
+func (m Model) ClearOverride(key string) Model {
+	delete(m.overrides, key)
+	return m
+}
+
+// ResetOverrides clears all session overrides.
+func (m Model) ResetOverrides() Model {
+	m.overrides = map[string]any{}
+	return m
+}
+
+// BadgeStateFor returns the badge to render next to a key. The defaults map
+// uses dotted-path lookup (e.g. "agents.targets" → defaults["agents"]["targets"]).
+func (m Model) BadgeStateFor(key string) BadgeState {
+	if _, ok := m.overrides[key]; ok {
+		return BadgeSet
+	}
+	if hasDottedKey(m.defaults, key) {
+		return BadgeDefault
+	}
+	return BadgeUnset
+}
+
+// hasDottedKey reports whether a dotted key exists in a nested map.
+func hasDottedKey(m map[string]any, key string) bool {
+	if m == nil {
+		return false
+	}
+	parts := splitDots(key)
+	cur := any(m)
+	for _, p := range parts {
+		mm, ok := cur.(map[string]any)
+		if !ok {
+			return false
+		}
+		v, present := mm[p]
+		if !present {
+			return false
+		}
+		cur = v
+	}
+	return true
+}
+
+// splitDots splits "a.b.c" into ["a","b","c"].
+func splitDots(s string) []string {
+	out := []string{}
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '.' {
+			out = append(out, s[start:i])
+			start = i + 1
+		}
+	}
+	out = append(out, s[start:])
+	return out
+}
