@@ -10,8 +10,13 @@ import (
 
 const indexFileName = "foundry.yaml"
 
-// IndexCacheDir returns the root cache directory for foundry indexes (~/.ailloy/cache/indexes).
+// IndexCacheDir returns the root cache directory for foundry indexes
+// (~/.ailloy/cache/indexes). The AILLOY_INDEX_CACHE_DIR env var, when set,
+// overrides the default — primarily for tests.
 func IndexCacheDir() (string, error) {
+	if v := os.Getenv("AILLOY_INDEX_CACHE_DIR"); v != "" {
+		return v, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine home directory: %w", err)
