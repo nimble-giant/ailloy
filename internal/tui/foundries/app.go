@@ -90,10 +90,17 @@ func New(deps Deps) App {
 		}
 		return out, err
 	}
+	discoverUpdate := func(cfg *index.Config) error {
+		if deps.UpdateFoundries == nil {
+			return errMissingDep
+		}
+		_, err := deps.UpdateFoundries(cfg)
+		return err
+	}
 
 	return App{
 		cfg:        cfg,
-		discover:   discover.New(cfg, discoverCast),
+		discover:   discover.New(cfg, discoverCast, discoverUpdate),
 		installed:  installed.New(cfg, installedCast),
 		registered: registered.New(cfg, regAdd, regRemove, regUpdate),
 		health:     health.New(cfg),

@@ -44,18 +44,25 @@ type CastFunc func(ctx context.Context, source string, opts CastOptions) (foundr
 // detail and just look at err for status display.
 type CastFn func(ctx context.Context, source string, opts CastOptions) error
 
+// UpdateFn fetches every effective foundry's index into the local cache.
+// Used to bootstrap an empty Discover view (e.g. on a fresh install where
+// the verified default has never been fetched).
+type UpdateFn func(cfg *index.Config) error
+
 // Model is the Discover tab.
 type Model struct {
-	cfg      *index.Config
-	cast     CastFn
-	catalog  []data.CatalogEntry
-	filtered []data.CatalogEntry
-	selected map[string]bool
-	cursor   int
-	filter   textinput.Model
-	loading  bool
-	loadErr  error
-	castStat map[string]string
+	cfg         *index.Config
+	cast        CastFn
+	update      UpdateFn
+	catalog     []data.CatalogEntry
+	filtered    []data.CatalogEntry
+	selected    map[string]bool
+	cursor      int
+	filter      textinput.Model
+	loading     bool
+	loadErr     error
+	castStat    map[string]string
+	autoFetched bool // guard so we only auto-fetch once per session
 }
 
 type catalogLoadedMsg struct {
@@ -63,20 +70,24 @@ type catalogLoadedMsg struct {
 	err     error
 }
 
+type catalogFetchedMsg struct{ err error }
+
 type castDoneMsg struct {
 	source string
 	err    error
 }
 
 // New initializes the Discover model and kicks off catalog loading. cast is
-// the install operation; pass nil during tests.
-func New(cfg *index.Config, cast CastFn) Model {
+// the install operation, update is the foundry-index fetch operation; pass
+// nil for either during tests.
+func New(cfg *index.Config, cast CastFn, update UpdateFn) Model {
 	ti := textinput.New()
 	ti.Placeholder = "filter (name / desc / tag / source)"
 	ti.Prompt = "/ "
 	return Model{
 		cfg:      cfg,
 		cast:     cast,
+		update:   update,
 		selected: map[string]bool{},
 		filter:   ti,
 		loading:  true,
@@ -100,7 +111,18 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.catalog = msg.catalog
 		m.loadErr = msg.err
 		m.applyFilter()
+		// Auto-bootstrap: if the catalog is empty and we have an update fn,
+		// fetch all foundry indexes once and reload. Common on first run
+		// where the verified default has never been cached.
+		if len(m.catalog) == 0 && m.loadErr == nil && m.update != nil && !m.autoFetched {
+			m.autoFetched = true
+			m.loading = true
+			return m, m.fetchCmd()
+		}
 		return m, nil
+	case catalogFetchedMsg:
+		// After fetch (success or error), reload from cache.
+		return m, loadCatalogCmd(m.cfg)
 	case castDoneMsg:
 		if msg.err != nil {
 			m.castStat[msg.source] = "err: " + msg.err.Error()
@@ -156,6 +178,17 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func (m Model) fetchCmd() tea.Cmd {
+	update := m.update
+	cfg := m.cfg
+	return func() tea.Msg {
+		if update == nil {
+			return catalogFetchedMsg{}
+		}
+		return catalogFetchedMsg{err: update(cfg)}
+	}
 }
 
 func (m Model) castCmd(source string) tea.Cmd {
