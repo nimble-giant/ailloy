@@ -408,8 +408,21 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 		skipped   int
 		failed    int
 	)
+	lastFnd := "\x00" // sentinel so the first iteration always prints a header
 	for _, r := range reports {
-		fmt.Printf("  %s", styles.AccentStyle.Render(r.Name))
+		if r.Foundry != lastFnd {
+			if lastFnd != "\x00" {
+				fmt.Println()
+			}
+			header := "Installing from " + styles.AccentStyle.Render(r.Foundry)
+			if len(r.Chain) > 0 {
+				header += styles.SubtleStyle.Render(" (via " + strings.Join(r.Chain, " → ") + ")")
+			}
+			fmt.Println(header)
+			lastFnd = r.Foundry
+		}
+		display := r.Foundry + "/" + r.Name
+		fmt.Printf("  %s", styles.AccentStyle.Render(display))
 		switch {
 		case r.Err != nil:
 			failed++
@@ -428,6 +441,12 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 			installed++
 			fmt.Println(" " + styles.SuccessStyle.Render("ok"))
 		}
+	}
+
+	if len(reports) == 0 && foundryInstallShallow {
+		fmt.Println(styles.InfoStyle.Render("Nothing to install — this foundry only aggregates nested foundries."))
+		fmt.Println(styles.SubtleStyle.Render("Drop --shallow to install transitively."))
+		return nil
 	}
 
 	fmt.Println()
