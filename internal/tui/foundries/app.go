@@ -144,6 +144,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.width, a.height = m.Width, m.Height
+		// Picker is sized here; tabs receive WindowSizeMsg via the broadcast
+		// loop below.
 		a.picker, _ = a.picker.Update(m)
 	case fluxpicker.FluxOverridesMsg:
 		// Task 11 will route session-target overrides into discover/installed
@@ -151,7 +153,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.picker = a.picker.Close()
 		return a, nil
 	case tea.KeyMsg:
-		// If the picker is open, route all key messages to it first.
+		// Picker captures all keys while open — including tab-switch keys —
+		// so the user can't navigate tabs behind the overlay.
 		if a.picker.IsOpen() {
 			var cmd tea.Cmd
 			a.picker, cmd = a.picker.Update(m)
