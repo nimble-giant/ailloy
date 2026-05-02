@@ -119,6 +119,9 @@ ailloy cast github.com/nimble-giant/nimble-mold --with-workflows
 
 # Override flux at install time
 ailloy cast github.com/nimble-giant/nimble-mold --set project.organization=mycompany
+
+# Install as a Claude Code plugin (writes to .claude/plugins/<slug>/)
+ailloy cast github.com/nimble-giant/nimble-mold --claude-plugin
 ```
 
 ### 3. Configure flux variables
@@ -144,6 +147,8 @@ ailloy cast github.com/nimble-giant/nimble-mold -f flux-overrides.yaml
 - `--with-workflows` — Include GitHub Actions workflow blanks
 - `--set key=value` — Override flux variables (repeatable)
 - `-f, --values file` — Layer flux value files (repeatable)
+- `--claude-plugin` — Package the rendered mold as a Claude Code plugin under `.claude/plugins/<slug>/` (see [`docs/cast-claude-plugin.md`](docs/cast-claude-plugin.md))
+- `--plugin-name`, `--plugin-version` — Override plugin metadata (require `--claude-plugin`)
 
 **`ailloy forge [mold-ref]`** (aliases: `blank`, `template`) — Dry-run render of mold blanks.
 
@@ -255,6 +260,8 @@ Currently Claude Code specific; the core pipeline is tool-agnostic.
 - `generate` — Generate plugin from blanks (`--mold`, `--output`, `--watch`, `--force`)
 - `update [path]` — Update existing plugin
 - `validate [path]` — Validate plugin structure
+
+> Looking to **install** a mold as a Claude Code plugin (rather than author one)? Use [`ailloy cast --claude-plugin`](docs/cast-claude-plugin.md) instead.
 
 </details>
 
