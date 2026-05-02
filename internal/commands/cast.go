@@ -227,6 +227,9 @@ func castProject(reader *blanks.MoldReader) error {
 		return fmt.Errorf("failed to copy files: %w", err)
 	}
 
+	// Drop directories that ended up empty after skipped renders (#145).
+	dirs = cleanupEmptyDirs(dirs, destPrefix)
+
 	// Record where blanks were installed (non-fatal if this fails).
 	if destPrefix == "" {
 		if err := writeInstallState(dirs); err != nil {
@@ -306,6 +309,52 @@ func castProject(reader *blanks.MoldReader) error {
 	}
 
 	return nil
+}
+
+// cleanupEmptyDirs removes any directories from dirs (and their ancestors up
+// to destPrefix or the working-directory root) that ended up empty after the
+// render pass. Multi-destination output mappings can leave behind empty
+// directories when target guards skip every file at one destination (#145).
+// Returns the subset of input dirs that still exist after cleanup.
+func cleanupEmptyDirs(dirs []string, destPrefix string) []string {
+	stop := destPrefix
+	if stop == "" {
+		stop = "."
+	}
+
+	candidates := make(map[string]bool)
+	for _, d := range dirs {
+		for cur := d; cur != stop && cur != "." && cur != string(filepath.Separator) && cur != ""; cur = filepath.Dir(cur) {
+			candidates[cur] = true
+		}
+	}
+
+	ordered := make([]string, 0, len(candidates))
+	for d := range candidates {
+		ordered = append(ordered, d)
+	}
+	// Deepest paths first so children are removed before their parents.
+	sort.Slice(ordered, func(i, j int) bool {
+		return len(ordered[i]) > len(ordered[j])
+	})
+
+	for _, d := range ordered {
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			continue
+		}
+		if len(entries) == 0 {
+			_ = os.Remove(d)
+		}
+	}
+
+	remaining := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		if info, err := os.Stat(d); err == nil && info.IsDir() {
+			remaining = append(remaining, d)
+		}
+	}
+	return remaining
 }
 
 // installState represents the .ailloy/state.yaml file that records where blanks were installed.
