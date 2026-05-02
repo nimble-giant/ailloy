@@ -4,6 +4,26 @@ import (
 	"testing"
 )
 
+func TestEvolveAnimationFrames(t *testing.T) {
+	full, sil := evolveAnimationFrames()
+	if len(full) == 0 || len(sil) == 0 {
+		t.Fatalf("expected non-empty animation frames, got full=%d sil=%d", len(full), len(sil))
+	}
+	if len(full) != len(sil) {
+		t.Errorf("full and silhouette frames must have equal line count: full=%d sil=%d", len(full), len(sil))
+	}
+	for i, line := range full {
+		if line == "" {
+			t.Errorf("full frame line %d is empty", i)
+		}
+	}
+	for i, line := range sil {
+		if line == "" {
+			t.Errorf("silhouette frame line %d is empty", i)
+		}
+	}
+}
+
 func TestIsHomebrewPath(t *testing.T) {
 	cases := []struct {
 		path string
