@@ -667,6 +667,16 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 				}
 				return fmt.Errorf("failed to merge %s: %w", rf.DestPath, err)
 			}
+		case "append":
+			if manifest == nil {
+				return fmt.Errorf("append strategy requires a mold manifest with a name (dest %s)", rf.DestPath)
+			}
+			err := merge.AppendFile(rf.DestPath, outputContent, merge.AppendOptions{
+				MoldName: manifest.Name,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to append into %s: %w", rf.DestPath, err)
+			}
 		case "", "replace":
 			if err := os.MkdirAll(filepath.Dir(rf.DestPath), 0750); err != nil { // #nosec G301
 				return fmt.Errorf("failed to create directory for %s: %w", rf.DestPath, err)

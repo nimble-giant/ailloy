@@ -683,6 +683,7 @@ func TestParseTargetMap_Strategy(t *testing.T) {
 		{name: "absent", input: map[string]any{"dest": "x"}, want: ""},
 		{name: "replace", input: map[string]any{"dest": "x", "strategy": "replace"}, want: "replace"},
 		{name: "merge", input: map[string]any{"dest": "x", "strategy": "merge"}, want: "merge"},
+		{name: "append", input: map[string]any{"dest": "x", "strategy": "append"}, want: "append"},
 		{name: "unknown", input: map[string]any{"dest": "x", "strategy": "smush"}, wantErr: true},
 		{name: "non-string", input: map[string]any{"dest": "x", "strategy": 7}, wantErr: true},
 	}

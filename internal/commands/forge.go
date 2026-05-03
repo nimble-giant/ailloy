@@ -186,7 +186,7 @@ func runForge(_ *cobra.Command, args []string) error {
 	ceremony.Open(ceremony.Forge)
 
 	if forgeOutputDir != "" {
-		if err := writeForgeFiles(files, forgeOutputDir, forgeForceReplaceOnParseError); err != nil {
+		if err := writeForgeFiles(files, forgeOutputDir, forgeForceReplaceOnParseError, manifest.Name); err != nil {
 			return err
 		}
 		ceremony.Stamp(ceremony.Forge, fmt.Sprintf("%d file(s) → %s", len(files), forgeOutputDir))
@@ -237,7 +237,7 @@ func printForgeFiles(files []renderedFile) error {
 	return nil
 }
 
-func writeForgeFiles(files []renderedFile, outputDir string, forceReplaceOnParseError bool) error {
+func writeForgeFiles(files []renderedFile, outputDir string, forceReplaceOnParseError bool, moldName string) error {
 	for _, f := range files {
 		dest := filepath.Join(outputDir, f.destPath)
 		switch f.strategy {
@@ -256,6 +256,17 @@ func writeForgeFiles(files []renderedFile, outputDir string, forceReplaceOnParse
 				return fmt.Errorf("failed to merge %s: %w", dest, err)
 			}
 			fmt.Println(styles.SuccessStyle.Render("Merged ") + styles.CodeStyle.Render(dest))
+		case "append":
+			if moldName == "" {
+				return fmt.Errorf("append strategy requires a mold name (dest %s)", dest)
+			}
+			err := merge.AppendFile(dest, []byte(f.content), merge.AppendOptions{
+				MoldName: moldName,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to append into %s: %w", dest, err)
+			}
+			fmt.Println(styles.SuccessStyle.Render("Appended ") + styles.CodeStyle.Render(dest))
 		case "", "replace":
 			if err := os.MkdirAll(filepath.Dir(dest), 0750); err != nil { // #nosec G301 -- Output directories need group read access
 				return fmt.Errorf("creating directory for %s: %w", f.destPath, err)

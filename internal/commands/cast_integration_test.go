@@ -763,7 +763,7 @@ func TestIntegration_Forge_MergeStrategy(t *testing.T) {
 			strategy: "merge",
 		},
 	}
-	if err := writeForgeFiles(files, outputDir, false); err != nil {
+	if err := writeForgeFiles(files, outputDir, false, "test"); err != nil {
 		t.Fatalf("writeForgeFiles: %v", err)
 	}
 	got, _ := os.ReadFile(dest)
@@ -992,5 +992,150 @@ func TestIntegration_MergeStrategy_NestedDestPath(t *testing.T) {
 	}
 	if _, err := os.Stat("nested/sub/dir/config.json"); err != nil {
 		t.Errorf("expected nested dest file to exist: %v", err)
+	}
+}
+
+// TestIntegration_AppendStrategy_TwoMoldsContributeToAGENTS verifies the
+// motivating use case: two molds each declare strategy: append on AGENTS.md;
+// after both casts, the file contains both molds' content in distinct
+// sentinel blocks.
+func TestIntegration_AppendStrategy_TwoMoldsContributeToAGENTS(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	wikiAgents := []byte("# wiki\n\nWiki agent instructions.")
+	docsAgents := []byte("# docs\n\nDocs agent instructions.")
+
+	wiki := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: wiki\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  AGENTS.md:
+    dest: AGENTS.md
+    strategy: append
+`)},
+		"AGENTS.md": &fstest.MapFile{Data: wikiAgents},
+	}
+	docs := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: docs\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  AGENTS.md:
+    dest: AGENTS.md
+    strategy: append
+`)},
+		"AGENTS.md": &fstest.MapFile{Data: docsAgents},
+	}
+
+	for _, m := range []fstest.MapFS{wiki, docs} {
+		reader := blanks.NewMoldReader(m)
+		manifest, err := reader.LoadManifest()
+		if err != nil {
+			t.Fatalf("load manifest: %v", err)
+		}
+		flux, err := reader.LoadFluxDefaults()
+		if err != nil {
+			t.Fatalf("load flux: %v", err)
+		}
+		resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+		if err != nil {
+			t.Fatalf("resolve: %v", err)
+		}
+		if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+			t.Fatalf("copy: %v", err)
+		}
+	}
+
+	got, err := os.ReadFile("AGENTS.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gs := string(got)
+	for _, want := range []string{
+		"<!-- ailloy:mold=wiki:start -->",
+		"<!-- ailloy:mold=wiki:end -->",
+		"<!-- ailloy:mold=docs:start -->",
+		"<!-- ailloy:mold=docs:end -->",
+		"Wiki agent instructions.",
+		"Docs agent instructions.",
+	} {
+		if !strings.Contains(gs, want) {
+			t.Errorf("missing %q in AGENTS.md after append:\n%s", want, gs)
+		}
+	}
+}
+
+// TestIntegration_AppendStrategy_RecastIsIdempotent verifies that re-casting
+// the same mold updates its sentinel block in place rather than appending
+// a duplicate.
+func TestIntegration_AppendStrategy_RecastIsIdempotent(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	wiki := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: wiki\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  AGENTS.md:
+    dest: AGENTS.md
+    strategy: append
+`)},
+		"AGENTS.md": &fstest.MapFile{Data: []byte("# wiki v1")},
+	}
+
+	castOnce := func() {
+		reader := blanks.NewMoldReader(wiki)
+		manifest, _ := reader.LoadManifest()
+		flux, _ := reader.LoadFluxDefaults()
+		resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
+		if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	castOnce()
+	castOnce()
+	castOnce()
+
+	got, _ := os.ReadFile("AGENTS.md")
+	gs := string(got)
+	if strings.Count(gs, "wiki:start") != 1 {
+		t.Errorf("re-cast duplicated sentinel block:\n%s", gs)
+	}
+}
+
+// TestIntegration_AppendStrategy_NonMarkdownErrors verifies that strategy:
+// append on a non-markdown file errors clearly.
+func TestIntegration_AppendStrategy_NonMarkdownErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  src/config.json:
+    dest: config.json
+    strategy: append
+`)},
+		"src/config.json": &fstest.MapFile{Data: []byte(`{"x":1}`)},
+	}
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, _ := reader.LoadManifest()
+	flux, _ := reader.LoadFluxDefaults()
+	resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
+	err := copyResolvedFiles(reader, manifest, flux, resolved, false)
+	if err == nil {
+		t.Fatal("expected error for append on non-markdown file, got nil")
+	}
+	if !strings.Contains(err.Error(), ".md") {
+		t.Errorf("error should explain markdown limitation; got: %v", err)
 	}
 }

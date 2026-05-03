@@ -215,11 +215,12 @@ output:
 Each output entry accepts an optional `strategy` field controlling how `cast`
 writes the destination when a file already exists:
 
-| value     | behavior                                                      |
-| --------- | ------------------------------------------------------------- |
-| (omitted) | Same as `replace`.                                            |
-| `replace` | Whole-file overwrite. Default.                                |
-| `merge`   | Deep-merge with the existing file (JSON/YAML only).           |
+| value     | behavior                                                                                                       |
+| --------- | -------------------------------------------------------------------------------------------------------------- |
+| (omitted) | Same as `replace`.                                                                                             |
+| `replace` | Whole-file overwrite. Default.                                                                                 |
+| `merge`   | Deep-merge with the existing file (JSON/YAML only).                                                            |
+| `append`  | Idempotent text append for markdown files. Each mold's content goes into a sentinel block keyed by mold name.  |
 
 **Use `strategy: merge` when multiple molds need to contribute to a shared
 config file.** The motivating example: several molds each declare MCP server
@@ -256,6 +257,32 @@ ailloy cast ./my-mold --force-replace-on-parse-error
 ```
 
 The same `strategy: merge` behavior applies to `ailloy forge --output <dir>`, so iterative previews against an existing output directory merge instead of clobbering. `forge` (without `--output`) prints rendered content to stdout and is unaffected — there is no destination file to merge against.
+
+#### `strategy: append` (markdown only)
+
+When multiple molds each contribute a section to a shared markdown file (e.g., a project `AGENTS.md`), declare `strategy: append`:
+
+```yaml
+output:
+  AGENTS.md:
+    dest: AGENTS.md
+    strategy: append
+```
+
+The cast pipeline wraps each mold's rendered content in a sentinel block keyed by the mold's name:
+
+```markdown
+<!-- ailloy:mold=wiki:start -->
+... wiki's content ...
+<!-- ailloy:mold=wiki:end -->
+```
+
+Re-casting the same mold updates only its block in place — no duplicates. Foreign content (hand-edited intros, prose between blocks) is preserved across re-casts. Casting two different molds into the same file produces two distinct blocks in cast order.
+
+**Limitations:**
+
+- v1 supports only `.md` and `.markdown` extensions. Other extensions return an error so authors get explicit feedback.
+- The sentinel format uses HTML comments (`<!-- ... -->`), which renders invisibly in markdown viewers but is syntactically a comment.
 
 ### String output
 

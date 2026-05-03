@@ -367,10 +367,10 @@ func parseTargetMap(v map[string]any) (OutputTarget, error) {
 			return t, fmt.Errorf("strategy must be a string")
 		}
 		switch s {
-		case "", "replace", "merge":
+		case "", "replace", "merge", "append":
 			t.Strategy = s
 		default:
-			return t, fmt.Errorf("unknown strategy %q: must be \"replace\" or \"merge\"", s)
+			return t, fmt.Errorf("unknown strategy %q: must be \"replace\", \"merge\", or \"append\"", s)
 		}
 	}
 	return t, nil
