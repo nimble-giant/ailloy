@@ -246,6 +246,6 @@ func (m Model) View() string {
 			metaStyle.Render(it.Entry.Source),
 			legacy)
 	}
-	b.WriteString("\n" + metaStyle.Render("u update · x uninstall · r refresh · j/k move") + "\n")
+	b.WriteString("\n" + metaStyle.Render("u update · x uninstall · r refresh · f flux · j/k move") + "\n")
 	return b.String()
 }

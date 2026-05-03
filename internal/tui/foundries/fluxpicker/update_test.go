@@ -21,6 +21,8 @@ func keyMsg(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyDown}
 	case "up":
 		return tea.KeyMsg{Type: tea.KeyUp}
+	case "ctrl+s":
+		return tea.KeyMsg{Type: tea.KeyCtrlS}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 	}
@@ -87,16 +89,28 @@ func TestUpdate_RResetsAllOverrides(t *testing.T) {
 	}
 }
 
-func TestUpdate_SOpensSavePrompt(t *testing.T) {
+func TestUpdate_CtrlSOpensSavePrompt(t *testing.T) {
+	// Ctrl+S works regardless of filter focus; we deliberately leave the
+	// filter focused (its default state in OpenFor) to prove the binding
+	// reaches the picker even while the user is typing.
 	m := New().OpenFor("a", data.ScopeProject,
-		[]mold.FluxVar{{Name: "k"}}, nil)
-	m.filter.Blur()
-	m, _ = m.Update(keyMsg("s"))
+		[]mold.FluxVar{{Name: "k"}}, nil).
+		SetOverride("k", "v")
+	m, _ = m.Update(keyMsg("ctrl+s"))
 	if m.focus != focusSavePrompt {
 		t.Fatalf("expected save prompt focus, got %v", m.focus)
 	}
 	if !m.saving.active {
 		t.Fatal("expected saving.active=true")
+	}
+}
+
+func TestUpdate_CtrlSWithNoOverridesIsNoop(t *testing.T) {
+	m := New().OpenFor("a", data.ScopeProject,
+		[]mold.FluxVar{{Name: "k"}}, nil)
+	m, _ = m.Update(keyMsg("ctrl+s"))
+	if m.focus == focusSavePrompt {
+		t.Fatal("expected save prompt to remain closed when no overrides exist")
 	}
 }
 
@@ -162,16 +176,21 @@ func TestHandleSaveKey_SessionEmitsMsg(t *testing.T) {
 	}
 }
 
-func TestHandleSaveKey_EscReturnsToFilter(t *testing.T) {
-	m := New().OpenFor("ref", data.ScopeProject, nil, nil)
+func TestHandleSaveKey_EscDiscardsAndCloses(t *testing.T) {
+	// Esc from the save prompt is the explicit "throw it away" action: the
+	// user already opted to save (ctrl+s, or esc-with-overrides) and is
+	// declining; closing the picker matches the dialog's [esc] discard label.
+	m := New().OpenFor("ref", data.ScopeProject,
+		[]mold.FluxVar{{Name: "k", Type: "string"}}, nil).
+		SetOverride("k", "v")
 	m.saving = saveState{active: true}
 	m.focus = focusSavePrompt
 	m, _ = m.Update(keyMsg("esc"))
-	if m.focus != focusFilter {
-		t.Fatalf("expected focus to return to filter, got %v", m.focus)
+	if m.IsOpen() {
+		t.Fatal("expected picker to close on esc-from-save-prompt")
 	}
-	if m.saving.active {
-		t.Fatal("expected saving cleared")
+	if len(m.Overrides()) != 0 {
+		t.Fatalf("expected overrides discarded, got %+v", m.Overrides())
 	}
 }
 

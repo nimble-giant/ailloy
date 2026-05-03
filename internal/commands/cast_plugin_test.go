@@ -106,7 +106,7 @@ func TestCastClaudePlugin_FullPipeline(t *testing.T) {
 	chdir(t, tmp)
 
 	reader := fixtureMoldReader()
-	if err := castClaudePlugin(reader); err != nil {
+	if err := castClaudePlugin(reader, ""); err != nil {
 		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
@@ -151,7 +151,7 @@ func TestCastClaudePlugin_FluxOverride(t *testing.T) {
 	chdir(t, tmp)
 
 	reader := fixtureMoldReader()
-	if err := castClaudePlugin(reader); err != nil {
+	if err := castClaudePlugin(reader, ""); err != nil {
 		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
@@ -172,7 +172,7 @@ func TestCastClaudePlugin_WithWorkflowsWarnsAndSkips(t *testing.T) {
 	chdir(t, tmp)
 
 	reader := fixtureMoldReader()
-	if err := castClaudePlugin(reader); err != nil {
+	if err := castClaudePlugin(reader, ""); err != nil {
 		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
@@ -210,7 +210,7 @@ func TestCastClaudePlugin_RecastReplacesContents(t *testing.T) {
 	}
 
 	reader := fixtureMoldReader()
-	if err := castClaudePlugin(reader); err != nil {
+	if err := castClaudePlugin(reader, ""); err != nil {
 		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
@@ -231,7 +231,7 @@ func TestCastClaudePlugin_GlobalRoutesToHome(t *testing.T) {
 	t.Setenv("HOME", tmp)
 
 	reader := fixtureMoldReader()
-	if err := castClaudePlugin(reader); err != nil {
+	if err := castClaudePlugin(reader, ""); err != nil {
 		t.Fatalf("castClaudePlugin: %v", err)
 	}
 
@@ -250,7 +250,7 @@ func TestCastClaudePlugin_PluginNameOverride(t *testing.T) {
 	chdir(t, tmp)
 
 	reader := fixtureMoldReader()
-	if err := castClaudePlugin(reader); err != nil {
+	if err := castClaudePlugin(reader, ""); err != nil {
 		t.Fatalf("castClaudePlugin: %v", err)
 	}
 

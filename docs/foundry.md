@@ -277,10 +277,10 @@ mold.
 | `↑` / `↓` | move cursor through results |
 | `tab` | commit top match into the type-aware editor |
 | `enter` | commit highlighted match (filter) / save value (editor) |
-| `d` | clear the override on the highlighted key |
-| `R` | reset every override in this session |
-| `s` | open the save-target prompt |
-| `esc` | cancel editor, or close picker (prompts to save when there are unsaved overrides) |
+| `d` | clear the override on the highlighted key (when filter blurred) |
+| `R` | reset every override in this session (when filter blurred) |
+| `ctrl+s` | open the save-target prompt (works regardless of filter focus) |
+| `esc` | cancel editor; close picker; or open the save prompt when there are unsaved overrides. From the save prompt, `esc` discards & closes. |
 
 Each row shows a badge: `●` set in this session, `○` value comes from
 `flux.yaml` defaults, blank for unset/required. The editor shape is
@@ -295,6 +295,12 @@ The save prompt routes the overrides three ways:
 - `[o]` this cast only — keeps the values in TUI memory and threads them as
   `--set` overrides into the next cast of that mold (cleared on success,
   retained on failure for retry).
+
+Project- and global-saved files are **auto-loaded by every cast of that
+mold** (CLI or TUI). They layer between the mold's built-in defaults and any
+user-supplied `-f` files, with project winning over global on conflict. So
+saving `target: opencode` to project once is enough — subsequent
+`ailloy cast <ref>` invocations pick it up without `-f`.
 
 The `<slug>` is derived from the full mold ref (e.g., `github.com/nimble-giant/agents` → `github.com_nimble-giant_agents`) so molds with the same final segment under different foundries — including nested foundries that re-export shared molds — don't clobber each other on disk.
 

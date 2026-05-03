@@ -44,12 +44,8 @@ func TestEndToEnd_SaveToProject(t *testing.T) {
 		t.Fatalf("override not applied: %+v", m.Overrides())
 	}
 
-	// Blur the filter so that the 's' shortcut key is recognized (not typed
-	// into the filter text input).
-	m.filter.Blur()
-
-	// Open save prompt and save to project.
-	m, _ = m.Update(keyMsg("s"))
+	// Open save prompt via Ctrl+S; works regardless of filter focus.
+	m, _ = m.Update(keyMsg("ctrl+s"))
 	if m.focus != focusSavePrompt {
 		t.Fatalf("expected save prompt, got focus=%v", m.focus)
 	}
@@ -90,11 +86,7 @@ func TestEndToEnd_SessionTargetSkipsDisk(t *testing.T) {
 	m := New().OpenFor("ref", data.ScopeProject, schema, nil)
 	m = m.SetOverride("k", "v")
 
-	// Blur the filter so that the 's' shortcut key is recognized (not typed
-	// into the filter text input).
-	m.filter.Blur()
-
-	m, _ = m.Update(keyMsg("s"))
+	m, _ = m.Update(keyMsg("ctrl+s"))
 	if m.focus != focusSavePrompt {
 		t.Fatalf("expected save prompt focus, got %v", m.focus)
 	}
