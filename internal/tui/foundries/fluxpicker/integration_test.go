@@ -61,7 +61,9 @@ func TestEndToEnd_SaveToProject(t *testing.T) {
 		t.Fatal("expected emit cmd from save")
 	}
 
-	wantPath := filepath.Join(".ailloy", "flux", "agents.yaml")
+	// Slug is derived from the full mold ref so nested-foundry molds with
+	// the same final segment can't clobber each other.
+	wantPath := filepath.Join(".ailloy", "flux", "official_agents.yaml")
 	b, err := os.ReadFile(wantPath)
 	if err != nil {
 		t.Fatalf("read written file at %s: %v", wantPath, err)

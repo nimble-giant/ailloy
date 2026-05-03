@@ -183,7 +183,7 @@ func (m Model) handleSaveKey(k tea.KeyMsg) (Model, tea.Cmd) {
 			m.err = err
 			return m, nil
 		}
-		moldName := lastPathSegment(m.moldRef)
+		moldName := fluxFileSlug(m.moldRef)
 		if _, err := persistOverrides(moldName, target, m.overrides); err != nil {
 			m.err = err
 			return m, nil

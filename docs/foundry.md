@@ -284,12 +284,14 @@ select gets a dropdown (with discovery support), int validates as you type.
 
 The save prompt routes the overrides three ways:
 
-- `[p]` project — writes `./.ailloy/flux/<mold>.yaml` (atomic; merges with
+- `[p]` project — writes `./.ailloy/flux/<slug>.yaml` (atomic; merges with
   existing content).
-- `[g]` global — writes `~/.ailloy/flux/<mold>.yaml`.
+- `[g]` global — writes `~/.ailloy/flux/<slug>.yaml`.
 - `[o]` this cast only — keeps the values in TUI memory and threads them as
   `--set` overrides into the next cast of that mold (cleared on success,
   retained on failure for retry).
+
+The `<slug>` is derived from the full mold ref (e.g., `github.com/nimble-giant/agents` → `github.com_nimble-giant_agents`) so molds with the same final segment under different foundries — including nested foundries that re-export shared molds — don't clobber each other on disk.
 
 Required-but-unset fields block save with the missing keys called out in the
 error banner.

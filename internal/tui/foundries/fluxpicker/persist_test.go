@@ -95,17 +95,31 @@ func TestPersistOverrides_GlobalWritesFile(t *testing.T) {
 	}
 }
 
-func TestLastPathSegment(t *testing.T) {
+func TestFluxFileSlug(t *testing.T) {
 	cases := map[string]string{
-		"":                "",
-		"agents":          "agents",
-		"official/agents": "agents",
-		"a/b/c/d":         "d",
-		"trailing/":       "",
+		"":                                   "mold",
+		"agents":                             "agents",
+		"official/agents":                    "official_agents",
+		"github.com/nimble-giant/agents":     "github.com_nimble-giant_agents",
+		"github.com/nimble-giant/agents@v1":  "github.com_nimble-giant_agents_v1",
+		"github.com/nimble-giant/agents.git": "github.com_nimble-giant_agents",
+		"github.com/foo/bar//sub/path":       "github.com_foo_bar_sub_path",
+		"trailing/":                          "trailing",
+		"  spaces around  ":                  "spaces_around",
 	}
 	for in, want := range cases {
-		if got := lastPathSegment(in); got != want {
-			t.Errorf("lastPathSegment(%q) = %q want %q", in, got, want)
+		if got := fluxFileSlug(in); got != want {
+			t.Errorf("fluxFileSlug(%q) = %q want %q", in, got, want)
 		}
+	}
+}
+
+// Sibling foundries that re-export a same-named mold must produce distinct
+// slugs so neither user's saved overrides clobber the other.
+func TestFluxFileSlug_AvoidsCrossFoundryCollision(t *testing.T) {
+	a := fluxFileSlug("github.com/nimble-giant/agents")
+	b := fluxFileSlug("github.com/replicated/agents")
+	if a == b {
+		t.Fatalf("expected distinct slugs across foundries; both = %q", a)
 	}
 }
