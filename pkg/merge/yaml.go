@@ -117,17 +117,25 @@ func (m yamlForceQuotedMap) MarshalYAML() ([]byte, error) {
 			kb = bytes.TrimRight(kb, "\n")
 			buf.Write(kb)
 		}
-		buf.WriteString(": ")
+		buf.WriteString(":")
 		vb, err := yaml.MarshalWithOptions(it.value, yaml.Indent(2))
 		if err != nil {
 			return nil, err
 		}
-		// If the value is a multi-line block, indent continuation lines.
 		vbStr := string(bytes.TrimRight(vb, "\n"))
-		if strings.Contains(vbStr, "\n") {
-			// Place value on next line, indented.
+		// Non-scalar values (sequences and mappings) must start on a new
+		// indented line. Multi-line scalars likewise need each line indented.
+		// Detect non-scalar by value type rather than by output shape.
+		nonScalar := false
+		switch it.value.(type) {
+		case yaml.MapSlice, []any, yamlForceQuotedMap:
+			nonScalar = true
+		}
+		if nonScalar || strings.Contains(vbStr, "\n") {
 			buf.WriteString("\n  ")
 			vbStr = strings.ReplaceAll(vbStr, "\n", "\n  ")
+		} else {
+			buf.WriteByte(' ')
 		}
 		buf.WriteString(vbStr)
 	}
