@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/nimble-giant/ailloy/internal/tui/cinematic"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 )
 
@@ -205,12 +206,7 @@ func (m Model) renderSettle(t float64) string {
 }
 
 func (m Model) staticFox() string {
-	out := make([]string, m.foxRows)
-	style := lipgloss.NewStyle().Foreground(finalColor)
-	for i, line := range m.foxLines {
-		out[i] = style.Render(line)
-	}
-	return strings.Join(out, "\n")
+	return cinematic.RenderFoxBlock(m.foxLines, finalColor)
 }
 
 func absF(v float64) float64 {
