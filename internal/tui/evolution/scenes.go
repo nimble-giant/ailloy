@@ -52,7 +52,10 @@ func (m Model) renderHeadline(t float64) string {
 
 // renderHold shows the fox in pre-evolve color with the current version chip
 // underneath. A quiet beat — the calm before the change.
-func (m Model) renderHold(_ float64) string {
+func (m Model) renderHold(t float64) string {
+	if m.compact {
+		return m.renderHoldCompact(t)
+	}
 	fox := cinematic.RenderFoxBlock(m.foxLines, preColor)
 	chip := versionChip(m.from, preColor)
 	scene := lipgloss.JoinVertical(lipgloss.Center, fox, "", chip)
@@ -63,6 +66,9 @@ func (m Model) renderHold(_ float64) string {
 // between preColor and a warmer ember as t advances. The version chip starts
 // to flicker.
 func (m Model) renderCharge(t float64) string {
+	if m.compact {
+		return m.renderChargeCompact(t)
+	}
 	// Per-row oscillation: each row has a small phase offset so the warming
 	// looks like it's sweeping through the body. Amplitude grows with t.
 	amp := styles.EaseOutCubic(t)
@@ -94,6 +100,9 @@ func (m Model) renderCharge(t float64) string {
 // dim→silhouette over the beat. The silhouette frame replaces non-space
 // characters with full block runes for a unified white shape — the squash.
 func (m Model) renderFlash(t float64) string {
+	if m.compact {
+		return m.renderFlashCompact(t)
+	}
 	// Five sub-beats; the silhouette is the last one and holds longest.
 	sub := min(int(t*5), 4)
 	var fox string
@@ -125,6 +134,9 @@ func (m Model) renderFlash(t float64) string {
 // blocks fading to postColor over a quarter-second, sweeping from the center
 // outward.
 func (m Model) renderCrack(t float64) string {
+	if m.compact {
+		return m.renderCrackCompact(t)
+	}
 	colorFor := func(row int) lipgloss.Color {
 		// Distance from vertical center, normalized.
 		mid := float64(m.foxRows) / 2
@@ -148,6 +160,9 @@ func (m Model) renderCrack(t float64) string {
 // renderReveal lands the new fox in postColor and runs the digit wheel
 // underneath, cycling from m.from → m.to.
 func (m Model) renderReveal(t float64) string {
+	if m.compact {
+		return m.renderRevealCompact(t)
+	}
 	// Fox fades from white-hot edge into full postColor over the first
 	// 30% of the beat, then holds.
 	colorFor := func(int) lipgloss.Color {
@@ -168,6 +183,9 @@ func (m Model) renderReveal(t float64) string {
 // renderFanfare is the celebration: stable post-evolve fox, sparkles drawn
 // in a band around it, "Congratulations!" headline, target version chip.
 func (m Model) renderFanfare(t float64) string {
+	if m.compact {
+		return m.renderFanfareCompact(t)
+	}
 	fox := cinematic.RenderFoxBlock(m.foxLines, postColor)
 	sparkles := cinematic.RenderSparkles(m.sparkles, t, m.foxRows, m.foxCols)
 
