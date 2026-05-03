@@ -386,6 +386,54 @@ func TestView_HeaderHasOrangeBackground(t *testing.T) {
 	}
 }
 
+func TestScrollbar_HiddenWhenContentFits(t *testing.T) {
+	m := newTestModel(t)
+	// Manually set viewport content to a single line and re-render — the
+	// scrollbar should be empty because total ≤ visible.
+	m.viewport.SetContent("only one line of content")
+	bar := m.renderScrollbar(m.viewport.Height)
+	if bar != "" {
+		t.Errorf("expected empty scrollbar when content fits; got %q", bar)
+	}
+}
+
+func TestScrollbar_RendersWhenContentOverflows(t *testing.T) {
+	m := newTestModel(t)
+	// Build content taller than the viewport.
+	lines := make([]string, m.viewport.Height*4)
+	for i := range lines {
+		lines[i] = "line"
+	}
+	m.viewport.SetContent(strings.Join(lines, "\n"))
+	bar := m.renderScrollbar(m.viewport.Height)
+	if bar == "" {
+		t.Fatal("expected scrollbar to render when content overflows")
+	}
+	if !strings.Contains(bar, "█") {
+		t.Errorf("scrollbar should contain a thumb (█); got %q", bar)
+	}
+	if !strings.Contains(bar, "│") {
+		t.Errorf("scrollbar should contain track characters (│); got %q", bar)
+	}
+}
+
+func TestScrollbar_ThumbMovesWithScroll(t *testing.T) {
+	m := newTestModel(t)
+	lines := make([]string, m.viewport.Height*4)
+	for i := range lines {
+		lines[i] = "line"
+	}
+	m.viewport.SetContent(strings.Join(lines, "\n"))
+	top := m.renderScrollbar(m.viewport.Height)
+
+	m.viewport.GotoBottom()
+	bottom := m.renderScrollbar(m.viewport.Height)
+
+	if top == bottom {
+		t.Errorf("thumb should move when scrolling from top to bottom; got identical bars")
+	}
+}
+
 func TestPaneWidths_RespectMinima(t *testing.T) {
 	m := New(clidocs.Tree())
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
