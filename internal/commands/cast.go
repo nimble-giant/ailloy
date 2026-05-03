@@ -3,6 +3,7 @@ package commands
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -19,6 +20,7 @@ import (
 	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
+	"github.com/nimble-giant/ailloy/pkg/merge"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/smelt"
 	"github.com/nimble-giant/ailloy/pkg/styles"
@@ -650,13 +652,31 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(rf.DestPath), 0750); err != nil { // #nosec G301
-			return fmt.Errorf("failed to create directory for %s: %w", rf.DestPath, err)
-		}
-
-		//#nosec G306 -- Blanks need to be readable
-		if err := os.WriteFile(rf.DestPath, outputContent, 0644); err != nil {
-			return fmt.Errorf("failed to write %s: %w", rf.DestPath, err)
+		switch rf.Strategy {
+		case "merge":
+			err := merge.MergeFile(rf.DestPath, outputContent, merge.Options{
+				ForceReplaceOnParseError: castForceReplaceOnParseError,
+			})
+			if err != nil {
+				var pe *merge.ParseError
+				if errors.As(err, &pe) {
+					return fmt.Errorf(
+						"failed to merge into %s: existing %s file could not be parsed: %w. "+
+							"Re-run with --force-replace-on-parse-error to overwrite",
+						pe.Path, pe.Format, pe.Err)
+				}
+				return fmt.Errorf("failed to merge %s: %w", rf.DestPath, err)
+			}
+		case "", "replace":
+			if err := os.MkdirAll(filepath.Dir(rf.DestPath), 0750); err != nil { // #nosec G301
+				return fmt.Errorf("failed to create directory for %s: %w", rf.DestPath, err)
+			}
+			//#nosec G306 -- Blanks need to be readable
+			if err := os.WriteFile(rf.DestPath, outputContent, 0644); err != nil {
+				return fmt.Errorf("failed to write %s: %w", rf.DestPath, err)
+			}
+		default:
+			return fmt.Errorf("unknown strategy %q on output for %s", rf.Strategy, rf.DestPath)
 		}
 
 		if !castSilent.Load() {
