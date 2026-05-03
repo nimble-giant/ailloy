@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.21](https://github.com/nimble-giant/ailloy/compare/v0.6.20...v0.6.21) (2026-05-03)
+
+
+### Bug Fixes
+
+* temper skips template validation for process:false outputs ([d7deea1](https://github.com/nimble-giant/ailloy/commit/d7deea1144c5189c873a4b4e9de96de337908186)), closes [#165](https://github.com/nimble-giant/ailloy/issues/165)
+
 ## [0.6.20](https://github.com/nimble-giant/ailloy/compare/v0.6.19...v0.6.20) (2026-05-03)
 
 
