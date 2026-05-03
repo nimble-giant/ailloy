@@ -224,8 +224,54 @@ func runOreAdd(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-// Stubs implemented in later tasks of Phase 6.
-func runOreNew(_ *cobra.Command, _ []string) error { return fmt.Errorf("ore new: not yet implemented") }
+func runOreNew(_ *cobra.Command, args []string) error {
+	name := args[0]
+	if !isSnakeCase(name) {
+		return fmt.Errorf("ore name must be snake_case (lowercase + underscore), got %q", name)
+	}
+	if _, err := os.Stat(name); err == nil {
+		return fmt.Errorf("directory %q already exists", name)
+	}
+	if err := os.MkdirAll(name, 0750); err != nil {
+		return fmt.Errorf("creating directory: %w", err)
+	}
+
+	manifest := fmt.Sprintf(`apiVersion: v1
+kind: ore
+name: %s
+version: 0.1.0
+description: ""
+author:
+  name: ""
+  url: ""
+requires:
+  ailloy: ">=0.7.0"
+`, name)
+	schema := `# Ore schema entries are unprefixed; the ailloy loader prepends ore.<name>.
+# at install time. See docs/ore.md for authoring conventions.
+- name: enabled
+  type: bool
+  description: "Enable this ore"
+  default: "false"
+`
+	defaults := `enabled: false
+`
+	for path, body := range map[string]string{
+		filepath.Join(name, "ore.yaml"):         manifest,
+		filepath.Join(name, "flux.schema.yaml"): schema,
+		filepath.Join(name, "flux.yaml"):        defaults,
+	} {
+		if err := os.WriteFile(path, []byte(body), 0644); err != nil { // #nosec G306
+			return fmt.Errorf("writing %s: %w", path, err)
+		}
+		fmt.Println(styles.SuccessStyle.Render("  + ") + styles.CodeStyle.Render(path))
+	}
+	fmt.Println()
+	fmt.Println(styles.SuccessStyle.Render("Ore scaffolded: ") + styles.AccentStyle.Render(name))
+	return nil
+}
+
+// Stub implemented in Task 6.4.
 func runOreRemove(_ *cobra.Command, _ []string) error {
 	return fmt.Errorf("ore remove: not yet implemented")
 }
