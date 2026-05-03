@@ -57,6 +57,50 @@ func TestPrintTopicList_RendersTable(t *testing.T) {
 	}
 }
 
+func TestRunDocs_ListFlagPrintsTable(t *testing.T) {
+	var buf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+
+	t.Cleanup(func() { docsListOnly = false })
+	docsListOnly = true
+
+	if err := runDocs(cmd, nil); err != nil {
+		t.Fatalf("runDocs: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "getting-started") || !strings.Contains(out, "Topic") {
+		t.Errorf("--list should print the topics table; got:\n%s", out)
+	}
+}
+
+func TestRunDocs_TopicArgRendersDirectly(t *testing.T) {
+	var buf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+	if err := runDocs(cmd, []string{"flux"}); err != nil {
+		t.Fatalf("runDocs: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Flux") {
+		t.Errorf("expected rendered flux topic; got:\n%s", buf.String())
+	}
+}
+
+func TestRunDocs_NonInteractiveFallsBackToList(t *testing.T) {
+	// In tests stdout is not a TTY, so isInteractive() returns false and
+	// runDocs (no args, no flags) should fall back to the table output
+	// instead of trying to launch the bubbletea program.
+	var buf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+	if err := runDocs(cmd, nil); err != nil {
+		t.Fatalf("runDocs: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Topic") {
+		t.Errorf("expected fallback to table; got:\n%s", buf.String())
+	}
+}
+
 func TestRenderTopicTo_RendersMarkdown(t *testing.T) {
 	var buf bytes.Buffer
 	if err := renderTopicTo(&buf, "getting-started"); err != nil {

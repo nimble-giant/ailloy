@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 	clidocs "github.com/nimble-giant/ailloy/docs"
+	docstui "github.com/nimble-giant/ailloy/internal/tui/docs"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -25,17 +26,29 @@ const (
 	minDocsWidth     = 40
 )
 
+var (
+	docsListOnly bool
+	docsNoTUI    bool
+)
+
 var docsCmd = &cobra.Command{
 	Use:   "docs [topic]",
-	Short: "Render embedded ailloy documentation in the terminal",
-	Long: `Render embedded ailloy documentation in the terminal.
+	Short: "Browse embedded ailloy documentation in the terminal",
+	Long: `Browse embedded ailloy documentation in the terminal.
 
-Run with no arguments to list available topics. Pass a topic slug to
-render that document via glamour.
+Run with no arguments to launch the interactive docs browser (a
+side-by-side topic list and rendered viewport powered by bubbletea +
+glamour). Pass a topic slug to render that document directly to stdout —
+useful for piping to a pager or grep.
+
+Use --list to print the available topics as a table without launching
+the TUI, and --no-tui to render the rendered topic to stdout instead of
+opening the browser.
 
 Examples:
-  ailloy docs                  # list topics
-  ailloy docs flux             # show the flux variable reference
+  ailloy docs                  # launch the interactive browser
+  ailloy docs flux             # render the flux variable reference
+  ailloy docs --list           # list topics as a table
   ailloy cast --docs           # show the doc associated with ` + "`cast`" + ``,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runDocs,
@@ -43,6 +56,8 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(docsCmd)
+	docsCmd.Flags().BoolVar(&docsListOnly, "list", false, "list topics as a table instead of opening the browser")
+	docsCmd.Flags().BoolVar(&docsNoTUI, "no-tui", false, "render output to stdout instead of opening the interactive browser")
 	rootCmd.PersistentFlags().BoolVar(&rootDocs, "docs", false, "render the command's associated documentation and exit")
 
 	// Hook the persistent pre-run so any command can be invoked with --docs.
@@ -79,10 +94,25 @@ func init() {
 }
 
 func runDocs(cmd *cobra.Command, args []string) error {
-	if len(args) == 0 {
-		return printTopicList(cmd.OutOrStdout())
+	out := cmd.OutOrStdout()
+
+	if docsListOnly {
+		return printTopicList(out)
 	}
-	return renderTopicTo(cmd.OutOrStdout(), args[0])
+	if len(args) == 1 {
+		return renderTopicTo(out, args[0])
+	}
+	if docsNoTUI || !isInteractive() {
+		return printTopicList(out)
+	}
+	return docstui.Run()
+}
+
+// isInteractive reports whether stdout is attached to a terminal. The TUI
+// only runs in interactive sessions; non-TTY callers (pipes, CI) get the
+// table fallback automatically.
+func isInteractive() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
 // topicForCommand returns the topic slug associated with a cobra command.
