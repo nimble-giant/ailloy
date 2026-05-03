@@ -119,3 +119,54 @@ func TestMergeFile_Malformed_ForceReplaceClobbers(t *testing.T) {
 		t.Errorf("force-replace should clobber.\nwant: %s\ngot:  %s", newContent, got)
 	}
 }
+
+func TestMergeFile_ReadError_NonENOENT(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root bypasses permission checks")
+	}
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "opencode.json")
+	if err := os.WriteFile(dest, []byte(`{"a":1}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Make the file unreadable to trigger a non-ENOENT error from os.ReadFile.
+	if err := os.Chmod(dest, 0); err != nil {
+		t.Fatalf("chmod 0: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dest, 0644) })
+
+	err := MergeFile(dest, []byte(`{"b":2}`), Options{})
+	if err == nil {
+		t.Fatal("expected error reading unreadable file, got nil")
+	}
+	// Must NOT be a *ParseError — it's a read error, not a parse error.
+	var pe *ParseError
+	if errors.As(err, &pe) {
+		t.Errorf("expected non-ParseError, got *ParseError: %v", err)
+	}
+	if !strings.Contains(err.Error(), "read existing") {
+		t.Errorf("expected error message to mention 'read existing', got: %v", err)
+	}
+}
+
+func TestMergeFile_MalformedNewContent_NotParseError(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "opencode.json")
+	// Existing file is valid.
+	if err := os.WriteFile(dest, []byte(`{"a":1}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// New content is malformed — would be a template/programmer bug in production.
+	err := MergeFile(dest, []byte("not json{"), Options{})
+	if err == nil {
+		t.Fatal("expected error for malformed new content, got nil")
+	}
+	// Must NOT be a *ParseError — that type is reserved for the on-disk file.
+	var pe *ParseError
+	if errors.As(err, &pe) {
+		t.Errorf("expected plain error for malformed new content, got *ParseError: %v", err)
+	}
+	if !strings.Contains(err.Error(), "cannot parse new") {
+		t.Errorf("expected message about new content; got: %v", err)
+	}
+}
