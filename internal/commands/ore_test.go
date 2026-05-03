@@ -11,3 +11,10 @@ func TestRunOreGet_NonRemoteRef_Errors(t *testing.T) {
 		t.Errorf("expected remote-reference error, got %v", err)
 	}
 }
+
+func TestRunOreAdd_NonRemoteRef_Errors(t *testing.T) {
+	err := runOreAdd(nil, []string{"./local/path"})
+	if err == nil || !strings.Contains(err.Error(), "remote reference") {
+		t.Errorf("expected remote-reference error, got %v", err)
+	}
+}

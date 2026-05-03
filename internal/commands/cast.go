@@ -721,3 +721,34 @@ func recordInstalled(result *foundry.ResolveResult, global bool) error {
 	})
 	return foundry.WriteInstalledManifest(path, manifest)
 }
+
+// recordInstalledArtifact upserts an installed ingot or ore into the manifest.
+// kind must be "ingot" or "ore". alias is "" for ingots and the --as value
+// for ores (or "" if no alias). When invoked from `ailloy ore add` /
+// `ailloy ingot add`, dependents includes the "user" sentinel so the artifact
+// survives mold uninstalls.
+func recordInstalledArtifact(kind string, result *foundry.ResolveResult, alias string, global bool) error {
+	path := manifestPathFor(global)
+	if path == "" {
+		return nil
+	}
+	manifest, err := foundry.ReadInstalledManifest(path)
+	if err != nil {
+		log.Printf("warning: corrupt installed manifest at %s, resetting: %v", path, err)
+		manifest = nil
+	}
+	if manifest == nil {
+		manifest = &foundry.InstalledManifest{APIVersion: "v1"}
+	}
+	manifest.UpsertArtifact(kind, foundry.ArtifactEntry{
+		Name:        result.Ref.Repo,
+		Source:      result.Ref.CacheKey(),
+		Subpath:     result.Ref.Subpath,
+		Version:     result.Resolved.Tag,
+		Commit:      result.Resolved.Commit,
+		InstalledAt: time.Now().UTC(),
+		Alias:       alias,
+		Dependents:  []string{"user"},
+	})
+	return foundry.WriteInstalledManifest(path, manifest)
+}

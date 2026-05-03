@@ -2,13 +2,22 @@ package commands
 
 import (
 	"fmt"
+	"io/fs"
+	"log"
+	"os"
 	"path/filepath"
+	"regexp"
+	"time"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
 )
+
+var snakeCaseRE = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+func isSnakeCase(s string) bool { return snakeCaseRE.MatchString(s) }
 
 var oreCmd = &cobra.Command{
 	Use:   "ore",
@@ -110,8 +119,112 @@ func runOreGet(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+func runOreAdd(_ *cobra.Command, args []string) error {
+	ref := args[0]
+
+	if !foundry.IsRemoteReference(ref) {
+		return fmt.Errorf("expected a remote reference (e.g. github.com/owner/repo), got %q", ref)
+	}
+
+	fmt.Println(styles.WorkingBanner("Adding ore..."))
+	fmt.Println()
+
+	fsys, result, err := foundry.ResolveWithMetadata(ref)
+	if err != nil {
+		return fmt.Errorf("resolving ore: %w", err)
+	}
+
+	// Validate ore.yaml exists and has kind=ore.
+	ore, err := mold.LoadOreFromFS(fsys, "ore.yaml")
+	if err != nil {
+		return fmt.Errorf("invalid ore manifest: %w", err)
+	}
+	if ore.Kind != "ore" {
+		return fmt.Errorf("manifest kind=%q, expected 'ore'", ore.Kind)
+	}
+
+	// Determine install-dir name (alias if provided, else ore.Name).
+	installName := ore.Name
+	if oreAddAlias != "" {
+		installName = oreAddAlias
+	}
+	if !isSnakeCase(installName) {
+		return fmt.Errorf("ore install name must be snake_case (lowercase + underscore), got %q", installName)
+	}
+
+	// Determine destination root: project or global.
+	var destRoot string
+	if oreAddGlobal {
+		home, herr := os.UserHomeDir()
+		if herr != nil {
+			return fmt.Errorf("determining home directory: %w", herr)
+		}
+		destRoot = filepath.Join(home, ".ailloy", "ores")
+	} else {
+		destRoot = filepath.Join(".ailloy", "ores")
+	}
+	destDir := filepath.Join(destRoot, installName)
+	if err := os.MkdirAll(destDir, 0750); err != nil {
+		return fmt.Errorf("creating ore directory: %w", err)
+	}
+
+	err = fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		destPath := filepath.Join(destDir, path)
+
+		if d.IsDir() {
+			return os.MkdirAll(destPath, 0750)
+		}
+
+		content, err := fs.ReadFile(fsys, path)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", path, err)
+		}
+
+		if err := os.WriteFile(destPath, content, 0644); err != nil { // #nosec G306 -- ore files need to be readable
+			return fmt.Errorf("writing %s: %w", destPath, err)
+		}
+
+		fmt.Println(styles.SuccessStyle.Render("  + ") + styles.CodeStyle.Render(destPath))
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("copying ore files: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println(styles.SuccessStyle.Render("Ore added: ") + styles.AccentStyle.Render(ore.Name+" "+ore.Version))
+	fmt.Println(styles.InfoStyle.Render("Installed to: ") + styles.CodeStyle.Render(destDir))
+
+	if err := recordInstalledArtifact("ore", result, oreAddAlias, oreAddGlobal); err != nil {
+		log.Printf("warning: failed to update installed manifest: %v", err)
+	}
+
+	// Update ailloy.lock if present (project scope only).
+	if !oreAddGlobal {
+		if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
+			lock.UpsertArtifactLock("ore", foundry.LockEntry{
+				Name:      result.Ref.Repo,
+				Source:    result.Ref.CacheKey(),
+				Subpath:   result.Ref.Subpath,
+				Version:   result.Resolved.Tag,
+				Commit:    result.Resolved.Commit,
+				Alias:     oreAddAlias,
+				Timestamp: time.Now().UTC(),
+			})
+			if err := foundry.WriteLockFile(foundry.LockFileName, lock); err != nil {
+				log.Printf("warning: failed to update lock file: %v", err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // Stubs implemented in later tasks of Phase 6.
-func runOreAdd(_ *cobra.Command, _ []string) error { return fmt.Errorf("ore add: not yet implemented") }
 func runOreNew(_ *cobra.Command, _ []string) error { return fmt.Errorf("ore new: not yet implemented") }
 func runOreRemove(_ *cobra.Command, _ []string) error {
 	return fmt.Errorf("ore remove: not yet implemented")
