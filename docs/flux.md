@@ -210,6 +210,51 @@ output:
     process: false          # skip Go template processing
 ```
 
+### `strategy` — merge or replace output files
+
+Each output entry accepts an optional `strategy` field controlling how `cast`
+writes the destination when a file already exists:
+
+| value     | behavior                                                      |
+| --------- | ------------------------------------------------------------- |
+| (omitted) | Same as `replace`.                                            |
+| `replace` | Whole-file overwrite. Default.                                |
+| `merge`   | Deep-merge with the existing file (JSON/YAML only).           |
+
+**Use `strategy: merge` when multiple molds need to contribute to a shared
+config file.** The motivating example: several molds each declare MCP server
+entries in `opencode.json`, and the user expects them to combine instead of
+the last cast clobbering the first.
+
+```yaml
+output:
+  mcp:
+    - dest: opencode.json
+      strategy: merge
+      set:
+        agent.current_target: opencode
+```
+
+#### Merge semantics
+
+- Detected by extension (`.json`, `.yaml`, `.yml`). Other extensions silently fall back to replace.
+- **Maps**: deep-merge. Existing keys keep their position; new keys are appended.
+- **Arrays**: concat with deep-equality dedupe (base entries first, then overlay-only).
+- **Type mismatch** (e.g., scalar replaced by a map): overlay wins.
+- **Non-existent destination**: the new content is written verbatim.
+- **JSON output**: 2-space indented, key insertion order preserved, integers preserved as integers (no float coercion).
+- **YAML output**: 2-space indented, key insertion order preserved. Comments and anchors are *not guaranteed* to survive round-tripping.
+
+#### Malformed existing files
+
+If the destination is hand-edited and no longer parses as JSON/YAML, `cast`
+errors out by default to avoid clobbering the user's work. Re-run with
+`--force-replace-on-parse-error` to overwrite:
+
+```bash
+ailloy cast ./my-mold --force-replace-on-parse-error
+```
+
 ### String output
 
 All top-level directories go under a single parent:
