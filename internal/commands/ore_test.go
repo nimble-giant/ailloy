@@ -147,6 +147,41 @@ func TestRunOreRemove_Force_OverridesMoldDependents(t *testing.T) {
 	}
 }
 
+func TestRunOreRemove_GlobalScope(t *testing.T) {
+	// Verify --global removes from ~/.ailloy/ores/<name> + ~/.ailloy/installed.yaml.
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp) // re-route ~/.ailloy/ to a temp dir so the test doesn't pollute real $HOME
+	t.Cleanup(func() { oreRemoveGlobal = false })
+
+	globalDir := filepath.Join(tmp, ".ailloy", "ores", "status")
+	if err := os.MkdirAll(globalDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+
+	manifestPath := filepath.Join(tmp, ".ailloy", "installed.yaml")
+	manifest := &foundry.InstalledManifest{
+		APIVersion: "v1",
+		Ores: []foundry.ArtifactEntry{
+			{Name: "status", Source: "g/status-ore", Dependents: []string{"user"}},
+		},
+	}
+	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	oreRemoveGlobal = true
+	if err := runOreRemove(nil, []string{"status"}); err != nil {
+		t.Fatalf("runOreRemove --global: %v", err)
+	}
+	if _, err := os.Stat(globalDir); !os.IsNotExist(err) {
+		t.Errorf("global ore dir should be gone: %v", err)
+	}
+	got, _ := foundry.ReadInstalledManifest(manifestPath)
+	if got != nil && len(got.Ores) != 0 {
+		t.Errorf("ore entry should be gone: %+v", got.Ores)
+	}
+}
+
 func TestRunOreNew_CreatesExpectedFiles(t *testing.T) {
 	dir := t.TempDir()
 	cwd, _ := os.Getwd()

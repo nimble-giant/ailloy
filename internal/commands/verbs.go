@@ -190,6 +190,7 @@ func init() {
 
 	// Flags for bidirectional "remove ore" must mirror "ore remove" flags.
 	removeOreSubCmd.Flags().BoolVar(&oreRemoveForce, "force", false, "remove even if other molds depend on this ore")
+	removeOreSubCmd.Flags().BoolVar(&oreRemoveGlobal, "global", false, "remove from ~/.ailloy/ores/ instead of ./.ailloy/ores/")
 
 	// search <noun>
 	rootCmd.AddCommand(searchCmd)

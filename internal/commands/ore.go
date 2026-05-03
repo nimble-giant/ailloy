@@ -59,9 +59,10 @@ var oreRemoveCmd = &cobra.Command{
 }
 
 var (
-	oreAddAlias    string
-	oreAddGlobal   bool
-	oreRemoveForce bool
+	oreAddAlias     string
+	oreAddGlobal    bool
+	oreRemoveForce  bool
+	oreRemoveGlobal bool
 )
 
 func init() {
@@ -71,6 +72,7 @@ func init() {
 	oreAddCmd.Flags().StringVar(&oreAddAlias, "as", "", "namespace alias (install at ore.<alias>.* instead of ore.<name>.*)")
 	oreAddCmd.Flags().BoolVar(&oreAddGlobal, "global", false, "install under ~/.ailloy/ores/ instead of ./.ailloy/ores/")
 	oreRemoveCmd.Flags().BoolVar(&oreRemoveForce, "force", false, "remove even if other molds depend on this ore")
+	oreRemoveCmd.Flags().BoolVar(&oreRemoveGlobal, "global", false, "remove from ~/.ailloy/ores/ instead of ./.ailloy/ores/")
 }
 
 func runOreGet(_ *cobra.Command, args []string) error {
@@ -273,7 +275,10 @@ requires:
 
 func runOreRemove(_ *cobra.Command, args []string) error {
 	name := args[0]
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := manifestPathFor(oreRemoveGlobal)
+	if manifestPath == "" {
+		return fmt.Errorf("cannot determine manifest path for global scope")
+	}
 	manifest, err := foundry.ReadInstalledManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("reading installed manifest: %w", err)
@@ -303,6 +308,13 @@ func runOreRemove(_ *cobra.Command, args []string) error {
 	}
 
 	dir := filepath.Join(".ailloy", "ores", name)
+	if oreRemoveGlobal {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("determining home directory: %w", err)
+		}
+		dir = filepath.Join(home, ".ailloy", "ores", name)
+	}
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("removing %s: %w", dir, err)
 	}
@@ -323,10 +335,12 @@ func runOreRemove(_ *cobra.Command, args []string) error {
 	}
 	fmt.Println(styles.SuccessStyle.Render("Ore removed: ") + styles.AccentStyle.Render(name))
 
-	// Drop from lock if present (project scope only).
-	if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
-		dropOreLockEntry(lock, name)
-		_ = foundry.WriteLockFile(foundry.LockFileName, lock)
+	// Drop from lock if present (project scope only; ailloy.lock is project-only).
+	if !oreRemoveGlobal {
+		if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
+			dropOreLockEntry(lock, name)
+			_ = foundry.WriteLockFile(foundry.LockFileName, lock)
+		}
 	}
 	return nil
 }
