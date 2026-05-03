@@ -1,14 +1,20 @@
 package merge
 
+import "reflect"
+
 // MergeYAMLValues deep-merges overlay maps into base, overlay-wins. Nil maps
 // are treated as empty. Returns a new map; inputs are not mutated.
 //
-// Semantics (parity with mergeNodes used by `ailloy cast --strategy=merge`):
+// Semantics (value parity with mergeNodes used by `ailloy cast --strategy=merge`):
 //   - kind mismatch (e.g., scalar vs map): overlay wins.
 //   - scalar vs scalar: overlay wins.
-//   - map vs map: recursive deep-merge. Base keys keep their position;
-//     overlay-only keys are appended.
+//   - map vs map: recursive deep-merge. Base keys retain their values;
+//     overlay-only keys are added.
 //   - sequence vs sequence: concat base+overlay, dedupe by deep equality.
+//
+// Note: because the result is a map[string]any, key *iteration order* is
+// not preserved (parity is on values, not on iteration order). Callers that
+// need byte-stable YAML output should sort keys at marshal time.
 //
 // Scalar types are preserved as-is (no YAML round-trip), so callers get back
 // the same Go types they put in.
@@ -130,5 +136,5 @@ func valueEqual(a, b any) bool {
 		}
 		return true
 	}
-	return a == b
+	return reflect.DeepEqual(a, b)
 }

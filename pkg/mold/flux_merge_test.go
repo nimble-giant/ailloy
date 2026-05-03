@@ -113,3 +113,21 @@ func TestValidateOrphanDefaults_ExtraLeaf_Reported(t *testing.T) {
 		t.Errorf("got %v; want %v", got, want)
 	}
 }
+
+func TestValidateOrphanDefaults_NilValueIsLeaf(t *testing.T) {
+	schema := []FluxVar{}
+	defaults := map[string]any{"some_key": nil}
+	got := ValidateOrphanDefaults(schema, defaults)
+	if len(got) != 1 || got[0] != "some_key" {
+		t.Errorf("nil value should be reported as leaf orphan; got %v", got)
+	}
+}
+
+func TestValidateOrphanDefaults_EmptyMapEmitsNothing(t *testing.T) {
+	schema := []FluxVar{}
+	defaults := map[string]any{"empty_branch": map[string]any{}}
+	got := ValidateOrphanDefaults(schema, defaults)
+	if len(got) != 0 {
+		t.Errorf("empty map should emit no leaves; got %v", got)
+	}
+}
