@@ -372,10 +372,6 @@ func moveCursorToSlugNoDrain(t *testing.T, m *Model, slug string) {
 }
 
 func TestView_HeaderHasOrangeBackground(t *testing.T) {
-	// Sanity check: the rendered header line includes ANSI sequences. We
-	// can't easily assert color codes portably, but we can ensure the line
-	// has content beyond just "Ailloy Docs" — i.e. it spans width with
-	// active topic + status.
 	m := newTestModel(t)
 	header := m.renderHeader()
 	if !strings.Contains(header, "Ailloy Docs") {
@@ -383,6 +379,22 @@ func TestView_HeaderHasOrangeBackground(t *testing.T) {
 	}
 	if !strings.Contains(header, "TREE") && !strings.Contains(header, "BODY") {
 		t.Errorf("header missing focus status: %q", header)
+	}
+	// The header is now 2 lines tall so the brand chrome is unmistakable.
+	if got := strings.Count(header, "\n"); got != 1 {
+		t.Errorf("expected header to span 2 lines (1 newline), got %d newlines", got)
+	}
+}
+
+func TestView_HeaderShowsActiveTopicTitle(t *testing.T) {
+	m := newTestModel(t)
+	header := m.renderHeader()
+	cur := m.currentRow()
+	if cur == nil || cur.topic == nil {
+		t.Skip("no topic at startup")
+	}
+	if !strings.Contains(header, cur.topic.Title) {
+		t.Errorf("header should contain active topic title %q; got:\n%s", cur.topic.Title, header)
 	}
 }
 

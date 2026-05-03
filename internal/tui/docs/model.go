@@ -27,7 +27,7 @@ const (
 	listWidthRatio   = 32 // percent of total width allocated to the tree
 	maxListWidth     = 38
 	footerHeight     = 1
-	headerHeight     = 1
+	headerHeight     = 2
 )
 
 // Focus identifies which pane currently receives input.
@@ -604,15 +604,28 @@ func (m Model) bodyContentWidth() int {
 	return w
 }
 
-// renderList draws the collapsible tree into the left pane.
+// renderList draws the collapsible tree into the left pane. Content is
+// hard-clipped so long titles never wrap onto a second line (the row
+// styles use horizontal padding internally; we account for that here so
+// the styled cells match the content width exactly).
 func (m Model) renderList(width int) string {
 	if len(m.rows) == 0 {
 		return styles.SubtleStyle.Render("(no topics)")
 	}
-	cellWidth := width - 4 // border + inner padding
+	// `width` is the outer pane width. The pane chrome (rounded border
+	// + 1ch padding on each side) eats 4 cells, so the row cells span
+	// width - 4. Each row style then adds its own 1ch padding on each
+	// side, leaving cellWidth - 2 cells for actual text. Clipping to
+	// that exact width prevents wrapping onto a second line.
+	cellWidth := width - 4
 	if cellWidth < 8 {
 		cellWidth = 8
 	}
+	contentWidth := cellWidth - 2
+	if contentWidth < 4 {
+		contentWidth = 4
+	}
+
 	var b strings.Builder
 	for i, r := range m.rows {
 		marker := "  "
@@ -623,9 +636,7 @@ func (m Model) renderList(width int) string {
 			marker = "▸ "
 		}
 		indent := strings.Repeat("  ", r.depth)
-		label := r.name
-		row := indent + marker + label
-		row = clipLine(row, cellWidth)
+		row := clipLine(indent+marker+treeLabel(r), contentWidth)
 
 		switch {
 		case i == m.cursor && m.focus == FocusList:
@@ -643,55 +654,95 @@ func (m Model) renderList(width int) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// renderHeader draws the full-width branded top bar. The entire line has
-// an orange background so it's unmistakable on any terminal theme: logo
-// hard-left, active topic title centered, focus + scroll status hard-right.
+// treeLabel picks the row label rendered in the tree pane. Directories
+// use their folder name; files use the slug basename (e.g. "anneal",
+// "first-mold") because slugs are short and predictable, and the full
+// human title stays visible in the header above the body.
+func treeLabel(r row) string {
+	if r.isDir || r.topic == nil {
+		return r.name
+	}
+	if base := slugBase(r.topic.Slug); base != "" {
+		return base
+	}
+	return r.topic.Title
+}
+
+func slugBase(slug string) string {
+	idx := strings.LastIndexByte(slug, '/')
+	if idx < 0 {
+		return slug
+	}
+	return slug[idx+1:]
+}
+
+// renderHeader draws a 2-line full-width branded top bar. The entire bar
+// has an orange background so it's unmistakable on any terminal theme.
+//
+//	[ORANGE BAR]  🦊 Ailloy Docs                              TREE / BODY · 42%
+//	[ORANGE BAR]  Configuration Wizard (`ailloy anneal`)
+//
+// We pre-pad each line to the full width and feed the result to a style
+// that only sets foreground/background/bold — no Width() trickery — so
+// nothing about the bar can be silently swallowed by terminal quirks.
 func (m Model) renderHeader() string {
 	logo := "🦊 Ailloy Docs"
 
-	var center string
+	var topicTitle string
 	if cur := m.currentRow(); cur != nil {
 		if cur.topic != nil {
-			center = cur.topic.Title
+			topicTitle = cur.topic.Title
 		} else {
-			center = cur.name + "/"
+			topicTitle = cur.name + "/"
 		}
 	}
 
 	right := m.headerStatus()
 
-	// Compose the inner string at the exact terminal width with the title
-	// centered. We measure raw widths first, then pad with spaces, then run
-	// the whole line through a single orange-bg style so the bar fills the
-	// row even if the active style chips don't.
-	inner := layoutHeaderRow(m.width, logo, center, right)
-	return headerBarStyle.Width(m.width).Render(inner)
+	line1 := layoutHeaderLine(m.width, logo, "", right)
+	line2 := layoutHeaderLine(m.width, "  "+topicTitle, "", "")
+
+	return headerBarStyle.Render(line1) + "\n" + headerBarStyle.Render(line2)
 }
 
-// layoutHeaderRow positions logo, center, and right text within width by
-// padding with spaces. Truncates the center when there isn't room.
-func layoutHeaderRow(width int, logo, center, right string) string {
+// layoutHeaderLine builds a single header line of exactly `width` runes
+// with `left` flush-left, `center` centered, and `right` flush-right.
+// Empty sections collapse cleanly. Anything that doesn't fit is clipped.
+func layoutHeaderLine(width int, left, center, right string) string {
 	if width < 1 {
 		return ""
 	}
-	logoW := lipgloss.Width(logo)
+	const sidePad = 1
+	leftW := lipgloss.Width(left)
 	rightW := lipgloss.Width(right)
-	available := width - logoW - rightW - 4 // 1ch padding on each side + 2 buffer
-	if available < 0 {
-		available = 0
+
+	// Clip left/right if they alone overflow the line.
+	if leftW+rightW+sidePad*2 > width {
+		left = clipLine(left, width-rightW-sidePad*2)
+		leftW = lipgloss.Width(left)
 	}
-	if lipgloss.Width(center) > available {
-		center = clipLine(center, available)
+
+	free := width - leftW - rightW - sidePad*2
+	if free < 0 {
+		free = 0
+	}
+	if lipgloss.Width(center) > free {
+		center = clipLine(center, free)
 	}
 	centerW := lipgloss.Width(center)
-	// Pad equally around the center.
-	totalPad := width - logoW - rightW - centerW - 2 // 1ch outer padding each side
-	if totalPad < 2 {
-		totalPad = 2
+
+	totalPad := width - leftW - centerW - rightW - sidePad*2
+	if totalPad < 0 {
+		totalPad = 0
 	}
-	left := totalPad / 2
-	right2 := totalPad - left
-	return " " + logo + strings.Repeat(" ", left) + center + strings.Repeat(" ", right2) + right + " "
+	leftGap := totalPad / 2
+	rightGap := totalPad - leftGap
+
+	return " " + left +
+		strings.Repeat(" ", leftGap) +
+		center +
+		strings.Repeat(" ", rightGap) +
+		right + " "
 }
 
 // headerStatus is a short right-aligned indicator: focused pane + (in body
