@@ -736,3 +736,39 @@ func TestIntegration_MergeStrategy_ForceReplaceOnParseError(t *testing.T) {
 		t.Errorf("force-replace should write new content; got: %s", got)
 	}
 }
+
+func TestIntegration_Forge_MergeStrategy(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	outputDir := filepath.Join(tmpDir, "preview")
+	if err := os.MkdirAll(outputDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	// Pre-seed an existing opencode.json under the output dir to simulate an
+	// iterative forge preview.
+	dest := filepath.Join(outputDir, "opencode.json")
+	if err := os.WriteFile(dest, []byte(`{"mcp":{"outline":{"url":"https://outline"}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	files := []renderedFile{
+		{
+			destPath: "opencode.json",
+			content:  `{"mcp":{"replicated-docs":{"url":"https://docs"}}}`,
+			strategy: "merge",
+		},
+	}
+	if err := writeForgeFiles(files, outputDir, false); err != nil {
+		t.Fatalf("writeForgeFiles: %v", err)
+	}
+	got, _ := os.ReadFile(dest)
+	gs := string(got)
+	if !strings.Contains(gs, "outline") || !strings.Contains(gs, "replicated-docs") {
+		t.Errorf("forge merge lost an entry, got: %s", gs)
+	}
+}

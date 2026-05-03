@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
+	"github.com/nimble-giant/ailloy/pkg/merge"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/smelt"
 	"github.com/nimble-giant/ailloy/pkg/styles"
@@ -32,9 +34,10 @@ By default, rendered output is printed to stdout. Use --output to write files to
 }
 
 var (
-	forgeOutputDir string
-	forgeSetValues []string
-	forgeValFiles  []string
+	forgeOutputDir                string
+	forgeSetValues                []string
+	forgeValFiles                 []string
+	forgeForceReplaceOnParseError bool
 )
 
 func init() {
@@ -43,6 +46,10 @@ func init() {
 	forgeCmd.Flags().StringVarP(&forgeOutputDir, "output", "o", "", "write rendered files to this directory instead of stdout")
 	forgeCmd.Flags().StringArrayVar(&forgeSetValues, "set", nil, "set flux values (key=value)")
 	forgeCmd.Flags().StringArrayVarP(&forgeValFiles, "values", "f", nil, "flux value files (can be repeated, later files override earlier)")
+	forgeCmd.Flags().BoolVar(&forgeForceReplaceOnParseError,
+		"force-replace-on-parse-error",
+		false,
+		"if a destination uses strategy: merge but is unparseable, replace it instead of erroring (only used with --output)")
 }
 
 // loadForgeFlux loads layered flux values using Helm-style precedence:
@@ -96,6 +103,7 @@ func renderFile(name string, content []byte, flux map[string]any, opts ...mold.T
 type renderedFile struct {
 	destPath string // relative output path (e.g. ".claude/commands/brainstorm.md")
 	content  string
+	strategy string
 }
 
 func runForge(_ *cobra.Command, args []string) error {
@@ -171,13 +179,14 @@ func runForge(_ *cobra.Command, args []string) error {
 		files = append(files, renderedFile{
 			destPath: rf.DestPath,
 			content:  rendered,
+			strategy: rf.Strategy,
 		})
 	}
 
 	ceremony.Open(ceremony.Forge)
 
 	if forgeOutputDir != "" {
-		if err := writeForgeFiles(files, forgeOutputDir); err != nil {
+		if err := writeForgeFiles(files, forgeOutputDir, forgeForceReplaceOnParseError); err != nil {
 			return err
 		}
 		ceremony.Stamp(ceremony.Forge, fmt.Sprintf("%d file(s) → %s", len(files), forgeOutputDir))
@@ -228,17 +237,37 @@ func printForgeFiles(files []renderedFile) error {
 	return nil
 }
 
-func writeForgeFiles(files []renderedFile, outputDir string) error {
+func writeForgeFiles(files []renderedFile, outputDir string, forceReplaceOnParseError bool) error {
 	for _, f := range files {
 		dest := filepath.Join(outputDir, f.destPath)
-		if err := os.MkdirAll(filepath.Dir(dest), 0750); err != nil { // #nosec G301 -- Output directories need group read access
-			return fmt.Errorf("creating directory for %s: %w", f.destPath, err)
+		switch f.strategy {
+		case "merge":
+			err := merge.MergeFile(dest, []byte(f.content), merge.Options{
+				ForceReplaceOnParseError: forceReplaceOnParseError,
+			})
+			if err != nil {
+				var pe *merge.ParseError
+				if errors.As(err, &pe) {
+					return fmt.Errorf(
+						"failed to merge into %s: existing %s file could not be parsed: %w. "+
+							"Re-run with --force-replace-on-parse-error to overwrite",
+						pe.Path, pe.Format, pe.Err)
+				}
+				return fmt.Errorf("failed to merge %s: %w", dest, err)
+			}
+			fmt.Println(styles.SuccessStyle.Render("Merged ") + styles.CodeStyle.Render(dest))
+		case "", "replace":
+			if err := os.MkdirAll(filepath.Dir(dest), 0750); err != nil { // #nosec G301 -- Output directories need group read access
+				return fmt.Errorf("creating directory for %s: %w", f.destPath, err)
+			}
+			//#nosec G306 -- Rendered blanks need to be readable
+			if err := os.WriteFile(dest, []byte(f.content), 0644); err != nil {
+				return fmt.Errorf("writing %s: %w", f.destPath, err)
+			}
+			fmt.Println(styles.SuccessStyle.Render("Wrote ") + styles.CodeStyle.Render(dest))
+		default:
+			return fmt.Errorf("unknown strategy %q on output for %s", f.strategy, dest)
 		}
-		//#nosec G306 -- Rendered blanks need to be readable
-		if err := os.WriteFile(dest, []byte(f.content), 0644); err != nil {
-			return fmt.Errorf("writing %s: %w", f.destPath, err)
-		}
-		fmt.Println(styles.SuccessStyle.Render("Wrote ") + styles.CodeStyle.Render(dest))
 	}
 	return nil
 }

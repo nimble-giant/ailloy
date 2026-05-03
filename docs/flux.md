@@ -255,6 +255,8 @@ errors out by default to avoid clobbering the user's work. Re-run with
 ailloy cast ./my-mold --force-replace-on-parse-error
 ```
 
+The same `strategy: merge` behavior applies to `ailloy forge --output <dir>`, so iterative previews against an existing output directory merge instead of clobbering. `forge` (without `--output`) prints rendered content to stdout and is unaffected — there is no destination file to merge against.
+
 ### String output
 
 All top-level directories go under a single parent:
