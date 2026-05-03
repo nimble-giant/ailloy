@@ -4,6 +4,13 @@ import (
 	"testing"
 )
 
+func TestParseOre_MalformedYAML(t *testing.T) {
+	data := []byte(`{{{not valid yaml`)
+	if _, err := ParseOre(data); err == nil {
+		t.Fatal("expected error for malformed YAML, got nil")
+	}
+}
+
 func TestParseOre_HappyPath(t *testing.T) {
 	data := []byte(`apiVersion: v1
 kind: ore
