@@ -2,8 +2,11 @@ package commands
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nimble-giant/ailloy/pkg/foundry"
 )
 
 func TestRunOreGet_NonRemoteRef_Errors(t *testing.T) {
@@ -41,6 +44,106 @@ func TestRunOreNew_RejectsExistingDirectory(t *testing.T) {
 	}
 	if err := runOreNew(nil, []string{"status"}); err == nil {
 		t.Error("expected error when directory exists")
+	}
+}
+
+func TestRunOreRemove_NotInstalled_Errors(t *testing.T) {
+	dir := t.TempDir()
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	// No .ailloy/installed.yaml at all.
+	if err := runOreRemove(nil, []string{"status"}); err == nil {
+		t.Error("expected error when no ores installed")
+	}
+}
+
+func TestRunOreRemove_HasMoldDependents_ErrorsWithoutForce(t *testing.T) {
+	dir := t.TempDir()
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	t.Cleanup(func() { oreRemoveForce = false })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	manifest := &foundry.InstalledManifest{
+		APIVersion: "v1",
+		Ores: []foundry.ArtifactEntry{
+			{Name: "status", Source: "g/status-ore", Dependents: []string{"g/some-mold"}},
+		},
+	}
+	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
+		t.Fatal(err)
+	}
+	if err := runOreRemove(nil, []string{"status"}); err == nil {
+		t.Error("expected error when mold depends on ore without --force")
+	}
+}
+
+func TestRunOreRemove_OnlyUserDependent_Removes(t *testing.T) {
+	dir := t.TempDir()
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	// Create the ore install dir + manifest entry.
+	if err := os.MkdirAll(filepath.Join(".ailloy", "ores", "status"), 0750); err != nil {
+		t.Fatal(err)
+	}
+	manifest := &foundry.InstalledManifest{
+		APIVersion: "v1",
+		Ores: []foundry.ArtifactEntry{
+			{Name: "status", Source: "g/status-ore", Dependents: []string{"user"}},
+		},
+	}
+	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
+		t.Fatal(err)
+	}
+	if err := runOreRemove(nil, []string{"status"}); err != nil {
+		t.Fatalf("runOreRemove: %v", err)
+	}
+	// Verify dir gone, manifest entry gone.
+	if _, err := os.Stat(filepath.Join(".ailloy", "ores", "status")); !os.IsNotExist(err) {
+		t.Errorf("ore dir should be gone: %v", err)
+	}
+	got, _ := foundry.ReadInstalledManifest(manifestPath)
+	if got != nil && len(got.Ores) != 0 {
+		t.Errorf("ore entry should be gone: %+v", got.Ores)
+	}
+}
+
+func TestRunOreRemove_Force_OverridesMoldDependents(t *testing.T) {
+	dir := t.TempDir()
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	t.Cleanup(func() { oreRemoveForce = false })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(".ailloy", "ores", "status"), 0750); err != nil {
+		t.Fatal(err)
+	}
+	manifest := &foundry.InstalledManifest{
+		APIVersion: "v1",
+		Ores: []foundry.ArtifactEntry{
+			{Name: "status", Source: "g/status-ore", Dependents: []string{"g/some-mold"}},
+		},
+	}
+	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
+		t.Fatal(err)
+	}
+	oreRemoveForce = true
+	if err := runOreRemove(nil, []string{"status"}); err != nil {
+		t.Fatalf("runOreRemove with --force: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(".ailloy", "ores", "status")); !os.IsNotExist(err) {
+		t.Errorf("ore dir should be gone: %v", err)
 	}
 }
 

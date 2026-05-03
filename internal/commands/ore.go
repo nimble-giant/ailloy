@@ -271,7 +271,76 @@ requires:
 	return nil
 }
 
-// Stub implemented in Task 6.4.
-func runOreRemove(_ *cobra.Command, _ []string) error {
-	return fmt.Errorf("ore remove: not yet implemented")
+func runOreRemove(_ *cobra.Command, args []string) error {
+	name := args[0]
+	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifest, err := foundry.ReadInstalledManifest(manifestPath)
+	if err != nil {
+		return fmt.Errorf("reading installed manifest: %w", err)
+	}
+	if manifest == nil {
+		return fmt.Errorf("no ores installed")
+	}
+	entry := manifest.FindArtifact("ore", name)
+	if entry == nil {
+		return fmt.Errorf("ore %q not installed", name)
+	}
+	hasMoldDeps := false
+	for _, dep := range entry.Dependents {
+		if dep != "user" {
+			hasMoldDeps = true
+			break
+		}
+	}
+	if hasMoldDeps && !oreRemoveForce {
+		var molds []string
+		for _, dep := range entry.Dependents {
+			if dep != "user" {
+				molds = append(molds, dep)
+			}
+		}
+		return fmt.Errorf("cannot remove ore %q: still required by mold(s) %v; use --force to override or 'ailloy uninstall' on the mold", name, molds)
+	}
+
+	dir := filepath.Join(".ailloy", "ores", name)
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("removing %s: %w", dir, err)
+	}
+	// Drop entry from manifest
+	kept := manifest.Ores[:0]
+	for _, e := range manifest.Ores {
+		effective := e.Name
+		if e.Alias != "" {
+			effective = e.Alias
+		}
+		if effective != name {
+			kept = append(kept, e)
+		}
+	}
+	manifest.Ores = kept
+	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
+		return fmt.Errorf("writing manifest: %w", err)
+	}
+	fmt.Println(styles.SuccessStyle.Render("Ore removed: ") + styles.AccentStyle.Render(name))
+
+	// Drop from lock if present (project scope only).
+	if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
+		dropOreLockEntry(lock, name)
+		_ = foundry.WriteLockFile(foundry.LockFileName, lock)
+	}
+	return nil
+}
+
+func dropOreLockEntry(lock *foundry.LockFile, name string) {
+	kept := lock.Ores[:0]
+	for _, e := range lock.Ores {
+		effective := e.Name
+		if e.Alias != "" {
+			effective = e.Alias
+		}
+		if effective != name {
+			kept = append(kept, e)
+		}
+	}
+	lock.Ores = kept
 }
