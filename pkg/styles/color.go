@@ -39,7 +39,10 @@ func parseHex(s string) (r, g, b uint8, ok bool) {
 	if err != nil {
 		return 0, 0, 0, false
 	}
-	return uint8(v >> 16), uint8(v >> 8), uint8(v), true
+	// Explicit byte masks before narrowing satisfy gosec's G115
+	// (integer-overflow) rule. Each masked value is in [0, 255] by
+	// construction, so the uint8 conversion cannot truncate.
+	return uint8((v >> 16) & 0xff), uint8((v >> 8) & 0xff), uint8(v & 0xff), true
 }
 
 func lerpByte(a, b uint8, t float64) uint8 {
