@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.23](https://github.com/nimble-giant/ailloy/compare/v0.6.22...v0.6.23) (2026-05-03)
+
+
+### Features
+
+* ceremony foundation + assay/temper cinematic stamps ([da971b4](https://github.com/nimble-giant/ailloy/commit/da971b4a05dacb64c6e9e899e176341567122145))
+* cinematic evolution sequence for ailloy evolve ([b3acbbd](https://github.com/nimble-giant/ailloy/commit/b3acbbd9d7ad5e6c32dca0b7fa0538a15d933fc0))
+* wire ceremony stamps into cast/recast/quench/smelt/forge ([6c9fa34](https://github.com/nimble-giant/ailloy/commit/6c9fa34fa7555beeaf3d59ce6c6187b81eee59c8))
+
+
+### Bug Fixes
+
+* cinematic plays on smaller terminals + add --demo + debug emit ([490ccce](https://github.com/nimble-giant/ailloy/commit/490ccce92b281695da8fec185191cb6ed0cb605e))
+* foundries flux picker save/load and footer hints ([929166f](https://github.com/nimble-giant/ailloy/commit/929166ff5e431506df61af26c67dfd2b63dbefd2))
+
 ## [0.6.22](https://github.com/nimble-giant/ailloy/compare/v0.6.21...v0.6.22) (2026-05-03)
 
 
