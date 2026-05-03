@@ -79,7 +79,7 @@ func dumpYAML(n *node) ([]byte, error) {
 type yamlAmbiguousStringScalar string
 
 func (s yamlAmbiguousStringScalar) MarshalYAML() ([]byte, error) {
-	return []byte(fmt.Sprintf("%q", string(s))), nil
+	return fmt.Appendf(nil, "%q", string(s)), nil
 }
 
 // yamlForceQuotedItem and yamlForceQuotedMap let us emit a YAML mapping where
@@ -106,7 +106,7 @@ func (m yamlForceQuotedMap) MarshalYAML() ([]byte, error) {
 			buf.WriteByte('\n')
 		}
 		if needsForceQuoteAsYAMLKey(it.key) {
-			buf.WriteString(fmt.Sprintf("%q", it.key))
+			fmt.Fprintf(&buf, "%q", it.key)
 		} else {
 			// Defer to goccy for non-problematic keys.
 			kb, err := yaml.Marshal(it.key)
