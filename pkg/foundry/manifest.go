@@ -51,10 +51,14 @@ func ReadInstalledManifest(path string) (*InstalledManifest, error) {
 	return &m, nil
 }
 
-// UpsertEntry adds or updates an entry by source.
+// UpsertEntry adds or updates an entry by (source, subpath).
+//
+// Subpath is part of the identity because a single foundry repo can host
+// multiple molds at different subpaths; matching on Source alone caused the
+// second install to overwrite the first.
 func (m *InstalledManifest) UpsertEntry(entry InstalledEntry) {
 	for i := range m.Molds {
-		if m.Molds[i].Source == entry.Source {
+		if m.Molds[i].Source == entry.Source && m.Molds[i].Subpath == entry.Subpath {
 			m.Molds[i] = entry
 			return
 		}
@@ -62,17 +66,34 @@ func (m *InstalledManifest) UpsertEntry(entry InstalledEntry) {
 	m.Molds = append(m.Molds, entry)
 }
 
-// FindBySource returns the entry matching the given source, or nil.
-func (m *InstalledManifest) FindBySource(source string) *InstalledEntry {
+// FindBySource returns the entry matching the given (source, subpath), or nil.
+// Pass an empty subpath for entries installed without one.
+func (m *InstalledManifest) FindBySource(source, subpath string) *InstalledEntry {
 	if m == nil {
 		return nil
 	}
 	for i := range m.Molds {
-		if m.Molds[i].Source == source {
+		if m.Molds[i].Source == source && m.Molds[i].Subpath == subpath {
 			return &m.Molds[i]
 		}
 	}
 	return nil
+}
+
+// FindAllBySource returns every entry matching the given source, regardless of
+// subpath. Useful for CLI flows where the user passes a bare source and we
+// need to disambiguate.
+func (m *InstalledManifest) FindAllBySource(source string) []*InstalledEntry {
+	if m == nil {
+		return nil
+	}
+	var out []*InstalledEntry
+	for i := range m.Molds {
+		if m.Molds[i].Source == source {
+			out = append(out, &m.Molds[i])
+		}
+	}
+	return out
 }
 
 // FindByName returns the entry matching the given name, or nil.

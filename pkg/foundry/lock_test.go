@@ -97,10 +97,12 @@ func TestLockFile_FindEntry(t *testing.T) {
 		Molds: []LockEntry{
 			{Source: "github.com/a/b", Version: "v1.0.0"},
 			{Source: "github.com/c/d", Version: "v2.0.0"},
+			{Source: "github.com/k/foundry", Subpath: "molds/shortcut", Version: "v0.3.0"},
+			{Source: "github.com/k/foundry", Subpath: "molds/linear", Version: "v0.3.0"},
 		},
 	}
 
-	e := lf.FindEntry("github.com/a/b")
+	e := lf.FindEntry("github.com/a/b", "")
 	if e == nil {
 		t.Fatal("expected entry")
 	}
@@ -108,14 +110,21 @@ func TestLockFile_FindEntry(t *testing.T) {
 		t.Errorf("Version = %q", e.Version)
 	}
 
-	if lf.FindEntry("github.com/not/found") != nil {
+	if lf.FindEntry("github.com/not/found", "") != nil {
 		t.Error("expected nil for missing entry")
+	}
+
+	if got := lf.FindEntry("github.com/k/foundry", "molds/linear"); got == nil || got.Subpath != "molds/linear" {
+		t.Errorf("FindEntry by subpath linear = %+v", got)
+	}
+	if got := lf.FindEntry("github.com/k/foundry", "molds/shortcut"); got == nil || got.Subpath != "molds/shortcut" {
+		t.Errorf("FindEntry by subpath shortcut = %+v", got)
 	}
 }
 
 func TestLockFile_FindEntry_Nil(t *testing.T) {
 	var lf *LockFile
-	if lf.FindEntry("anything") != nil {
+	if lf.FindEntry("anything", "") != nil {
 		t.Error("expected nil on nil LockFile")
 	}
 }
@@ -146,6 +155,27 @@ func TestLockFile_UpsertEntry_Update(t *testing.T) {
 	}
 	if lf.Molds[0].Version != "v2.0.0" {
 		t.Errorf("Version = %q, want v2.0.0", lf.Molds[0].Version)
+	}
+}
+
+// Regression: two molds locked from the same foundry repo at different
+// subpaths must coexist in the lock file, not collapse to one entry.
+func TestLockFile_UpsertEntry_SameSourceDifferentSubpaths(t *testing.T) {
+	lf := &LockFile{APIVersion: "v1"}
+	lf.UpsertEntry(LockEntry{Source: "github.com/k/foundry", Subpath: "molds/shortcut", Version: "v0.3.0"})
+	lf.UpsertEntry(LockEntry{Source: "github.com/k/foundry", Subpath: "molds/linear", Version: "v0.3.0"})
+
+	if len(lf.Molds) != 2 {
+		t.Fatalf("expected 2 entries (different subpaths), got %d: %+v", len(lf.Molds), lf.Molds)
+	}
+
+	// Re-upsert of same (Source, Subpath) still replaces.
+	lf.UpsertEntry(LockEntry{Source: "github.com/k/foundry", Subpath: "molds/shortcut", Version: "v0.4.0"})
+	if len(lf.Molds) != 2 {
+		t.Fatalf("re-upsert should replace, got %d entries", len(lf.Molds))
+	}
+	if got := lf.FindEntry("github.com/k/foundry", "molds/shortcut"); got == nil || got.Version != "v0.4.0" {
+		t.Errorf("upsert did not replace: %+v", got)
 	}
 }
 

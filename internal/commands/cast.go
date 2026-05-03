@@ -291,7 +291,7 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	// Backfill the manifest entry's Files list so uninstall knows what to remove.
 	// The manifest is always written (regardless of --global), so this works
 	// for both project and global installs.
-	if source != "" {
+	if source != "" && resolvedRemote != nil {
 		manifestPath := manifestPathFor(castGlobal)
 		if manifestPath != "" {
 			installed := make([]foundry.InstalledFile, 0, len(filesToCast))
@@ -305,7 +305,7 @@ func castProject(reader *blanks.MoldReader, source string) error {
 				}
 				installed = append(installed, foundry.InstalledFile{RelPath: rel, SHA256: sum})
 			}
-			if err := foundry.RecordInstalledFiles(manifestPath, source, installed); err != nil {
+			if err := foundry.RecordInstalledFiles(manifestPath, source, resolvedRemote.Ref.Subpath, installed); err != nil {
 				log.Printf("warning: recording installed files: %v", err)
 			}
 		}
@@ -451,16 +451,38 @@ type installState struct {
 	WorkflowDirs []string `yaml:"workflowDirs,omitempty"`
 }
 
+const installStatePath = ".ailloy/state.yaml"
+
 // writeInstallState records where blanks were installed so `mold list` can find them.
+//
+// Reads the existing state.yaml first and unions the new dirs into it, so
+// repeated casts (e.g. installing several molds from a foundry) accumulate
+// rather than overwriting each other.
 func writeInstallState(dirs []string) error {
 	state := installState{}
+	if existing, err := readInstallState(installStatePath); err == nil && existing != nil {
+		state = *existing
+	}
+
+	blankSet := make(map[string]struct{}, len(state.BlankDirs)+len(dirs))
+	workflowSet := make(map[string]struct{}, len(state.WorkflowDirs)+len(dirs))
+	for _, d := range state.BlankDirs {
+		blankSet[d] = struct{}{}
+	}
+	for _, d := range state.WorkflowDirs {
+		workflowSet[d] = struct{}{}
+	}
 	for _, d := range dirs {
 		if strings.HasPrefix(d, ".github/") {
-			state.WorkflowDirs = append(state.WorkflowDirs, d)
+			workflowSet[d] = struct{}{}
 		} else {
-			state.BlankDirs = append(state.BlankDirs, d)
+			blankSet[d] = struct{}{}
 		}
 	}
+
+	state.BlankDirs = sortedKeys(blankSet)
+	state.WorkflowDirs = sortedKeys(workflowSet)
+
 	data, err := yaml.Marshal(state)
 	if err != nil {
 		return err
@@ -468,7 +490,34 @@ func writeInstallState(dirs []string) error {
 	if err := os.MkdirAll(".ailloy", 0750); err != nil { // #nosec G301
 		return err
 	}
-	return os.WriteFile(".ailloy/state.yaml", data, 0644) // #nosec G306
+	return os.WriteFile(installStatePath, data, 0644) // #nosec G306
+}
+
+func readInstallState(path string) (*installState, error) {
+	data, err := os.ReadFile(path) // #nosec G304 -- path is a known constant
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var s installState
+	if err := yaml.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func sortedKeys(m map[string]struct{}) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // hasDestFile checks if any resolved file targets the given destination path.

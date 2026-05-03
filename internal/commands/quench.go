@@ -64,7 +64,7 @@ func runQuench(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("parsing reference: %w", err)
 		}
-		match := manifest.FindBySource(ref.CacheKey())
+		match := manifest.FindBySource(ref.CacheKey(), ref.Subpath)
 		if match == nil {
 			return fmt.Errorf("mold %q not found in installed manifest — run %s first",
 				args[0],
@@ -159,7 +159,7 @@ func verifyManifestAgainstLock(entries []foundry.InstalledEntry, lock *foundry.L
 		return nil // no lock to verify against — first quench scenario
 	}
 	for _, entry := range entries {
-		locked := lock.FindEntry(entry.Source)
+		locked := lock.FindEntry(entry.Source, entry.Subpath)
 		if locked == nil {
 			failures = append(failures, fmt.Sprintf("%s is in installed manifest but missing from lock", entry.Name))
 			continue

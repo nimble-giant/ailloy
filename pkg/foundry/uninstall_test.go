@@ -58,7 +58,7 @@ func TestUninstallMold_Clean(t *testing.T) {
 	writeFileT(t, "agents.md", "hello")
 	writeFileT(t, "skills/x/y.md", "world")
 
-	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", "", UninstallOptions{})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestUninstallMold_ModifiedFile_Skipped(t *testing.T) {
 	manifestPath := setupManifest(t, []string{"agents.md"}, hashes)
 	writeFileT(t, "agents.md", "modified content")
 
-	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", "", UninstallOptions{})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestUninstallMold_ModifiedFile_Force(t *testing.T) {
 	manifestPath := setupManifest(t, []string{"agents.md"}, hashes)
 	writeFileT(t, "agents.md", "modified")
 
-	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{Force: true})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", "", UninstallOptions{Force: true})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestUninstallMold_Missing(t *testing.T) {
 	hashes := map[string]string{"agents.md": sha256Hex("anything")}
 	manifestPath := setupManifest(t, []string{"agents.md"}, hashes)
 
-	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", "", UninstallOptions{})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestUninstallMold_DryRun(t *testing.T) {
 	manifestPath := setupManifest(t, []string{"agents.md"}, hashes)
 	writeFileT(t, "agents.md", "x")
 
-	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{DryRun: true})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", "", UninstallOptions{DryRun: true})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestUninstallMold_SharedFile_Retained(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", "", UninstallOptions{})
 	if err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestUninstallMold_LegacyEntry_NoFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{})
+	res, err := UninstallMold(manifestPath, "github.com/x/y", "", UninstallOptions{})
 	if err == nil {
 		t.Fatal("expected ErrLegacyEntry")
 	}
@@ -215,7 +215,7 @@ func TestUninstallMold_DropsLockEntryToo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := UninstallMold(manifestPath, "github.com/x/y", UninstallOptions{}); err != nil {
+	if _, err := UninstallMold(manifestPath, "github.com/x/y", "", UninstallOptions{}); err != nil {
 		t.Fatalf("UninstallMold: %v", err)
 	}
 	loaded, _ := ReadLockFile(LockFileName)

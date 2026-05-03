@@ -61,13 +61,16 @@ func WriteLockFile(path string, lock *LockFile) error {
 	return nil
 }
 
-// FindEntry looks up a lock entry by source (cache key).
-func (lf *LockFile) FindEntry(source string) *LockEntry {
+// FindEntry looks up a lock entry by (source, subpath).
+//
+// Subpath is part of the identity because a single foundry repo can host
+// multiple molds at different subpaths.
+func (lf *LockFile) FindEntry(source, subpath string) *LockEntry {
 	if lf == nil {
 		return nil
 	}
 	for i := range lf.Molds {
-		if lf.Molds[i].Source == source {
+		if lf.Molds[i].Source == source && lf.Molds[i].Subpath == subpath {
 			return &lf.Molds[i]
 		}
 	}
@@ -104,10 +107,10 @@ func ReferenceFromEntry(entry *LockEntry) (*Reference, error) {
 	}, nil
 }
 
-// UpsertEntry adds or updates a lock entry by source.
+// UpsertEntry adds or updates a lock entry by (source, subpath).
 func (lf *LockFile) UpsertEntry(entry LockEntry) {
 	for i := range lf.Molds {
-		if lf.Molds[i].Source == entry.Source {
+		if lf.Molds[i].Source == entry.Source && lf.Molds[i].Subpath == entry.Subpath {
 			lf.Molds[i] = entry
 			return
 		}

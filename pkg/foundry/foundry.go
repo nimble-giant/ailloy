@@ -17,12 +17,12 @@ type InstalledFile struct {
 }
 
 // RecordInstalledFiles backfills the Files list and FileHashes map on the
-// installed-manifest entry whose Source matches. Hashes are sha256 hex of the
-// file content at install time, used by UninstallMold to detect user
-// modifications. Provenance lives on the manifest (always written by cast)
-// rather than the lock so uninstall stays available when the user has not
-// opted into ailloy.lock.
-func RecordInstalledFiles(manifestPath, source string, files []InstalledFile) error {
+// installed-manifest entry whose (source, subpath) matches. Hashes are sha256
+// hex of the file content at install time, used by UninstallMold to detect
+// user modifications. Provenance lives on the manifest (always written by
+// cast) rather than the lock so uninstall stays available when the user has
+// not opted into ailloy.lock.
+func RecordInstalledFiles(manifestPath, source, subpath string, files []InstalledFile) error {
 	m, err := ReadInstalledManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("reading installed manifest: %w", err)
@@ -31,9 +31,9 @@ func RecordInstalledFiles(manifestPath, source string, files []InstalledFile) er
 		return fmt.Errorf("installed manifest %s does not exist", manifestPath)
 	}
 
-	entry := m.FindBySource(source)
+	entry := m.FindBySource(source, subpath)
 	if entry == nil {
-		return fmt.Errorf("no installed manifest entry for source %q", source)
+		return fmt.Errorf("no installed manifest entry for source %q (subpath %q)", source, subpath)
 	}
 
 	seen := make(map[string]struct{}, len(files))
@@ -167,7 +167,7 @@ func resolveWithMeta(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.F
 		if err != nil {
 			log.Printf("warning: reading lock file: %v", err)
 		}
-		if entry := lock.FindEntry(ref.CacheKey()); entry != nil && ref.Type != Branch && ref.Type != SHA {
+		if entry := lock.FindEntry(ref.CacheKey(), ref.Subpath); entry != nil && ref.Type != Branch && ref.Type != SHA {
 			if lockedSatisfies(ref, entry) {
 				resolved = &ResolvedVersion{Tag: entry.Version, Commit: entry.Commit}
 				log.Printf("using locked version %s@%s", ref.CacheKey(), entry.Version)

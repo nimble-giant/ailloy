@@ -153,7 +153,7 @@ func TestRecordInstalledFiles(t *testing.T) {
 		{RelPath: "a/dir/x.md", SHA256: "hash-a"},
 	}
 
-	if err := RecordInstalledFiles(manifestPath, "github.com/x/y", files); err != nil {
+	if err := RecordInstalledFiles(manifestPath, "github.com/x/y", "", files); err != nil {
 		t.Fatalf("RecordInstalledFiles: %v", err)
 	}
 
@@ -172,7 +172,7 @@ func TestRecordInstalledFiles(t *testing.T) {
 }
 
 func TestRecordInstalledFiles_NoManifest(t *testing.T) {
-	err := RecordInstalledFiles("/nonexistent/.ailloy/installed.yaml", "github.com/x/y", []InstalledFile{{RelPath: "a"}})
+	err := RecordInstalledFiles("/nonexistent/.ailloy/installed.yaml", "github.com/x/y", "", []InstalledFile{{RelPath: "a"}})
 	if err == nil {
 		t.Error("expected error for missing manifest")
 	}
@@ -184,7 +184,7 @@ func TestRecordInstalledFiles_EntryNotFound(t *testing.T) {
 	if err := WriteInstalledManifest(manifestPath, &InstalledManifest{APIVersion: "v1"}); err != nil {
 		t.Fatal(err)
 	}
-	err := RecordInstalledFiles(manifestPath, "github.com/missing/repo", []InstalledFile{{RelPath: "a"}})
+	err := RecordInstalledFiles(manifestPath, "github.com/missing/repo", "", []InstalledFile{{RelPath: "a"}})
 	if err == nil {
 		t.Error("expected error when entry not found")
 	}
