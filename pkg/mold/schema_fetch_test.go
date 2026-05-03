@@ -112,6 +112,35 @@ func TestFetchSchemaFromSource_RemoteResolverDispatchAndCleanup(t *testing.T) {
 	}
 }
 
+func TestLoadMoldFluxWithOres_MergesAcrossSearchPaths(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"flux.schema.yaml":             &fstest.MapFile{Data: []byte("- name: project.organization\n  type: string\n")},
+		"flux.yaml":                    &fstest.MapFile{Data: []byte("project:\n  organization: nimble-giant\n")},
+		"ores/status/ore.yaml":         &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: ore\nname: status\nversion: 1.0.0\n")},
+		"ores/status/flux.schema.yaml": &fstest.MapFile{Data: []byte("- name: enabled\n  type: bool\n")},
+		"ores/status/flux.yaml":        &fstest.MapFile{Data: []byte("enabled: false\n")},
+	}
+	schema, defaults, report, err := mold.LoadMoldFluxWithOres(moldFS, []mold.OreSearchPath{{Name: "mold-local", FS: moldFS, Root: "ores"}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	// Should have the mold's own entry plus ore.status.enabled.
+	names := map[string]bool{}
+	for _, e := range schema {
+		names[e.Name] = true
+	}
+	if !names["project.organization"] || !names["ore.status.enabled"] {
+		t.Errorf("missing expected entries: %+v", names)
+	}
+	// Defaults should have ore.status.enabled wired through.
+	if oreNs, ok := defaults["ore"].(map[string]any); !ok || oreNs["status"] == nil {
+		t.Errorf("ore defaults not merged: %+v", defaults)
+	}
+	if report.Sources["ore.status.enabled"] != "ore:status" {
+		t.Errorf("Sources should attribute to ore:status, got %v", report.Sources)
+	}
+}
+
 func TestFetchSchemaFromSource_RemoteResolverError(t *testing.T) {
 	prev := mold.ResolveSchemaFunc
 	t.Cleanup(func() { mold.ResolveSchemaFunc = prev })
