@@ -106,3 +106,38 @@ func TestMCPMergeRoundTrip(t *testing.T) {
 		t.Errorf("expected outline before replicated-docs, got: %s", got)
 	}
 }
+
+func TestDumpJSON_DoesNotHTMLEscapeURLs(t *testing.T) {
+	in := []byte(`{"url":"https://example.com/?a=1&b=2"}`)
+	n, err := loadJSON(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := dumpJSON(n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "?a=1&b=2") {
+		t.Errorf("expected raw &; got: %s", got)
+	}
+	if strings.Contains(got, "\\u0026") {
+		t.Errorf("expected no \\u0026 escape; got: %s", got)
+	}
+}
+
+func TestLoadJSON_RejectsTrailingGarbage(t *testing.T) {
+	cases := []string{
+		`{"a":1} extra`,  // unexpected token after value
+		`{"a":1}null`,    // valid trailing JSON value
+		`{"a":1}{"b":2}`, // two top-level objects
+	}
+	for _, in := range cases {
+		t.Run(in, func(t *testing.T) {
+			_, err := loadJSON([]byte(in))
+			if err == nil {
+				t.Errorf("expected error for input %q, got nil", in)
+			}
+		})
+	}
+}

@@ -3,7 +3,9 @@ package merge
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -16,9 +18,11 @@ func loadJSON(data []byte) (*node, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Verify nothing left over.
-	if _, err := dec.Token(); err == nil {
-		return nil, fmt.Errorf("trailing data after JSON value")
+	// Anything other than EOF means there's trailing content.
+	if tok, err := dec.Token(); err == nil {
+		return nil, fmt.Errorf("trailing data after JSON value: %v", tok)
+	} else if !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("trailing data after JSON value: %w", err)
 	}
 	return n, nil
 }
@@ -176,9 +180,16 @@ func writeJSONScalar(buf *bytes.Buffer, v any) error {
 }
 
 func writeJSONString(buf *bytes.Buffer, s string) error {
-	out, err := json.Marshal(s)
-	if err != nil {
+	var tmp bytes.Buffer
+	enc := json.NewEncoder(&tmp)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(s); err != nil {
 		return err
+	}
+	// Encoder.Encode appends a trailing newline; strip it.
+	out := tmp.Bytes()
+	if len(out) > 0 && out[len(out)-1] == '\n' {
+		out = out[:len(out)-1]
 	}
 	buf.Write(out)
 	return nil
