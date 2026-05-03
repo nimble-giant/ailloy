@@ -622,3 +622,62 @@ func TestIntegration_MergeStrategy_JSON(t *testing.T) {
 		t.Errorf("expected outline before replicated-docs, got:\n%s", gs)
 	}
 }
+
+func TestIntegration_MergeStrategy_TwoMolds(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	moldA := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: a\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  config/opencode.json:
+    dest: opencode.json
+    strategy: merge
+`)},
+		"config/opencode.json": &fstest.MapFile{Data: []byte(`{"mcp":{"outline":{"url":"https://outline"}}}`)},
+	}
+	moldB := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: b\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  config/opencode.json:
+    dest: opencode.json
+    strategy: merge
+`)},
+		"config/opencode.json": &fstest.MapFile{Data: []byte(`{"mcp":{"replicated-docs":{"url":"https://docs"}}}`)},
+	}
+
+	for _, m := range []fstest.MapFS{moldA, moldB} {
+		reader := blanks.NewMoldReader(m)
+		manifest, err := reader.LoadManifest()
+		if err != nil {
+			t.Fatalf("load manifest: %v", err)
+		}
+		flux, err := reader.LoadFluxDefaults()
+		if err != nil {
+			t.Fatalf("load flux: %v", err)
+		}
+		resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+		if err != nil {
+			t.Fatalf("resolve: %v", err)
+		}
+		if err := copyResolvedFiles(reader, manifest, flux, resolved); err != nil {
+			t.Fatalf("copy: %v", err)
+		}
+	}
+
+	got, err := os.ReadFile("opencode.json")
+	if err != nil {
+		t.Fatalf("readback: %v", err)
+	}
+	gs := string(got)
+	if !strings.Contains(gs, `"outline"`) {
+		t.Errorf("mold A's outline lost:\n%s", gs)
+	}
+	if !strings.Contains(gs, `"replicated-docs"`) {
+		t.Errorf("mold B's replicated-docs missing:\n%s", gs)
+	}
+}
