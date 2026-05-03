@@ -434,7 +434,10 @@ func temperFluxSchema(fsys fs.FS, manifestFlux []FluxVar, result *TemperResult) 
 
 // validateTemplates parses .md files through Go text/template to catch syntax errors.
 // When allowedPaths is non-nil, only files in that set are validated.
-// resolveOutputPaths returns the set of source paths from the output manifest.
+// resolveOutputPaths returns the set of source paths from the output manifest
+// that will be template-processed at cast time. Files in `process: false`
+// mappings are copied as-is and therefore must not be subject to Go template
+// syntax validation (they may legitimately contain `{{` from Helm/KOTS/Jinja).
 // If output is nil (identity mode), all .md files are considered in scope.
 func resolveOutputPaths(output any, fsys fs.FS) map[string]bool {
 	resolved, err := ResolveFiles(output, fsys)
@@ -443,6 +446,9 @@ func resolveOutputPaths(output any, fsys fs.FS) map[string]bool {
 	}
 	paths := make(map[string]bool, len(resolved))
 	for _, rf := range resolved {
+		if !rf.Process {
+			continue
+		}
 		paths[rf.SrcPath] = true
 	}
 	return paths
