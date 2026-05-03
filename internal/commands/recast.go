@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
@@ -68,11 +69,13 @@ func runRecast(_ *cobra.Command, args []string) error {
 	}
 
 	if recastDryRun {
+		// Dry-run keeps the lighter informational banner — no full ceremony
+		// because nothing actually changes on disk.
 		fmt.Println(styles.WorkingBanner("Previewing dependency updates (dry run)..."))
+		fmt.Println()
 	} else {
-		fmt.Println(styles.WorkingBanner("Recasting dependencies..."))
+		ceremony.Open(ceremony.Recast)
 	}
-	fmt.Println()
 
 	git := foundry.DefaultGitRunner()
 	var changes []recastChange
@@ -177,6 +180,7 @@ func runRecast(_ *cobra.Command, args []string) error {
 		fmt.Println(styles.InfoStyle.Render("Run without --dry-run to apply these changes."))
 	} else {
 		fmt.Println(styles.SuccessBanner("Recast complete!"))
+		ceremony.Stamp(ceremony.Recast, fmt.Sprintf("%d mold(s) updated", len(changes)))
 	}
 	return nil
 }
