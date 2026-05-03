@@ -772,3 +772,225 @@ func TestIntegration_Forge_MergeStrategy(t *testing.T) {
 		t.Errorf("forge merge lost an entry, got: %s", gs)
 	}
 }
+
+// TestIntegration_MergeStrategy_MultiDestList: an output entry uses the LIST
+// form — strategy must propagate per-list-entry, not be applied uniformly.
+func TestIntegration_MergeStrategy_MultiDestList(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.WriteFile("merged.json", []byte(`{"keep":"existing"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("replaced.json", []byte(`{"will":"vanish"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  src/config.json:
+    - dest: merged.json
+      strategy: merge
+    - dest: replaced.json
+      strategy: replace
+`)},
+		"src/config.json": &fstest.MapFile{Data: []byte(`{"new":"value"}`)},
+	}
+
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	flux, err := reader.LoadFluxDefaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+		t.Fatal(err)
+	}
+
+	mergedBytes, _ := os.ReadFile("merged.json")
+	merged := string(mergedBytes)
+	if !strings.Contains(merged, "keep") {
+		t.Errorf("merged.json should retain 'keep' from base; got: %s", merged)
+	}
+	if !strings.Contains(merged, "new") {
+		t.Errorf("merged.json should include 'new' from overlay; got: %s", merged)
+	}
+
+	replacedBytes, _ := os.ReadFile("replaced.json")
+	replaced := string(replacedBytes)
+	if strings.Contains(replaced, "vanish") {
+		t.Errorf("replaced.json should NOT retain old content; got: %s", replaced)
+	}
+	if !strings.Contains(replaced, "new") {
+		t.Errorf("replaced.json should have new content; got: %s", replaced)
+	}
+}
+
+// TestIntegration_MergeStrategy_NonMergeableExt: strategy: merge on an
+// extension we don't know how to merge silently falls back to replace.
+func TestIntegration_MergeStrategy_NonMergeableExt(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.WriteFile("README.md", []byte("# Old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  README.md:
+    dest: README.md
+    strategy: merge
+`)},
+		"README.md": &fstest.MapFile{Data: []byte("# New")},
+	}
+
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, _ := reader.LoadManifest()
+	flux, _ := reader.LoadFluxDefaults()
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+		t.Fatalf("non-mergeable ext should silently replace, not error: %v", err)
+	}
+
+	got, _ := os.ReadFile("README.md")
+	if string(got) != "# New" {
+		t.Errorf("expected '# New' (replaced), got: %s", got)
+	}
+}
+
+// TestIntegration_MergeStrategy_CrossFormatMisconfig: mold renders YAML
+// content into a .json destination with strategy: merge. The JSON loader
+// fails on YAML syntax. New-content parse errors are programmer/template
+// bugs, NOT user-edit issues, so the error must NOT suggest force-replace.
+func TestIntegration_MergeStrategy_CrossFormatMisconfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.WriteFile("config.json", []byte(`{"valid":"json"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  src/config.yaml:
+    dest: config.json
+    strategy: merge
+`)},
+		"src/config.yaml": &fstest.MapFile{Data: []byte("yaml_key: yaml_value\n")},
+	}
+
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, _ := reader.LoadManifest()
+	flux, _ := reader.LoadFluxDefaults()
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
+	if err == nil {
+		t.Fatal("expected error for YAML content into .json dest, got nil")
+	}
+	if strings.Contains(err.Error(), "force-replace-on-parse-error") {
+		t.Errorf("template-bug errors should not suggest force-replace flag; got: %v", err)
+	}
+}
+
+// TestIntegration_MergeStrategy_ErrorMessageActionable: when an existing
+// destination is unparseable, the cast user-facing error must literally
+// include the dest path, the format ("json" or "yaml"), and the flag name.
+func TestIntegration_MergeStrategy_ErrorMessageActionable(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	dest := "opencode.json"
+	if err := os.WriteFile(dest, []byte("not json{{"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  src/opencode.json:
+    dest: opencode.json
+    strategy: merge
+`)},
+		"src/opencode.json": &fstest.MapFile{Data: []byte(`{"mcp":{"x":{}}}`)},
+	}
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, _ := reader.LoadManifest()
+	flux, _ := reader.LoadFluxDefaults()
+	resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
+
+	err := copyResolvedFiles(reader, manifest, flux, resolved, false)
+	if err == nil {
+		t.Fatal("expected error for unparseable existing file, got nil")
+	}
+	msg := err.Error()
+	for _, must := range []string{"opencode.json", "json", "force-replace-on-parse-error"} {
+		if !strings.Contains(msg, must) {
+			t.Errorf("error message must include %q; got:\n%s", must, msg)
+		}
+	}
+}
+
+// TestIntegration_MergeStrategy_NestedDestPath: dest in a non-existent
+// subdirectory; MergeFile must create the parent dir.
+func TestIntegration_MergeStrategy_NestedDestPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  src/config.json:
+    dest: nested/sub/dir/config.json
+    strategy: merge
+`)},
+		"src/config.json": &fstest.MapFile{Data: []byte(`{"a":1}`)},
+	}
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, _ := reader.LoadManifest()
+	flux, _ := reader.LoadFluxDefaults()
+	resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
+
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat("nested/sub/dir/config.json"); err != nil {
+		t.Errorf("expected nested dest file to exist: %v", err)
+	}
+}
