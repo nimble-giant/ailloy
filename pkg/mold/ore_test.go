@@ -2,12 +2,39 @@ package mold
 
 import (
 	"testing"
+	"testing/fstest"
 )
 
 func TestParseOre_MalformedYAML(t *testing.T) {
 	data := []byte(`{{{not valid yaml`)
 	if _, err := ParseOre(data); err == nil {
 		t.Fatal("expected error for malformed YAML, got nil")
+	}
+}
+
+func TestLoadOreFromFS(t *testing.T) {
+	yaml := `apiVersion: v1
+kind: ore
+name: status
+version: 2.1.0
+description: GitHub Project Status field tracking
+`
+	fsys := fstest.MapFS{
+		"ore.yaml": &fstest.MapFile{Data: []byte(yaml)},
+	}
+
+	o, err := LoadOreFromFS(fsys, "ore.yaml")
+	if err != nil {
+		t.Fatalf("LoadOreFromFS: %v", err)
+	}
+	if o.Name != "status" {
+		t.Errorf("Name = %q; want status", o.Name)
+	}
+	if o.Version != "2.1.0" {
+		t.Errorf("Version = %q; want 2.1.0", o.Version)
+	}
+	if o.Kind != "ore" {
+		t.Errorf("Kind = %q; want ore", o.Kind)
 	}
 }
 
