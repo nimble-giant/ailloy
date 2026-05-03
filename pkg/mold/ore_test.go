@@ -1,6 +1,9 @@
 package mold
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 )
@@ -35,6 +38,19 @@ description: GitHub Project Status field tracking
 	}
 	if o.Kind != "ore" {
 		t.Errorf("Kind = %q; want ore", o.Kind)
+	}
+}
+
+func TestLoadOre_MissingFile(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "does-not-exist.yaml")
+
+	_, err := LoadOre(missing)
+	if err == nil {
+		t.Fatal("expected error for missing file, got nil")
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected wrapped os.ErrNotExist, got: %v", err)
 	}
 }
 
