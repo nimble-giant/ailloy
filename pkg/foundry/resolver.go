@@ -34,6 +34,27 @@ type ResolvedVersion struct {
 // abc123\trefs/tags/v1.0.0^{}
 var tagRef = regexp.MustCompile(`^([0-9a-f]+)\trefs/tags/(.+)$`)
 
+// prefixedTagRe matches monorepo-style per-component tags like `wiki-v0.4.0`
+// or `my-mold-1.2.3-rc1`. Group 1 is the prefix (component name); group 2 is
+// the semver remainder (with or without leading `v`).
+var prefixedTagRe = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9_-]*)-v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?)$`)
+
+// parseSemverTag classifies a tag as plain semver (`v1.2.3`, `1.2.3`) or
+// prefixed semver (`wiki-v0.4.0`). Returns the prefix ("" for plain), the
+// normalised semver string (no leading v), and ok=true on success.
+func parseSemverTag(tag string) (prefix, normalized string, ok bool) {
+	plain := strings.TrimPrefix(tag, "v")
+	if _, err := semver.NewVersion(plain); err == nil {
+		return "", plain, true
+	}
+	if m := prefixedTagRe.FindStringSubmatch(tag); m != nil {
+		if _, err := semver.NewVersion(m[2]); err == nil {
+			return m[1], m[2], true
+		}
+	}
+	return "", "", false
+}
+
 // ResolveVersion resolves a Reference to a concrete tag + commit SHA using
 // git ls-remote. It does not require a local clone.
 func ResolveVersion(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
@@ -63,8 +84,9 @@ func remoteTags(url string, git GitRunner) (map[string]string, error) {
 	return parseLsRemoteTags(string(out))
 }
 
-// parseLsRemoteTags parses the output of git ls-remote --tags into a map
-// of normalised version string → commit SHA.
+// parseLsRemoteTags parses the output of git ls-remote --tags into a map of
+// raw tag name → commit SHA. Includes both plain (`v1.2.3`) and monorepo-
+// prefixed (`wiki-v0.4.0`) semver tags. Non-semver tags are excluded.
 func parseLsRemoteTags(output string) (map[string]string, error) {
 	tags := make(map[string]string)
 
@@ -86,9 +108,8 @@ func parseLsRemoteTags(output string) (map[string]string, error) {
 			tagName = strings.TrimSuffix(tagName, "^{}")
 		}
 
-		// Only keep tags that look like semver.
-		normalized := strings.TrimPrefix(tagName, "v")
-		if _, err := semver.NewVersion(normalized); err != nil {
+		// Only keep tags that look like semver (plain or prefixed).
+		if _, _, ok := parseSemverTag(tagName); !ok {
 			continue
 		}
 
@@ -100,12 +121,46 @@ func parseLsRemoteTags(output string) (map[string]string, error) {
 	return tags, nil
 }
 
-// resolveLatest picks the highest semver tag.
+// selectTagsForPrefix narrows a tag map down to those eligible for ranking
+// against a particular release prefix.
+//
+//   - prefix == "":       only plain (un-prefixed) semver tags.
+//   - prefix == "wiki":   only `wiki-v*` tags. If none exist, falls back to
+//     plain tags so single-mold repos using plain tags still work.
+func selectTagsForPrefix(all map[string]string, prefix string) map[string]string {
+	plain := map[string]string{}
+	prefixed := map[string]string{}
+
+	for tag, sha := range all {
+		p, _, ok := parseSemverTag(tag)
+		if !ok {
+			continue
+		}
+		switch {
+		case p == "":
+			plain[tag] = sha
+		case prefix != "" && p == prefix:
+			prefixed[tag] = sha
+		}
+	}
+
+	if prefix == "" {
+		return plain
+	}
+	if len(prefixed) > 0 {
+		return prefixed
+	}
+	return plain
+}
+
+// resolveLatest picks the highest semver tag, preferring monorepo-prefixed
+// tags (`<subpath>-v*`) when the reference has a Subpath.
 func resolveLatest(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
-	tags, err := remoteTags(ref.CloneURL(), git)
+	all, err := remoteTags(ref.CloneURL(), git)
 	if err != nil {
 		return nil, err
 	}
+	tags := selectTagsForPrefix(all, ref.ReleasePrefix())
 	tag, sha, err := highestVersion(tags, nil)
 	if err != nil {
 		return nil, fmt.Errorf("no semver tags found for %s", ref.CacheKey())
@@ -113,16 +168,26 @@ func resolveLatest(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
 	return &ResolvedVersion{Tag: tag, Commit: sha}, nil
 }
 
-// resolveExact finds the exact tag matching the specified version.
+// resolveExact finds the exact tag matching the specified version. When the
+// reference has a Subpath, prefixed candidates (`<prefix>-v1.2.3`) are tried
+// before plain ones.
 func resolveExact(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
 	tags, err := remoteTags(ref.CloneURL(), git)
 	if err != nil {
 		return nil, err
 	}
 
-	// Try both with and without v prefix.
 	version := ref.Version
-	candidates := []string{version, "v" + version, strings.TrimPrefix(version, "v")}
+	bare := strings.TrimPrefix(version, "v")
+	candidates := []string{version, "v" + bare, bare}
+	if prefix := ref.ReleasePrefix(); prefix != "" {
+		prefixed := []string{
+			prefix + "-" + version,
+			prefix + "-v" + bare,
+			prefix + "-" + bare,
+		}
+		candidates = append(prefixed, candidates...)
+	}
 
 	for _, tag := range candidates {
 		if sha, ok := tags[tag]; ok {
@@ -132,17 +197,20 @@ func resolveExact(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
 	return nil, fmt.Errorf("tag %q not found in %s", ref.Version, ref.CacheKey())
 }
 
-// resolveConstraint matches a semver constraint against available tags.
+// resolveConstraint matches a semver constraint against available tags. When
+// the reference has a Subpath, the constraint is evaluated against the
+// monorepo-prefixed tags for that subpath when any exist.
 func resolveConstraint(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
 	c, err := semver.NewConstraint(ref.Version)
 	if err != nil {
 		return nil, fmt.Errorf("invalid semver constraint %q: %w", ref.Version, err)
 	}
 
-	tags, err := remoteTags(ref.CloneURL(), git)
+	all, err := remoteTags(ref.CloneURL(), git)
 	if err != nil {
 		return nil, err
 	}
+	tags := selectTagsForPrefix(all, ref.ReleasePrefix())
 
 	tag, sha, err := highestVersion(tags, c)
 	if err != nil {
@@ -184,7 +252,10 @@ func highestVersion(tags map[string]string, c *semver.Constraints) (string, stri
 
 	var entries []entry
 	for tag, sha := range tags {
-		normalized := strings.TrimPrefix(tag, "v")
+		_, normalized, ok := parseSemverTag(tag)
+		if !ok {
+			continue
+		}
 		v, err := semver.NewVersion(normalized)
 		if err != nil {
 			continue
