@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 
+	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/smelt"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
@@ -32,8 +33,7 @@ func init() {
 }
 
 func runSmelt(_ *cobra.Command, args []string) error {
-	fmt.Println(styles.WorkingBanner("Smelting mold..."))
-	fmt.Println()
+	ceremony.Open(ceremony.Smelt)
 
 	moldDir := "."
 	if len(args) > 0 {
@@ -61,6 +61,7 @@ func runSmelt(_ *cobra.Command, args []string) error {
 
 	fmt.Println(styles.SuccessStyle.Render("Smelted: ") + styles.CodeStyle.Render(outputFile) +
 		styles.SubtleStyle.Render(fmt.Sprintf(" (%s)", humanSize(size))))
+	ceremony.Stamp(ceremony.Smelt, fmt.Sprintf("%s · %s", outputFile, humanSize(size)))
 	return nil
 }
 

@@ -16,6 +16,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-yaml"
+	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -182,9 +183,8 @@ func resolveDestPrefix() (string, error) {
 }
 
 func castProject(reader *blanks.MoldReader, source string) error {
-	// Welcome message
-	fmt.Println(styles.WorkingBanner("Casting Ailloy project structure..."))
-	fmt.Println()
+	// Welcome message — themed entrance flourish wraps the canonical banner.
+	ceremony.Open(ceremony.Cast)
 
 	// Check runtime dependencies
 	checkDependencies()
@@ -369,6 +369,7 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	summary := styles.SuccessBoxStyle.Render(summaryContent)
 
 	fmt.Println(summary)
+	ceremony.Stamp(ceremony.Cast, fmt.Sprintf("%d blank dir(s) installed", len(dirs)))
 
 	// Prompt to add @AGENTS.md import to CLAUDE.md (after summary box)
 	if destPrefix == "" {

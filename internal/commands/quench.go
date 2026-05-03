@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
@@ -79,11 +80,12 @@ func runQuench(_ *cobra.Command, args []string) error {
 	}
 
 	if quenchVerify {
+		// Verify mode keeps the plain banner — it's a check, not a freeze.
 		fmt.Println(styles.WorkingBanner("Verifying pins..."))
+		fmt.Println()
 	} else {
-		fmt.Println(styles.WorkingBanner("Quenching dependencies..."))
+		ceremony.Open(ceremony.Quench)
 	}
-	fmt.Println()
 
 	// Verification phase: manifest <-> lock consistency.
 	failures := verifyManifestAgainstLock(entries, existingLock)
@@ -149,6 +151,7 @@ func runQuench(_ *cobra.Command, args []string) error {
 		styles.CodeStyle.Render(lockPath),
 	)
 	fmt.Printf("Run %s to update to newer versions.\n", styles.CodeStyle.Render("ailloy recast"))
+	ceremony.Stamp(ceremony.Quench, fmt.Sprintf("%d dependency pin(s) frozen", len(entries)))
 	return nil
 }
 

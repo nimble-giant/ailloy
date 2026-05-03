@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -173,12 +174,17 @@ func runForge(_ *cobra.Command, args []string) error {
 		})
 	}
 
-	fmt.Println(styles.WorkingBanner("Forging blanks..."))
-	fmt.Println()
+	ceremony.Open(ceremony.Forge)
 
 	if forgeOutputDir != "" {
-		return writeForgeFiles(files, forgeOutputDir)
+		if err := writeForgeFiles(files, forgeOutputDir); err != nil {
+			return err
+		}
+		ceremony.Stamp(ceremony.Forge, fmt.Sprintf("%d file(s) → %s", len(files), forgeOutputDir))
+		return nil
 	}
+	// Stdout-rendered preview: skip the trailing stamp so pipe consumers
+	// (e.g. `ailloy forge | code -`) don't get an extra trailing line.
 	return printForgeFiles(files)
 }
 
