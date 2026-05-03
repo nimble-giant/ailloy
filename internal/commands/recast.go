@@ -152,7 +152,7 @@ func runRecast(_ *cobra.Command, args []string) error {
 					log.Printf("warning: installing deps for %s: %v", entry.Name, err)
 				}
 				// Cascade-prune deps the mold no longer declares.
-				if err := pruneRemovedDeps(manifestPathFor(recastGlobal), moldKey, freshMold.Dependencies); err != nil {
+				if err := pruneRemovedDeps(manifestPathFor(recastGlobal), moldKey, freshMold.Dependencies, recastGlobal); err != nil {
 					log.Printf("warning: pruning removed deps for %s: %v", entry.Name, err)
 				}
 				// Re-read manifest so subsequent mold iterations see the

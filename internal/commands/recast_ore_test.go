@@ -69,7 +69,7 @@ func TestRecast_DropsOreFromMold_DecrementsDependentsAndGCs(t *testing.T) {
 
 	// Mold.yaml on disk no longer declares the ore.
 	freshMoldDeps := []mold.Dependency{}
-	if err := pruneRemovedDeps(manifestPath, moldKey, freshMoldDeps); err != nil {
+	if err := pruneRemovedDeps(manifestPath, moldKey, freshMoldDeps, false); err != nil {
 		t.Fatalf("pruneRemovedDeps: %v", err)
 	}
 
@@ -123,7 +123,7 @@ func TestPruneRemovedDeps_KeepsStillDeclared(t *testing.T) {
 	}
 
 	deps := []mold.Dependency{{Ore: "github.com/example/status-ore", Version: "1.0.0"}}
-	if err := pruneRemovedDeps(manifestPath, moldKey, deps); err != nil {
+	if err := pruneRemovedDeps(manifestPath, moldKey, deps, false); err != nil {
 		t.Fatalf("pruneRemovedDeps: %v", err)
 	}
 
@@ -179,7 +179,7 @@ func TestPruneRemovedDeps_KeepsEntryWithOtherDependents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := pruneRemovedDeps(manifestPath, moldKey, nil); err != nil {
+	if err := pruneRemovedDeps(manifestPath, moldKey, nil, false); err != nil {
 		t.Fatalf("pruneRemovedDeps: %v", err)
 	}
 

@@ -131,13 +131,9 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 		}
 
 		// Compute install dir.
-		baseDir := filepath.Join(".ailloy", kind+"s", installName)
-		if global {
-			home, herr := os.UserHomeDir()
-			if herr != nil {
-				return fmt.Errorf("determining home directory: %w", herr)
-			}
-			baseDir = filepath.Join(home, ".ailloy", kind+"s", installName)
+		baseDir, derr := artifactInstallDir(kind, installName, global)
+		if derr != nil {
+			return fmt.Errorf("determining install dir for %s %s: %w", kind, installName, derr)
 		}
 		if err := copyFromFS(fsys, baseDir); err != nil {
 			return fmt.Errorf("copying %s to %s: %w", kind, baseDir, err)
@@ -302,7 +298,7 @@ func copyFromFS(fsys fs.FS, dest string) error {
 // are left untouched even if their Dependents would otherwise change.
 //
 // A nil/missing manifest is a no-op (nothing to prune).
-func pruneRemovedDeps(manifestPath, moldKey string, currentDeps []mold.Dependency) error {
+func pruneRemovedDeps(manifestPath, moldKey string, currentDeps []mold.Dependency, global bool) error {
 	if manifestPath == "" || moldKey == "" {
 		return nil
 	}
@@ -370,11 +366,14 @@ func pruneRemovedDeps(manifestPath, moldKey string, currentDeps []mold.Dependenc
 		return nil
 	}
 
-	// Remove orphan install directories. These live under .ailloy/<kind>s/<name>
-	// for project scope. (recast/anneal that call this helper are project-scoped;
-	// when global support lands, this will need a scope parameter.)
+	// Remove orphan install directories. Project scope lives under
+	// .ailloy/<kind>s/<name>; global lives under ~/.ailloy/<kind>s/<name>.
 	for _, p := range orphanPlans {
-		dir := filepath.Join(".ailloy", p.kind+"s", p.installName)
+		dir, derr := artifactInstallDir(p.kind, p.installName, global)
+		if derr != nil {
+			log.Printf("warning: determining install dir for %s %s: %v", p.kind, p.installName, derr)
+			continue
+		}
 		if err := os.RemoveAll(dir); err != nil {
 			log.Printf("warning: removing %s: %v", dir, err)
 		}
@@ -403,6 +402,130 @@ func stripDependent(s []string, target string) []string {
 		return nil
 	}
 	return out
+}
+
+// artifactInstallDir returns the on-disk install directory for an artifact of
+// the given kind and install-name. Project scope returns ".ailloy/<kind>s/<name>";
+// global scope returns "~/.ailloy/<kind>s/<name>". Returns an error if the home
+// directory cannot be resolved while in global mode.
+func artifactInstallDir(kind, name string, global bool) (string, error) {
+	if !global {
+		return filepath.Join(".ailloy", kind+"s", name), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".ailloy", kind+"s", name), nil
+}
+
+// cascadeUninstallArtifacts strips moldKey from every ingot/ore Dependents
+// list. Any artifact whose Dependents drains to empty is treated as an orphan:
+// the install directory is removed from disk, the manifest entry is dropped,
+// and the matching lock entry (if any, project-scope only) is removed.
+//
+// Used by uninstall after the mold's own files have been removed. The
+// "user" sentinel is preserved automatically — RemoveDependent only matches
+// the supplied moldKey.
+func cascadeUninstallArtifacts(manifestPath, moldKey string, global bool) error {
+	if manifestPath == "" || moldKey == "" {
+		return nil
+	}
+	im, err := foundry.ReadInstalledManifest(manifestPath)
+	if err != nil {
+		return err
+	}
+	if im == nil {
+		return nil
+	}
+
+	// Tag every artifact's identity with its kind up-front so we can recover
+	// the kind for orphans (RemoveDependent doesn't return that info).
+	type kindKey struct{ source, subpath, alias string }
+	kindByKey := map[kindKey]string{}
+	for _, e := range im.Ingots {
+		kindByKey[kindKey{e.Source, e.Subpath, e.Alias}] = "ingot"
+	}
+	for _, e := range im.Ores {
+		kindByKey[kindKey{e.Source, e.Subpath, e.Alias}] = "ore"
+	}
+
+	orphans := im.RemoveDependent(moldKey)
+
+	for _, o := range orphans {
+		kind, ok := kindByKey[kindKey{o.Source, o.Subpath, o.Alias}]
+		if !ok {
+			continue
+		}
+		installName := o.Name
+		if o.Alias != "" {
+			installName = o.Alias
+		}
+		baseDir, derr := artifactInstallDir(kind, installName, global)
+		if derr != nil {
+			log.Printf("warning: determining install dir for orphaned %s %s: %v", kind, installName, derr)
+			continue
+		}
+		if err := os.RemoveAll(baseDir); err != nil {
+			log.Printf("warning: removing %s: %v", baseDir, err)
+		}
+		if !castSilent.Load() {
+			fmt.Println(styles.SuccessStyle.Render("  Cascade-removed: ") + styles.AccentStyle.Render(kind+" "+installName))
+		}
+	}
+
+	if err := foundry.WriteInstalledManifest(manifestPath, im); err != nil {
+		return fmt.Errorf("writing manifest after cascade: %w", err)
+	}
+
+	// Drop orphans from the lock as well (project-scope only — global has no
+	// lock convention today).
+	if !global && len(orphans) > 0 {
+		if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
+			for _, o := range orphans {
+				kind, ok := kindByKey[kindKey{o.Source, o.Subpath, o.Alias}]
+				if !ok {
+					continue
+				}
+				installName := o.Name
+				if o.Alias != "" {
+					installName = o.Alias
+				}
+				dropArtifactLockEntry(lock, kind, installName)
+			}
+			_ = foundry.WriteLockFile(foundry.LockFileName, lock)
+		}
+	}
+
+	return nil
+}
+
+// dropArtifactLockEntry removes a lock entry for the given (kind, install-name).
+// install-name is the alias-applied name (the on-disk dir name).
+func dropArtifactLockEntry(lock *foundry.LockFile, kind, name string) {
+	if lock == nil {
+		return
+	}
+	var list *[]foundry.LockEntry
+	switch kind {
+	case "ingot":
+		list = &lock.Ingots
+	case "ore":
+		list = &lock.Ores
+	default:
+		return
+	}
+	kept := (*list)[:0]
+	for _, e := range *list {
+		effective := e.Name
+		if e.Alias != "" {
+			effective = e.Alias
+		}
+		if effective != name {
+			kept = append(kept, e)
+		}
+	}
+	*list = kept
 }
 
 func artifactToLock(e foundry.ArtifactEntry) foundry.LockEntry {
