@@ -22,6 +22,8 @@ var (
 	moldNameStyle   = lipgloss.NewStyle().Foreground(styles.Accent1).Bold(true)
 	verifiedStyle   = lipgloss.NewStyle().Foreground(styles.Success).Bold(true)
 	installedStyle  = lipgloss.NewStyle().Foreground(styles.Info).Bold(true)
+	upToDateStyle   = lipgloss.NewStyle().Foreground(styles.Success).Bold(true)
+	updateStyle     = lipgloss.NewStyle().Foreground(styles.Warning).Bold(true)
 	descStyle       = lipgloss.NewStyle().Foreground(styles.LightGray)
 	metaStyle       = lipgloss.NewStyle().Foreground(styles.Gray)
 	statusOKStyle   = lipgloss.NewStyle().Foreground(styles.Success)
@@ -50,22 +52,36 @@ type CastFn func(ctx context.Context, source string, opts CastOptions) error
 // the verified default has never been fetched).
 type UpdateFn func(cfg *index.Config) error
 
+// installedInfo is what we know about a mold present in the installed manifest.
+// Source/Subpath are kept so we can build a foundry.Reference for resolving the
+// latest upstream version.
+type installedInfo struct {
+	Version string
+	Commit  string
+	Source  string
+	Subpath string
+}
+
 // Model is the Discover tab.
 type Model struct {
-	cfg         *index.Config
-	cast        CastFn
-	update      UpdateFn
-	catalog     []data.CatalogEntry
-	filtered    []data.CatalogEntry
-	installed   map[string]string // source -> installed version (for the "installed" badge)
-	selected    map[string]bool
-	cursor      int
-	filter      textinput.Model
-	loading     bool
-	loadErr     error
-	castStat    map[string]string
-	autoFetched bool                // guard so we only auto-fetch once per session
-	pending     map[string][]string // moldRef → encoded "--set" overrides
+	cfg            *index.Config
+	cast           CastFn
+	update         UpdateFn
+	git            foundry.GitRunner // injected for tests; nil falls back to DefaultGitRunner
+	catalog        []data.CatalogEntry
+	filtered       []data.CatalogEntry
+	installed      map[string]installedInfo           // canonical join key → installed info
+	latest         map[string]foundry.ResolvedVersion // canonical join key → latest upstream
+	resolving      map[string]bool                    // canonical join key → "checking…" in flight
+	selected       map[string]bool
+	cursor         int
+	filter         textinput.Model
+	loading        bool
+	loadErr        error
+	castStat       map[string]string
+	autoFetched    bool                // guard so we only auto-fetch once per session
+	pending        map[string][]string // moldRef → encoded "--set" overrides
+	wantLatestScan bool                // user pressed `r`; resolve latest after inventory reloads
 }
 
 type catalogLoadedMsg struct {
@@ -74,7 +90,7 @@ type catalogLoadedMsg struct {
 }
 
 type inventoryLoadedMsg struct {
-	installed map[string]string // source -> version
+	installed map[string]installedInfo // canonical join key → info
 }
 
 type catalogFetchedMsg struct{ err error }
@@ -82,6 +98,15 @@ type catalogFetchedMsg struct{ err error }
 type castDoneMsg struct {
 	source string
 	err    error
+}
+
+// latestResolvedMsg reports the result of one upstream version resolve. One
+// message fires per installed mold so the UI can update incrementally rather
+// than blocking on the slowest network call.
+type latestResolvedMsg struct {
+	key      string
+	resolved *foundry.ResolvedVersion
+	err      error
 }
 
 // New initializes the Discover model and kicks off catalog loading. cast is
@@ -95,7 +120,9 @@ func New(cfg *index.Config, cast CastFn, update UpdateFn) Model {
 		cfg:       cfg,
 		cast:      cast,
 		update:    update,
-		installed: map[string]string{},
+		installed: map[string]installedInfo{},
+		latest:    map[string]foundry.ResolvedVersion{},
+		resolving: map[string]bool{},
 		selected:  map[string]bool{},
 		filter:    ti,
 		loading:   true,
@@ -117,12 +144,20 @@ func loadCatalogCmd(cfg *index.Config) tea.Cmd {
 func loadInventoryCmd(cfg *index.Config) tea.Cmd {
 	return func() tea.Msg {
 		items, _ := data.LoadInventory(cfg)
-		out := make(map[string]string, len(items))
+		out := make(map[string]installedInfo, len(items))
 		for _, it := range items {
-			// First scope wins (project before global). Both are useful info,
-			// but the badge just signals "you have this".
-			if _, exists := out[it.Entry.Source]; !exists {
-				out[it.Entry.Source] = it.Entry.Version
+			// Key by the canonical "source[//subpath]" form so subpath-bearing
+			// catalog entries (e.g. "github.com/x/y//molds/foo") match installed
+			// entries (which store subpath separately). First scope wins —
+			// project entries take precedence over global ones.
+			key := data.MoldIdentity(it.Entry.Source, it.Entry.Subpath)
+			if _, exists := out[key]; !exists {
+				out[key] = installedInfo{
+					Version: it.Entry.Version,
+					Commit:  it.Entry.Commit,
+					Source:  it.Entry.Source,
+					Subpath: it.Entry.Subpath,
+				}
 			}
 		}
 		return inventoryLoadedMsg{installed: out}
@@ -150,6 +185,23 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, loadCatalogCmd(m.cfg)
 	case inventoryLoadedMsg:
 		m.installed = msg.installed
+		// Drop any stale "latest" entries for molds that are no longer installed
+		// so the next render doesn't claim "up to date" for things we don't have.
+		for k := range m.latest {
+			if _, ok := m.installed[k]; !ok {
+				delete(m.latest, k)
+			}
+		}
+		if m.wantLatestScan {
+			m.wantLatestScan = false
+			return m, m.scanLatestCmd()
+		}
+		return m, nil
+	case latestResolvedMsg:
+		delete(m.resolving, msg.key)
+		if msg.err == nil && msg.resolved != nil {
+			m.latest[msg.key] = *msg.resolved
+		}
 		return m, nil
 	case castDoneMsg:
 		if msg.err != nil {
@@ -158,7 +210,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.castStat[msg.source] = "ok"
 			delete(m.pending, msg.source)
 		}
-		// Refresh inventory so the "installed" badge updates immediately.
+		// Refresh inventory so the "installed" badge updates immediately, and
+		// re-scan latest so an updated mold's "update available" tag clears.
+		m.wantLatestScan = true
 		return m, loadInventoryCmd(m.cfg)
 	case tea.KeyMsg:
 		if m.filter.Focused() {
@@ -204,6 +258,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		case "r":
 			m.loading = true
+			m.wantLatestScan = true
 			return m, tea.Batch(loadCatalogCmd(m.cfg), loadInventoryCmd(m.cfg))
 		}
 	}
@@ -219,6 +274,57 @@ func (m Model) fetchCmd() tea.Cmd {
 		}
 		return catalogFetchedMsg{err: update(cfg)}
 	}
+}
+
+// scanLatestCmd kicks off one async resolve per installed mold, in parallel.
+// Each resolve emits its own latestResolvedMsg so the UI fills in incrementally
+// rather than blocking on the slowest network call.
+func (m *Model) scanLatestCmd() tea.Cmd {
+	if len(m.installed) == 0 {
+		return nil
+	}
+	git := m.git
+	if git == nil {
+		git = foundry.DefaultGitRunner()
+	}
+	cmds := make([]tea.Cmd, 0, len(m.installed))
+	for key, info := range m.installed {
+		if m.resolving[key] {
+			continue
+		}
+		m.resolving[key] = true
+		key, info := key, info
+		cmds = append(cmds, func() tea.Msg {
+			ref, err := referenceFromInstalled(info)
+			if err != nil {
+				return latestResolvedMsg{key: key, err: err}
+			}
+			rv, err := foundry.ResolveVersion(ref, git)
+			return latestResolvedMsg{key: key, resolved: rv, err: err}
+		})
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	return tea.Batch(cmds...)
+}
+
+// referenceFromInstalled builds the foundry.Reference needed for a "latest"
+// resolve from the source/subpath stored in the installed manifest. Mirrors
+// internal/commands.referenceFromInstalledEntry without taking a dependency on
+// the commands package.
+func referenceFromInstalled(info installedInfo) (*foundry.Reference, error) {
+	parts := strings.SplitN(info.Source, "/", 3)
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("invalid source %q: expected host/owner/repo", info.Source)
+	}
+	return &foundry.Reference{
+		Host:    parts[0],
+		Owner:   parts[1],
+		Repo:    parts[2],
+		Subpath: info.Subpath,
+		Type:    foundry.Latest,
+	}, nil
 }
 
 func (m Model) castCmd(source string) tea.Cmd {
@@ -321,6 +427,37 @@ func formatSetValue(v any) string {
 	}
 }
 
+// renderCastBadge produces the status pill rendered next to a catalog row's
+// name. Returns "" when the mold has never been cast (no badge at all);
+// otherwise one of:
+//
+//   - "● up to date {version}"        — installed and matches latest upstream
+//   - "● update available {old} → {new}" — installed but upstream has moved on
+//   - "● installed {version} (checking…)" — installed, latest still resolving
+//   - "● installed {version}"          — installed, latest unknown (resolve failed)
+func renderCastBadge(m Model, e data.CatalogEntry) string {
+	key := data.MoldIdentity(e.Source, "")
+	info, ok := m.installed[key]
+	if !ok {
+		return ""
+	}
+	version := info.Version
+	if version == "" {
+		version = "?"
+	}
+	if latest, have := m.latest[key]; have {
+		if latest.Tag == info.Version && latest.Commit == info.Commit {
+			return upToDateStyle.Render("● up to date " + version)
+		}
+		return updateStyle.Render("● update available " + version + " → " + latest.Tag)
+	}
+	label := "● installed " + version
+	if m.resolving[key] {
+		label += " (checking…)"
+	}
+	return installedStyle.Render(label)
+}
+
 func (m Model) View() string {
 	if m.loading {
 		return metaStyle.Render("Loading catalog…")
@@ -362,12 +499,8 @@ func (m Model) View() string {
 			verified = " " + verifiedStyle.Render("✓")
 		}
 		installedTag := ""
-		if v, ok := m.installed[e.Source]; ok {
-			label := "● installed"
-			if v != "" {
-				label = "● installed " + v
-			}
-			installedTag = " " + installedStyle.Render(label)
+		if badge := renderCastBadge(m, e); badge != "" {
+			installedTag = " " + badge
 		}
 		status := ""
 		if s, ok := m.castStat[e.Source]; ok {
@@ -396,6 +529,6 @@ func (m Model) View() string {
 
 	fmt.Fprintf(&b, "\n%s\n", metaStyle.Render(fmt.Sprintf("%d selected · %d shown · %d total",
 		len(m.selected), len(visible), len(m.catalog))))
-	b.WriteString(metaStyle.Render("space toggle · enter cast all · / search · c clear · r refresh · f flux · j/k move") + "\n")
+	b.WriteString(metaStyle.Render("space toggle · enter cast all · / search · c clear · r refresh + check updates · f flux · j/k move") + "\n")
 	return b.String()
 }
