@@ -61,7 +61,7 @@ func TestIntegration_CopyResolvedFiles(t *testing.T) {
 		t.Fatal("expected resolved files, got none")
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestIntegration_CopyResolvedFiles_WithVariableSubstitution(t *testing.T) {
 		}
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, processable)
+	err = copyResolvedFiles(reader, manifest, flux, processable, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestIntegration_ResolvedFilesMatchMold(t *testing.T) {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestCopyResolvedFiles_SkipsEmptyRenderedFiles(t *testing.T) {
 		{SrcPath: "commands/nonempty.md", DestPath: filepath.Join(tmpDir, ".claude/commands/nonempty.md"), Process: true},
 	}
 
-	err := copyResolvedFiles(reader, nil, map[string]any{}, resolved)
+	err := copyResolvedFiles(reader, nil, map[string]any{}, resolved, false)
 	if err != nil {
 		t.Fatalf("copyResolvedFiles failed: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestCopyResolvedFiles_RemovesEmptyMultiDestDirs(t *testing.T) {
 		}
 	}
 
-	if err := copyResolvedFiles(reader, nil, map[string]any{}, resolved); err != nil {
+	if err := copyResolvedFiles(reader, nil, map[string]any{}, resolved, false); err != nil {
 		t.Fatalf("copyResolvedFiles failed: %v", err)
 	}
 
@@ -423,7 +423,7 @@ func TestIntegration_FilePermissions(t *testing.T) {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -534,7 +534,7 @@ func TestIntegration_WorkflowsNotProcessed(t *testing.T) {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -561,5 +561,581 @@ func TestIntegration_WorkflowsNotProcessed(t *testing.T) {
 		if string(moldContent) != string(fileContent) {
 			t.Errorf("workflow %s should be copied verbatim (process: false) but content differs", rf.DestPath)
 		}
+	}
+}
+
+func TestIntegration_MergeStrategy_JSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	// Pre-seed an existing opencode.json with the "outline" MCP server.
+	preExisting := []byte(`{"mcp":{"outline":{"url":"https://outline"}}}`)
+	if err := os.WriteFile("opencode.json", preExisting, 0644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Build a synthetic mold that produces opencode.json with strategy: merge.
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: test\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  config/opencode.json:
+    dest: opencode.json
+    strategy: merge
+`)},
+		"config/opencode.json": &fstest.MapFile{Data: []byte(`{"mcp":{"replicated-docs":{"url":"https://docs"}}}`)},
+	}
+
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	flux, err := reader.LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("load flux: %v", err)
+	}
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+		t.Fatalf("copy: %v", err)
+	}
+
+	got, err := os.ReadFile("opencode.json")
+	if err != nil {
+		t.Fatalf("readback: %v", err)
+	}
+	gs := string(got)
+	if !strings.Contains(gs, `"outline"`) {
+		t.Errorf("outline missing after merge:\n%s", gs)
+	}
+	if !strings.Contains(gs, `"replicated-docs"`) {
+		t.Errorf("replicated-docs missing after merge:\n%s", gs)
+	}
+	// Order: outline comes first (from pre-existing file).
+	if strings.Index(gs, "outline") > strings.Index(gs, "replicated-docs") {
+		t.Errorf("expected outline before replicated-docs, got:\n%s", gs)
+	}
+}
+
+func TestIntegration_MergeStrategy_TwoMolds(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	moldA := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: a\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  config/opencode.json:
+    dest: opencode.json
+    strategy: merge
+`)},
+		"config/opencode.json": &fstest.MapFile{Data: []byte(`{"mcp":{"outline":{"url":"https://outline"}}}`)},
+	}
+	moldB := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: b\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  config/opencode.json:
+    dest: opencode.json
+    strategy: merge
+`)},
+		"config/opencode.json": &fstest.MapFile{Data: []byte(`{"mcp":{"replicated-docs":{"url":"https://docs"}}}`)},
+	}
+
+	for _, m := range []fstest.MapFS{moldA, moldB} {
+		reader := blanks.NewMoldReader(m)
+		manifest, err := reader.LoadManifest()
+		if err != nil {
+			t.Fatalf("load manifest: %v", err)
+		}
+		flux, err := reader.LoadFluxDefaults()
+		if err != nil {
+			t.Fatalf("load flux: %v", err)
+		}
+		resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+		if err != nil {
+			t.Fatalf("resolve: %v", err)
+		}
+		if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+			t.Fatalf("copy: %v", err)
+		}
+	}
+
+	got, err := os.ReadFile("opencode.json")
+	if err != nil {
+		t.Fatalf("readback: %v", err)
+	}
+	gs := string(got)
+	if !strings.Contains(gs, `"outline"`) {
+		t.Errorf("mold A's outline lost:\n%s", gs)
+	}
+	if !strings.Contains(gs, `"replicated-docs"`) {
+		t.Errorf("mold B's replicated-docs missing:\n%s", gs)
+	}
+}
+
+func TestIntegration_MergeStrategy_ForceReplaceOnParseError(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	// Pre-seed an unparseable opencode.json (simulating user hand-edits).
+	if err := os.WriteFile("opencode.json", []byte("not json{"), 0644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: test\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  config/opencode.json:
+    dest: opencode.json
+    strategy: merge
+`)},
+		"config/opencode.json": &fstest.MapFile{Data: []byte(`{"mcp":{"replicated-docs":{"url":"https://docs"}}}`)},
+	}
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	flux, err := reader.LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("load flux: %v", err)
+	}
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	// Without force-replace: should fail with ParseError-derived message.
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
+	if err == nil {
+		t.Fatal("expected error without force-replace, got nil")
+	}
+	if !strings.Contains(err.Error(), "force-replace-on-parse-error") {
+		t.Errorf("expected error to mention the flag; got: %v", err)
+	}
+
+	// With force-replace: should clobber the unparseable file.
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, true); err != nil {
+		t.Fatalf("force-replace should succeed; got: %v", err)
+	}
+	got, _ := os.ReadFile("opencode.json")
+	if !strings.Contains(string(got), "replicated-docs") {
+		t.Errorf("force-replace should write new content; got: %s", got)
+	}
+}
+
+func TestIntegration_Forge_MergeStrategy(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	outputDir := filepath.Join(tmpDir, "preview")
+	if err := os.MkdirAll(outputDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	// Pre-seed an existing opencode.json under the output dir to simulate an
+	// iterative forge preview.
+	dest := filepath.Join(outputDir, "opencode.json")
+	if err := os.WriteFile(dest, []byte(`{"mcp":{"outline":{"url":"https://outline"}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	files := []renderedFile{
+		{
+			destPath: "opencode.json",
+			content:  `{"mcp":{"replicated-docs":{"url":"https://docs"}}}`,
+			strategy: "merge",
+		},
+	}
+	if err := writeForgeFiles(files, outputDir, false, "test"); err != nil {
+		t.Fatalf("writeForgeFiles: %v", err)
+	}
+	got, _ := os.ReadFile(dest)
+	gs := string(got)
+	if !strings.Contains(gs, "outline") || !strings.Contains(gs, "replicated-docs") {
+		t.Errorf("forge merge lost an entry, got: %s", gs)
+	}
+}
+
+// TestIntegration_MergeStrategy_MultiDestList: an output entry uses the LIST
+// form — strategy must propagate per-list-entry, not be applied uniformly.
+func TestIntegration_MergeStrategy_MultiDestList(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.WriteFile("merged.json", []byte(`{"keep":"existing"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("replaced.json", []byte(`{"will":"vanish"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  src/config.json:
+    - dest: merged.json
+      strategy: merge
+    - dest: replaced.json
+      strategy: replace
+`)},
+		"src/config.json": &fstest.MapFile{Data: []byte(`{"new":"value"}`)},
+	}
+
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	flux, err := reader.LoadFluxDefaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+		t.Fatal(err)
+	}
+
+	mergedBytes, _ := os.ReadFile("merged.json")
+	merged := string(mergedBytes)
+	if !strings.Contains(merged, "keep") {
+		t.Errorf("merged.json should retain 'keep' from base; got: %s", merged)
+	}
+	if !strings.Contains(merged, "new") {
+		t.Errorf("merged.json should include 'new' from overlay; got: %s", merged)
+	}
+
+	replacedBytes, _ := os.ReadFile("replaced.json")
+	replaced := string(replacedBytes)
+	if strings.Contains(replaced, "vanish") {
+		t.Errorf("replaced.json should NOT retain old content; got: %s", replaced)
+	}
+	if !strings.Contains(replaced, "new") {
+		t.Errorf("replaced.json should have new content; got: %s", replaced)
+	}
+}
+
+// TestIntegration_MergeStrategy_NonMergeableExt: strategy: merge on an
+// extension we don't know how to merge silently falls back to replace.
+func TestIntegration_MergeStrategy_NonMergeableExt(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.WriteFile("README.md", []byte("# Old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  README.md:
+    dest: README.md
+    strategy: merge
+`)},
+		"README.md": &fstest.MapFile{Data: []byte("# New")},
+	}
+
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, _ := reader.LoadManifest()
+	flux, _ := reader.LoadFluxDefaults()
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+		t.Fatalf("non-mergeable ext should silently replace, not error: %v", err)
+	}
+
+	got, _ := os.ReadFile("README.md")
+	if string(got) != "# New" {
+		t.Errorf("expected '# New' (replaced), got: %s", got)
+	}
+}
+
+// TestIntegration_MergeStrategy_CrossFormatMisconfig: mold renders YAML
+// content into a .json destination with strategy: merge. The JSON loader
+// fails on YAML syntax. New-content parse errors are programmer/template
+// bugs, NOT user-edit issues, so the error must NOT suggest force-replace.
+func TestIntegration_MergeStrategy_CrossFormatMisconfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.WriteFile("config.json", []byte(`{"valid":"json"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  src/config.yaml:
+    dest: config.json
+    strategy: merge
+`)},
+		"src/config.yaml": &fstest.MapFile{Data: []byte("yaml_key: yaml_value\n")},
+	}
+
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, _ := reader.LoadManifest()
+	flux, _ := reader.LoadFluxDefaults()
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
+	if err == nil {
+		t.Fatal("expected error for YAML content into .json dest, got nil")
+	}
+	if strings.Contains(err.Error(), "force-replace-on-parse-error") {
+		t.Errorf("template-bug errors should not suggest force-replace flag; got: %v", err)
+	}
+}
+
+// TestIntegration_MergeStrategy_ErrorMessageActionable: when an existing
+// destination is unparseable, the cast user-facing error must literally
+// include the dest path, the format ("json" or "yaml"), and the flag name.
+func TestIntegration_MergeStrategy_ErrorMessageActionable(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	dest := "opencode.json"
+	if err := os.WriteFile(dest, []byte("not json{{"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  src/opencode.json:
+    dest: opencode.json
+    strategy: merge
+`)},
+		"src/opencode.json": &fstest.MapFile{Data: []byte(`{"mcp":{"x":{}}}`)},
+	}
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, _ := reader.LoadManifest()
+	flux, _ := reader.LoadFluxDefaults()
+	resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
+
+	err := copyResolvedFiles(reader, manifest, flux, resolved, false)
+	if err == nil {
+		t.Fatal("expected error for unparseable existing file, got nil")
+	}
+	msg := err.Error()
+	for _, must := range []string{"opencode.json", "json", "force-replace-on-parse-error"} {
+		if !strings.Contains(msg, must) {
+			t.Errorf("error message must include %q; got:\n%s", must, msg)
+		}
+	}
+}
+
+// TestIntegration_MergeStrategy_NestedDestPath: dest in a non-existent
+// subdirectory; MergeFile must create the parent dir.
+func TestIntegration_MergeStrategy_NestedDestPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  src/config.json:
+    dest: nested/sub/dir/config.json
+    strategy: merge
+`)},
+		"src/config.json": &fstest.MapFile{Data: []byte(`{"a":1}`)},
+	}
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, _ := reader.LoadManifest()
+	flux, _ := reader.LoadFluxDefaults()
+	resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
+
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat("nested/sub/dir/config.json"); err != nil {
+		t.Errorf("expected nested dest file to exist: %v", err)
+	}
+}
+
+// TestIntegration_AppendStrategy_TwoMoldsContributeToAGENTS verifies the
+// motivating use case: two molds each declare strategy: append on AGENTS.md;
+// after both casts, the file contains both molds' content in distinct
+// sentinel blocks.
+func TestIntegration_AppendStrategy_TwoMoldsContributeToAGENTS(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	wikiAgents := []byte("# wiki\n\nWiki agent instructions.")
+	docsAgents := []byte("# docs\n\nDocs agent instructions.")
+
+	wiki := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: wiki\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  AGENTS.md:
+    dest: AGENTS.md
+    strategy: append
+`)},
+		"AGENTS.md": &fstest.MapFile{Data: wikiAgents},
+	}
+	docs := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: docs\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  AGENTS.md:
+    dest: AGENTS.md
+    strategy: append
+`)},
+		"AGENTS.md": &fstest.MapFile{Data: docsAgents},
+	}
+
+	for _, m := range []fstest.MapFS{wiki, docs} {
+		reader := blanks.NewMoldReader(m)
+		manifest, err := reader.LoadManifest()
+		if err != nil {
+			t.Fatalf("load manifest: %v", err)
+		}
+		flux, err := reader.LoadFluxDefaults()
+		if err != nil {
+			t.Fatalf("load flux: %v", err)
+		}
+		resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+		if err != nil {
+			t.Fatalf("resolve: %v", err)
+		}
+		if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+			t.Fatalf("copy: %v", err)
+		}
+	}
+
+	got, err := os.ReadFile("AGENTS.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gs := string(got)
+	for _, want := range []string{
+		"<!-- ailloy:mold=wiki:start -->",
+		"<!-- ailloy:mold=wiki:end -->",
+		"<!-- ailloy:mold=docs:start -->",
+		"<!-- ailloy:mold=docs:end -->",
+		"Wiki agent instructions.",
+		"Docs agent instructions.",
+	} {
+		if !strings.Contains(gs, want) {
+			t.Errorf("missing %q in AGENTS.md after append:\n%s", want, gs)
+		}
+	}
+}
+
+// TestIntegration_AppendStrategy_RecastIsIdempotent verifies that re-casting
+// the same mold updates its sentinel block in place rather than appending
+// a duplicate.
+func TestIntegration_AppendStrategy_RecastIsIdempotent(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	wiki := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: wiki\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  AGENTS.md:
+    dest: AGENTS.md
+    strategy: append
+`)},
+		"AGENTS.md": &fstest.MapFile{Data: []byte("# wiki v1")},
+	}
+
+	castOnce := func() {
+		reader := blanks.NewMoldReader(wiki)
+		manifest, _ := reader.LoadManifest()
+		flux, _ := reader.LoadFluxDefaults()
+		resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
+		if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	castOnce()
+	castOnce()
+	castOnce()
+
+	got, _ := os.ReadFile("AGENTS.md")
+	gs := string(got)
+	if strings.Count(gs, "wiki:start") != 1 {
+		t.Errorf("re-cast duplicated sentinel block:\n%s", gs)
+	}
+}
+
+// TestIntegration_AppendStrategy_NonMarkdownErrors verifies that strategy:
+// append on a non-markdown file errors clearly.
+func TestIntegration_AppendStrategy_NonMarkdownErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: t\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  src/config.json:
+    dest: config.json
+    strategy: append
+`)},
+		"src/config.json": &fstest.MapFile{Data: []byte(`{"x":1}`)},
+	}
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, _ := reader.LoadManifest()
+	flux, _ := reader.LoadFluxDefaults()
+	resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
+	err := copyResolvedFiles(reader, manifest, flux, resolved, false)
+	if err == nil {
+		t.Fatal("expected error for append on non-markdown file, got nil")
+	}
+	if !strings.Contains(err.Error(), ".md") {
+		t.Errorf("error should explain markdown limitation; got: %v", err)
 	}
 }

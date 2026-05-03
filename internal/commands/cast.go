@@ -3,6 +3,7 @@ package commands
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -19,6 +20,7 @@ import (
 	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
+	"github.com/nimble-giant/ailloy/pkg/merge"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/smelt"
 	"github.com/nimble-giant/ailloy/pkg/styles"
@@ -40,13 +42,14 @@ Use -g/--global to install into the user's home directory (~/) instead.`,
 }
 
 var (
-	withWorkflows        bool
-	castGlobal           bool
-	castSetFlags         []string
-	castValFiles         []string
-	castClaudePluginFlag bool
-	castPluginName       string
-	castPluginVer        string
+	withWorkflows                bool
+	castGlobal                   bool
+	castSetFlags                 []string
+	castValFiles                 []string
+	castClaudePluginFlag         bool
+	castPluginName               string
+	castPluginVer                string
+	castForceReplaceOnParseError bool
 	// castSilent suppresses interactive output from copyResolvedFiles and
 	// related helpers. Set by CastMold (the programmatic core used by the
 	// foundries TUI) so per-file "✅ Created" lines don't corrupt the
@@ -64,6 +67,10 @@ func init() {
 	castCmd.Flags().BoolVar(&castClaudePluginFlag, "claude-plugin", false, "package the rendered mold as a Claude Code plugin instead of installing blanks at their cast destinations")
 	castCmd.Flags().StringVar(&castPluginName, "plugin-name", "", "override the plugin name (defaults to the mold's name; requires a plugin output flag such as --claude-plugin)")
 	castCmd.Flags().StringVar(&castPluginVer, "plugin-version", "", "override the plugin version (defaults to the mold's version; requires a plugin output flag such as --claude-plugin)")
+	castCmd.Flags().BoolVar(&castForceReplaceOnParseError,
+		"force-replace-on-parse-error",
+		false,
+		"if a destination uses strategy: merge but is unparseable, replace it instead of erroring")
 }
 
 func runCast(_ *cobra.Command, args []string) error {
@@ -285,7 +292,7 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	fmt.Println()
 
 	// Copy resolved files from mold
-	if err := copyResolvedFiles(reader, manifest, flux, filesToCast); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, filesToCast, castForceReplaceOnParseError); err != nil {
 		return fmt.Errorf("failed to copy files: %w", err)
 	}
 
@@ -602,7 +609,7 @@ func offerAgentsImport(claudePath string) {
 
 // copyResolvedFiles copies resolved mold files to the project, applying template
 // processing where indicated by the output mapping.
-func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[string]any, resolved []mold.ResolvedFile) error {
+func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[string]any, resolved []mold.ResolvedFile, forceReplaceOnParseError bool) error {
 	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
 	var schema []mold.FluxVar
 	if s, err := reader.LoadFluxSchema(); err == nil && s != nil {
@@ -645,13 +652,41 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(rf.DestPath), 0750); err != nil { // #nosec G301
-			return fmt.Errorf("failed to create directory for %s: %w", rf.DestPath, err)
-		}
-
-		//#nosec G306 -- Blanks need to be readable
-		if err := os.WriteFile(rf.DestPath, outputContent, 0644); err != nil {
-			return fmt.Errorf("failed to write %s: %w", rf.DestPath, err)
+		switch rf.Strategy {
+		case "merge":
+			err := merge.MergeFile(rf.DestPath, outputContent, merge.Options{
+				ForceReplaceOnParseError: forceReplaceOnParseError,
+			})
+			if err != nil {
+				var pe *merge.ParseError
+				if errors.As(err, &pe) {
+					return fmt.Errorf(
+						"failed to merge into %s: existing %s file could not be parsed: %w. "+
+							"Re-run with --force-replace-on-parse-error to overwrite",
+						pe.Path, pe.Format, pe.Err)
+				}
+				return fmt.Errorf("failed to merge %s: %w", rf.DestPath, err)
+			}
+		case "append":
+			if manifest == nil {
+				return fmt.Errorf("append strategy requires a mold manifest with a name (dest %s)", rf.DestPath)
+			}
+			err := merge.AppendFile(rf.DestPath, outputContent, merge.AppendOptions{
+				MoldName: manifest.Name,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to append into %s: %w", rf.DestPath, err)
+			}
+		case "", "replace":
+			if err := os.MkdirAll(filepath.Dir(rf.DestPath), 0750); err != nil { // #nosec G301
+				return fmt.Errorf("failed to create directory for %s: %w", rf.DestPath, err)
+			}
+			//#nosec G306 -- Blanks need to be readable
+			if err := os.WriteFile(rf.DestPath, outputContent, 0644); err != nil {
+				return fmt.Errorf("failed to write %s: %w", rf.DestPath, err)
+			}
+		default:
+			return fmt.Errorf("unknown strategy %q on output for %s", rf.Strategy, rf.DestPath)
 		}
 
 		if !castSilent.Load() {

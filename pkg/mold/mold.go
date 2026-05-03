@@ -56,12 +56,13 @@ type Dependency struct {
 // OutputTarget represents a single output directory or file mapping.
 // It supports three YAML forms:
 //   - Simple string: "dest/path" (process defaults to true)
-//   - Expanded map: {dest: "dest/path", process: false, set: {...}}
+//   - Expanded map: {dest: "dest/path", process: false, set: {...}, strategy: "merge"}
 //   - List of either form, expanded into multiple targets (multi-destination)
 type OutputTarget struct {
-	Dest    string         `yaml:"dest"`
-	Process *bool          `yaml:"process,omitempty"` // nil = true (default)
-	Set     map[string]any `yaml:"set,omitempty"`     // per-destination context overrides
+	Dest     string         `yaml:"dest"`
+	Process  *bool          `yaml:"process,omitempty"`  // nil = true (default)
+	Set      map[string]any `yaml:"set,omitempty"`      // per-destination context overrides
+	Strategy string         `yaml:"strategy,omitempty"` // "" or "replace" (default) | "merge"
 }
 
 // ShouldProcess returns whether files under this target should be template-processed.
@@ -75,6 +76,7 @@ type ResolvedFile struct {
 	DestPath string         // output path (e.g., ".claude/commands/hello.md")
 	Process  bool           // whether to apply template processing
 	Set      map[string]any // context overrides applied to this render pass
+	Strategy string         // "" or "replace" (default) | "merge"
 }
 
 // Mold represents a mold.yaml manifest.
