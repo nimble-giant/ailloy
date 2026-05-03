@@ -77,7 +77,7 @@ func TestTemper_NoManifest(t *testing.T) {
 	if len(errors) != 1 {
 		t.Fatalf("expected 1 error, got %d", len(errors))
 	}
-	if errors[0].Message != "no mold.yaml or ingot.yaml found" {
+	if errors[0].Message != "no mold.yaml, ingot.yaml, or ore.yaml found" {
 		t.Errorf("unexpected error message: %s", errors[0].Message)
 	}
 }
