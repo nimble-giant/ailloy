@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 
+	"dario.cat/mergo"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
@@ -135,8 +136,12 @@ func (r *EphemeralOreResolver) MergeInto(baseSchema []mold.FluxVar, baseDefaults
 		return nil, nil, report, err
 	}
 	out := map[string]any{}
-	// ores first, then base wins.
-	mold.MergeOreDefaults(out, r.defaults)
-	mold.MergeOreDefaults(out, baseDefaults)
+	// Mold-wins on collision via mergo.WithOverride; ores layered first.
+	if err := mergo.Merge(&out, r.defaults); err != nil {
+		return nil, nil, report, fmt.Errorf("merging ore defaults: %w", err)
+	}
+	if err := mergo.Merge(&out, baseDefaults, mergo.WithOverride); err != nil {
+		return nil, nil, report, fmt.Errorf("merging mold defaults over ore defaults: %w", err)
+	}
 	return merged, out, report, nil
 }
