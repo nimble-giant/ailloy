@@ -7,15 +7,19 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
+	"github.com/nimble-giant/ailloy/internal/tui/splash"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
 )
+
+var rootNoAnimate bool
 
 var rootCmd = &cobra.Command{
 	Use:   "ailloy",
 	Short: "The package manager for AI instructions",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		styles.Init()
+		styles.SetNoAnimate(rootNoAnimate)
 	},
 }
 
@@ -37,36 +41,57 @@ func Execute() {
 	}
 }
 
-func buildLongDescription(version string) string {
-	banner := styles.WelcomeBanner(version)
-
-	description := styles.BoxStyle.Render(
+func descriptionBlock() string {
+	return styles.BoxStyle.Render(
 		"Ailloy is the package manager for AI instructions.\n" +
 			"Find, create, and share reusable AI workflow packages —\n" +
 			"the same way Helm manages Kubernetes applications.\n\n" +
 			"Like in metallurgy—where combining two elements yields a stronger alloy—\n" +
 			"Ailloy fuses human creativity with AI precision.",
 	)
+}
 
-	quickStart := styles.InfoBoxStyle.Render(
+func quickStartBlock() string {
+	return styles.InfoBoxStyle.Render(
 		"Quick Start:\n\n" +
 			"🦊 ailloy cast            # Cast project (alias: install)\n" +
 			"🦊 ailloy mold list       # View molds\n" +
 			"🦊 ailloy anneal          # Anneal settings (alias: configure)",
 	)
+}
 
+func buildLongDescription(version string) string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		banner,
+		styles.WelcomeBanner(version),
 		"",
-		description,
+		descriptionBlock(),
 		"",
-		quickStart,
+		quickStartBlock(),
 	)
+}
+
+// animatedHelpFunc plays the splash cinematic in the alternate screen buffer
+// (when allowed by the environment) and then prints the static help into
+// normal scrollback so it persists for the user to read, scroll, and copy.
+// PersistentPreRun isn't called for help-only invocations, so we redo the
+// styles.Init / SetNoAnimate setup here.
+func animatedHelpFunc(cmd *cobra.Command, args []string) {
+	styles.Init()
+	styles.SetNoAnimate(rootNoAnimate)
+
+	if cmd == rootCmd {
+		splash.Run() // no-op when not animatable; never writes to stdout permanently
+	}
+
+	fmt.Println(cmd.Long)
+	_ = cmd.Usage()
 }
 
 func init() {
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
+	rootCmd.PersistentFlags().BoolVar(&rootNoAnimate, "no-animate", false, "disable terminal animations")
+	rootCmd.SetHelpFunc(animatedHelpFunc)
 
 	// Register custom template function to render commands as a styled table
 	cobra.AddTemplateFunc("commandTable", func(cmd *cobra.Command) string {
