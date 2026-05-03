@@ -96,7 +96,7 @@ func TestResolveAnnealSchema_WithFluxSchema(t *testing.T) {
 
 	reader := testMoldReader(t)
 
-	schema, fluxDefaults, err := resolveAnnealSchema(reader)
+	schema, fluxDefaults, err := resolveAnnealSchema(reader, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
