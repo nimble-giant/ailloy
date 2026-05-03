@@ -23,9 +23,15 @@ import (
 // Dependents entry. May be "" for local-path molds (no dependents tracking
 // happens then; the install still proceeds).
 //
+// `allowLocalDeps` controls whether mold.yaml may declare dependencies
+// pointing at local filesystem paths (absolute or file:// refs). Should be
+// true only when the parent mold itself was loaded from a local source —
+// refusing local-path deps inside a remotely-resolved mold prevents a
+// malicious foundry from exfiltrating files via the cast pipeline.
+//
 // Pre-collision check: ore deps with explicit aliases that resolve to the
 // same install-dir name fail BEFORE any download.
-func installDeclaredDeps(manifest *mold.Mold, moldKey string, global bool) error {
+func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocalDeps bool) error {
 	if manifest == nil || len(manifest.Dependencies) == 0 {
 		return nil
 	}
@@ -58,9 +64,19 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global bool) error
 		kind, _ := d.Kind() // already validated above
 		ref := d.Source()
 
-		// Skip if already installed (any version) for this source.
+		if !allowLocalDeps && !foundry.IsRemoteReference(ref) {
+			return fmt.Errorf("dependency %q is a local path, but the mold was resolved from a remote source; refusing to copy local files into the project", ref)
+		}
+
+		// Pre-compute provenance identity (source, subpath) from the ref so
+		// the skip-check below uses the same (Source, Subpath, Alias) key
+		// that UpsertArtifact later writes. Avoids a network round-trip for
+		// already-installed deps.
+		sourceID, subpath := depIdentity(ref)
+
+		// Skip if already installed (any version) for this (source, subpath, alias).
 		// Constraint solving is deferred to issue #185 (transitive deps).
-		if existing := findArtifactBySource(im, kind, ref); existing != nil {
+		if existing := findArtifactBySource(im, kind, sourceID, subpath, d.As); existing != nil {
 			if moldKey != "" && !containsString(existing.Dependents, moldKey) {
 				existing.Dependents = append(existing.Dependents, moldKey)
 				_ = foundry.WriteInstalledManifest(manifestPath, im)
@@ -68,15 +84,21 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global bool) error
 			continue
 		}
 
-		fmt.Println(styles.WorkingBanner(fmt.Sprintf("Installing %s %s...", kind, ref)))
-		fsys, sourceID, version, commit, err := resolveDepFS(ref, d.Version, global)
+		if !castSilent.Load() {
+			fmt.Println(styles.WorkingBanner(fmt.Sprintf("Installing %s %s...", kind, ref)))
+		}
+		fsys, resolvedSource, resolvedSubpath, version, commit, err := resolveDepFS(ref, d.Version, global)
 		if err != nil {
 			return fmt.Errorf("resolving %s %s: %w", kind, ref, err)
 		}
+		// Trust the resolver's view of (source, subpath) once we have it;
+		// pre-parse can't see e.g. lock-file rewrites, but practically these
+		// match for both the remote and local branches.
+		sourceID = resolvedSource
+		subpath = resolvedSubpath
 
 		// Validate manifest matches kind.
 		manifestName := ""
-		subpath := ""
 		switch kind {
 		case "ingot":
 			ingot, ierr := mold.LoadIngotFromFS(fsys, "ingot.yaml")
@@ -138,7 +160,9 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global bool) error
 		}
 		im.UpsertArtifact(kind, entry)
 
-		fmt.Println(styles.SuccessStyle.Render("  Installed: ") + styles.AccentStyle.Render(manifestName+" "+version))
+		if !castSilent.Load() {
+			fmt.Println(styles.SuccessStyle.Render("  Installed: ") + styles.AccentStyle.Render(manifestName+" "+version))
+		}
 	}
 
 	if err := foundry.WriteInstalledManifest(manifestPath, im); err != nil {
@@ -162,12 +186,14 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global bool) error
 }
 
 // resolveDepFS returns an fs.FS for an ore/ingot dep along with provenance
-// fields suitable for InstalledManifest. Remote refs go through the foundry
+// fields suitable for InstalledManifest: source (cache key for remote, path
+// for local), subpath (only set for remote refs that include //subpath),
+// resolved version, and resolved commit. Remote refs go through the foundry
 // resolver; local paths (absolute, ./relative, or file://...) are loaded
 // directly from disk so cast-time auto-install works in dev workflows
 // without a network round-trip. The dep's declared `version` is reused as
 // the recorded version for local refs (they have no resolved tag).
-func resolveDepFS(ref, declaredVersion string, global bool) (fs.FS, string, string, string, error) {
+func resolveDepFS(ref, declaredVersion string, global bool) (fs.FS, string, string, string, string, error) {
 	if foundry.IsRemoteReference(ref) {
 		var resolveOpts []foundry.ResolveOption
 		if global {
@@ -175,23 +201,43 @@ func resolveDepFS(ref, declaredVersion string, global bool) (fs.FS, string, stri
 		}
 		fsys, result, err := foundry.ResolveWithMetadata(ref, resolveOpts...)
 		if err != nil {
-			return nil, "", "", "", err
+			return nil, "", "", "", "", err
 		}
-		return fsys, result.Ref.CacheKey(), result.Resolved.Tag, result.Resolved.Commit, nil
+		return fsys, result.Ref.CacheKey(), result.Ref.Subpath, result.Resolved.Tag, result.Resolved.Commit, nil
 	}
 
 	path := strings.TrimPrefix(ref, "file://")
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, "", "", "", fmt.Errorf("stat %q: %w", path, err)
+		return nil, "", "", "", "", fmt.Errorf("stat %q: %w", path, err)
 	}
 	if !info.IsDir() {
-		return nil, "", "", "", fmt.Errorf("%q is not a directory", path)
+		return nil, "", "", "", "", fmt.Errorf("%q is not a directory", path)
 	}
-	return os.DirFS(path), path, declaredVersion, "", nil
+	return os.DirFS(path), path, "", declaredVersion, "", nil
 }
 
-func findArtifactBySource(m *foundry.InstalledManifest, kind, source string) *foundry.ArtifactEntry {
+// depIdentity returns the (source, subpath) identity tuple for a dependency
+// reference without doing a full network/disk resolve. Used by the
+// installed-manifest skip check so already-installed deps don't trigger a
+// foundry round-trip just to discover they're a no-op.
+//
+// For remote refs, this parses the reference to extract CacheKey + Subpath.
+// For local refs, source is the path and subpath is empty (matching what
+// resolveDepFS reports). Parse failures fall back to (ref, "") — the
+// downstream resolve will surface the real error.
+func depIdentity(ref string) (string, string) {
+	if foundry.IsRemoteReference(ref) {
+		parsed, err := foundry.ParseReference(ref)
+		if err != nil {
+			return ref, ""
+		}
+		return parsed.CacheKey(), parsed.Subpath
+	}
+	return strings.TrimPrefix(ref, "file://"), ""
+}
+
+func findArtifactBySource(m *foundry.InstalledManifest, kind, source, subpath, alias string) *foundry.ArtifactEntry {
 	if m == nil {
 		return nil
 	}
@@ -205,8 +251,9 @@ func findArtifactBySource(m *foundry.InstalledManifest, kind, source string) *fo
 		return nil
 	}
 	for i := range *list {
-		if (*list)[i].Source == source {
-			return &(*list)[i]
+		e := &(*list)[i]
+		if e.Source == source && e.Subpath == subpath && e.Alias == alias {
+			return e
 		}
 	}
 	return nil

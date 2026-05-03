@@ -261,7 +261,11 @@ func castProject(reader *blanks.MoldReader, source string) error {
 			moldKey += "@" + resolvedRemote.Ref.Subpath
 		}
 	}
-	if err := installDeclaredDeps(manifest, moldKey, castGlobal); err != nil {
+	// Local-path deps are only safe when the parent mold is itself local —
+	// otherwise a malicious foundry could declare e.g. `- ore: /etc` and
+	// have it copied into the project tree.
+	allowLocalDeps := resolvedRemote == nil
+	if err := installDeclaredDeps(manifest, moldKey, castGlobal, allowLocalDeps); err != nil {
 		return fmt.Errorf("installing declared dependencies: %w", err)
 	}
 

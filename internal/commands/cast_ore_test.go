@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
@@ -57,7 +58,7 @@ func TestInstallDeclaredDeps_InstallsMissingOre(t *testing.T) {
 		},
 	}
 
-	if err := installDeclaredDeps(manifest, "g/test-mold", false); err != nil {
+	if err := installDeclaredDeps(manifest, "g/test-mold", false, true); err != nil {
 		t.Fatalf("installDeclaredDeps: %v", err)
 	}
 
@@ -107,10 +108,10 @@ func TestInstallDeclaredDeps_AppendsDependent(t *testing.T) {
 			{Ore: remoteOre, Version: "1.0.0"},
 		},
 	}
-	if err := installDeclaredDeps(manifest, "g/first", false); err != nil {
+	if err := installDeclaredDeps(manifest, "g/first", false, true); err != nil {
 		t.Fatalf("first install: %v", err)
 	}
-	if err := installDeclaredDeps(manifest, "g/second", false); err != nil {
+	if err := installDeclaredDeps(manifest, "g/second", false, true); err != nil {
 		t.Fatalf("second install: %v", err)
 	}
 
@@ -156,7 +157,7 @@ func TestInstallDeclaredDeps_AliasCollisionPreCheck(t *testing.T) {
 			{Ore: oreB, Version: "1.0.0", As: "shared"},
 		},
 	}
-	err := installDeclaredDeps(manifest, "g/m", false)
+	err := installDeclaredDeps(manifest, "g/m", false, true)
 	if err == nil {
 		t.Fatal("expected alias collision error, got nil")
 	}
@@ -196,7 +197,7 @@ func TestCast_AutoInstallsOreFromMoldYAML(t *testing.T) {
 		},
 	}
 
-	if err := installDeclaredDeps(manifest, "g/m", false); err != nil {
+	if err := installDeclaredDeps(manifest, "g/m", false, true); err != nil {
 		t.Fatalf("installDeclaredDeps: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(".ailloy", "ores", "status", "ore.yaml")); err != nil {
@@ -234,5 +235,89 @@ func TestCast_AutoInstallsOreFromMoldYAML(t *testing.T) {
 	}
 	if statusNS["enabled"] != false {
 		t.Errorf("expected ore.status.enabled = false, got %v", statusNS["enabled"])
+	}
+}
+
+// TestInstallDeclaredDeps_DistinctSubpathsCoexist verifies the (Source,
+// Subpath, Alias) identity tuple — two ores at distinct local paths must
+// produce two manifest entries rather than collapsing under the same Source.
+// (Hosting two ores at distinct subpaths within the same remote foundry
+// would exercise the same code path; the local-path branch suffices to
+// prove the manifest doesn't collide.)
+func TestInstallDeclaredDeps_DistinctSubpathsCoexist(t *testing.T) {
+	tmp := t.TempDir()
+
+	oreA := filepath.Join(tmp, "ore-a")
+	writeOreFiles(t, oreA, "status_a")
+	oreB := filepath.Join(tmp, "ore-b")
+	writeOreFiles(t, oreB, "status_b")
+
+	moldDir := filepath.Join(tmp, "mold")
+	if err := os.MkdirAll(moldDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if err := os.Chdir(moldDir); err != nil {
+		t.Fatal(err)
+	}
+
+	manifest := &mold.Mold{
+		Name:    "test-mold",
+		Version: "1.0.0",
+		Dependencies: []mold.Dependency{
+			{Ore: oreA, Version: "1.0.0"},
+			{Ore: oreB, Version: "1.0.0"},
+		},
+	}
+
+	if err := installDeclaredDeps(manifest, "g/test-mold", false, true); err != nil {
+		t.Fatalf("installDeclaredDeps: %v", err)
+	}
+
+	im, _ := foundry.ReadInstalledManifest(filepath.Join(moldDir, ".ailloy", "installed.yaml"))
+	if im == nil {
+		t.Fatal("manifest missing")
+	}
+	if len(im.Ores) != 2 {
+		t.Errorf("expected 2 distinct ore entries, got %d: %+v", len(im.Ores), im.Ores)
+	}
+}
+
+// TestInstallDeclaredDeps_RejectsLocalDepFromRemoteMold verifies the local-
+// dep sandbox: when the parent mold was resolved from a remote source,
+// declaring a local-path dep (absolute path, file:// ref) must be refused
+// before any files are copied.
+func TestInstallDeclaredDeps_RejectsLocalDepFromRemoteMold(t *testing.T) {
+	tmp := t.TempDir()
+
+	oreDir := filepath.Join(tmp, "remote-ore")
+	writeOreFiles(t, oreDir, "status")
+
+	moldDir := filepath.Join(tmp, "mold")
+	if err := os.MkdirAll(moldDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if err := os.Chdir(moldDir); err != nil {
+		t.Fatal(err)
+	}
+
+	manifest := &mold.Mold{
+		Name:    "remote-mold",
+		Version: "1.0.0",
+		Dependencies: []mold.Dependency{
+			{Ore: oreDir, Version: "1.0.0"},
+		},
+	}
+
+	// Simulate a remote-resolved mold by passing allowLocalDeps=false.
+	err := installDeclaredDeps(manifest, "g/remote-mold", false, false)
+	if err == nil {
+		t.Fatal("expected error for local-path dep in remote mold")
+	}
+	if !strings.Contains(err.Error(), "local path") {
+		t.Errorf("error should mention 'local path': %v", err)
 	}
 }

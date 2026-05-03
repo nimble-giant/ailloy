@@ -90,7 +90,11 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 			moldKey += "@" + remoteResult.Ref.Subpath
 		}
 	}
-	if err := installDeclaredDeps(manifest, moldKey, opts.Global); err != nil {
+	// Local-path deps are only safe when the parent mold is itself local —
+	// otherwise a malicious foundry could declare e.g. `- ore: /etc` and
+	// have it copied into the project tree.
+	allowLocalDeps := remoteResult == nil
+	if err := installDeclaredDeps(manifest, moldKey, opts.Global, allowLocalDeps); err != nil {
 		return res, fmt.Errorf("installing declared dependencies: %w", err)
 	}
 
