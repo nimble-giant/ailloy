@@ -76,7 +76,7 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 		res.MoldName = manifest.Name
 	}
 
-	flux, err := layerFluxForCore(reader, opts.ValueFiles, opts.SetOverrides)
+	flux, err := layerFluxForCore(reader, source, opts.ValueFiles, opts.SetOverrides)
 	if err != nil {
 		return res, err
 	}
@@ -216,8 +216,10 @@ func openMoldReaderForCore(ref string, global bool) (*blanks.MoldReader, *foundr
 }
 
 // layerFluxForCore mirrors loadCastFlux but is parameterized so CastMold
-// doesn't depend on package-level cast flag vars.
-func layerFluxForCore(reader *blanks.MoldReader, valueFiles, setOverrides []string) (map[string]any, error) {
+// doesn't depend on package-level cast flag vars. `source` is the resolved
+// mold ref used to pick up persisted flux files (~/.ailloy/flux/<slug>.yaml
+// then ./.ailloy/flux/<slug>.yaml). Empty source skips persisted-file lookup.
+func layerFluxForCore(reader *blanks.MoldReader, source string, valueFiles, setOverrides []string) (map[string]any, error) {
 	defaults, err := reader.LoadFluxDefaults()
 	if err != nil {
 		defaults = make(map[string]any)
@@ -229,6 +231,15 @@ func layerFluxForCore(reader *blanks.MoldReader, valueFiles, setOverrides []stri
 	flux := make(map[string]any, len(defaults))
 	for k, v := range defaults {
 		flux[k] = v
+	}
+	if persisted := mold.PersistedFluxPaths(source); len(persisted) > 0 {
+		overlay, err := mold.LayerFluxFiles(persisted)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range overlay {
+			flux[k] = v
+		}
 	}
 	if len(valueFiles) > 0 {
 		overlay, err := mold.LayerFluxFiles(valueFiles)

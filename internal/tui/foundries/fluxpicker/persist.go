@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+
+	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
 // writeFluxFile writes overrides into a YAML file at path, merging with any
@@ -93,6 +95,10 @@ func resolveGlobalPath(moldName string) (string, error) {
 	return filepath.Join(home, ".ailloy", "flux", moldName+".yaml"), nil
 }
 
+// fluxFileSlug delegates to the shared slug helper. Kept as a package-local
+// alias so existing call sites stay readable.
+var fluxFileSlug = mold.FluxFileSlug
+
 // persistOverrides routes overrides to the chosen save target. Returns the
 // path written (empty string for SaveTargetSession).
 func persistOverrides(moldName string, target SaveTarget, overrides map[string]any) (string, error) {
@@ -110,46 +116,6 @@ func persistOverrides(moldName string, target SaveTarget, overrides map[string]a
 		return path, writeFluxFile(path, overrides)
 	}
 	return "", fmt.Errorf("unknown save target %v", target)
-}
-
-// fluxFileSlug derives a deterministic, filesystem-safe filename stem from a
-// mold ref. The full source is preserved (with separators replaced) so molds
-// with the same final segment under different foundries — including nested
-// foundries that can re-export molds — don't collide on disk.
-//
-//	"github.com/nimble-giant/agents@v1"  → "github.com_nimble-giant_agents_v1"
-//	"nimble-giant/agents"                → "nimble-giant_agents"
-//	"agents"                             → "agents"
-//
-// Anything that isn't [A-Za-z0-9._-] is collapsed to '_'.
-func fluxFileSlug(ref string) string {
-	ref = strings.TrimSuffix(strings.TrimSpace(ref), ".git")
-	if ref == "" {
-		return "mold"
-	}
-	out := make([]byte, 0, len(ref))
-	for i := 0; i < len(ref); i++ {
-		c := ref[i]
-		switch {
-		case c >= 'a' && c <= 'z',
-			c >= 'A' && c <= 'Z',
-			c >= '0' && c <= '9',
-			c == '.', c == '-':
-			out = append(out, c)
-		default:
-			if len(out) > 0 && out[len(out)-1] != '_' {
-				out = append(out, '_')
-			}
-		}
-	}
-	// Trim trailing underscore from collapsed runs at the tail.
-	for len(out) > 0 && out[len(out)-1] == '_' {
-		out = out[:len(out)-1]
-	}
-	if len(out) == 0 {
-		return "mold"
-	}
-	return string(out)
 }
 
 // mergeOverrides returns a new map combining defaults and overrides

@@ -36,13 +36,16 @@ type pluginPackageResult struct {
 // castClaudePlugin is the CLI entrypoint for `ailloy cast --claude-plugin`.
 // It prints the banner and success message; the underlying pipeline lives in
 // packageMoldAsClaudePlugin so foundry install / CastMold can share it.
-func castClaudePlugin(reader *blanks.MoldReader) error {
+//
+// `source` is the resolved mold ref used to pick up persisted flux files; it
+// is "" for local mold dirs and embedded molds.
+func castClaudePlugin(reader *blanks.MoldReader, source string) error {
 	if !castSilent.Load() {
 		fmt.Println(styles.WorkingBanner("Casting Ailloy mold as Claude Code plugin..."))
 		fmt.Println()
 	}
 
-	flux, err := loadCastFlux(reader)
+	flux, err := loadCastFlux(reader, source)
 	if err != nil {
 		flux = make(map[string]any)
 	}

@@ -396,6 +396,6 @@ func (m Model) View() string {
 
 	fmt.Fprintf(&b, "\n%s\n", metaStyle.Render(fmt.Sprintf("%d selected · %d shown · %d total",
 		len(m.selected), len(visible), len(m.catalog))))
-	b.WriteString(metaStyle.Render("space toggle · enter cast all · / search · c clear · r refresh · j/k move") + "\n")
+	b.WriteString(metaStyle.Render("space toggle · enter cast all · / search · c clear · r refresh · f flux · j/k move") + "\n")
 	return b.String()
 }

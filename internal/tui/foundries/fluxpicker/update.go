@@ -31,6 +31,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(k tea.KeyMsg) (Model, tea.Cmd) {
+	// Ctrl+S opens the save prompt from any focus mode. Filter input
+	// otherwise swallows letter shortcuts, so a non-letter binding is the
+	// only one that reliably reaches the picker while typing.
+	if k.Type == tea.KeyCtrlS && m.focus != focusSavePrompt {
+		if len(m.overrides) == 0 {
+			return m, nil
+		}
+		m.saving = saveState{active: true}
+		m.focus = focusSavePrompt
+		m.editor = editorState{}
+		m.filter.Blur()
+		return m, nil
+	}
 	switch m.focus {
 	case focusEditor:
 		return m.handleEditorKey(k)
@@ -88,8 +101,9 @@ func (m Model) handleFilterKey(k tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyRunes:
 		// Single-character shortcuts only fire when the filter is blurred —
-		// otherwise typing 'd'/'R'/'s' into the filter would clear overrides
-		// or open the save prompt instead of editing the query.
+		// otherwise typing 'd'/'R' into the filter would clear overrides.
+		// Save is bound to Ctrl+S in handleKey so it works regardless of
+		// filter focus.
 		if len(k.Runes) == 1 && !m.filter.Focused() {
 			switch k.Runes[0] {
 			case 'd':
@@ -100,10 +114,6 @@ func (m Model) handleFilterKey(k tea.KeyMsg) (Model, tea.Cmd) {
 				return m, nil
 			case 'R':
 				return m.ResetOverrides(), nil
-			case 's':
-				m.saving = saveState{active: true}
-				m.focus = focusSavePrompt
-				return m, nil
 			}
 		}
 	}
@@ -161,10 +171,11 @@ func (m Model) handleEditorKey(k tea.KeyMsg) (Model, tea.Cmd) {
 // handleSaveKey handles key events when the save-target prompt is focused.
 func (m Model) handleSaveKey(k tea.KeyMsg) (Model, tea.Cmd) {
 	if k.Type == tea.KeyEsc {
-		m.saving = saveState{}
-		m.focus = focusFilter
-		m.filter.Focus()
-		return m, nil
+		// Discard pending overrides and close. The picker reached this prompt
+		// because the user opted to save (ctrl+s) or pressed esc with pending
+		// overrides; an esc from here is the explicit "throw it away" action.
+		m = m.ResetOverrides()
+		return m.Close(), nil
 	}
 	if k.Type == tea.KeyRunes && len(k.Runes) == 1 {
 		var target SaveTarget

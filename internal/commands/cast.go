@@ -74,7 +74,7 @@ func runCast(_ *cobra.Command, args []string) error {
 		return err
 	}
 	if castClaudePluginFlag {
-		return castClaudePlugin(reader)
+		return castClaudePlugin(reader, source)
 	}
 	return castProject(reader, source)
 }
@@ -129,8 +129,12 @@ func resolveMoldReader(args []string) (*blanks.MoldReader, string, error) {
 }
 
 // loadCastFlux loads layered flux values using Helm-style precedence:
-// mold flux.yaml < mold.yaml schema defaults < -f files (left to right) < --set flags
-func loadCastFlux(reader *blanks.MoldReader) (map[string]any, error) {
+// mold flux.yaml < mold.yaml schema defaults < persisted ~/.ailloy/flux/<slug>.yaml
+// < persisted ./.ailloy/flux/<slug>.yaml < -f files (left to right) < --set flags.
+//
+// `source` is the mold ref used to derive the persisted-file slug (typically the
+// foundry cache key for remote refs). Empty source skips persisted-file lookup.
+func loadCastFlux(reader *blanks.MoldReader, source string) (map[string]any, error) {
 	// Layer 1: Load mold flux.yaml as base
 	fluxDefaults, err := reader.LoadFluxDefaults()
 	if err != nil {
@@ -148,7 +152,21 @@ func loadCastFlux(reader *blanks.MoldReader) (map[string]any, error) {
 		flux[k] = v
 	}
 
-	// Layer 3: Layer -f files left-to-right (each overrides previous)
+	// Layer 3: persisted flux files written by the foundries TUI (global, then
+	// project — project wins on conflict). Layered before user-supplied -f so
+	// explicit -f still overrides saved values.
+	persisted := mold.PersistedFluxPaths(source)
+	if len(persisted) > 0 {
+		overlay, err := mold.LayerFluxFiles(persisted)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range overlay {
+			flux[k] = v
+		}
+	}
+
+	// Layer 4: Layer -f files left-to-right (each overrides previous)
 	if len(castValFiles) > 0 {
 		overlay, err := mold.LayerFluxFiles(castValFiles)
 		if err != nil {
@@ -159,7 +177,7 @@ func loadCastFlux(reader *blanks.MoldReader) (map[string]any, error) {
 		}
 	}
 
-	// Layer 4: Apply --set overrides (highest precedence)
+	// Layer 5: Apply --set overrides (highest precedence)
 	if err := mold.ApplySetOverrides(flux, castSetFlags); err != nil {
 		return nil, err
 	}
@@ -212,7 +230,7 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	}
 
 	// Load flux values and extract output mapping.
-	flux, err := loadCastFlux(reader)
+	flux, err := loadCastFlux(reader, source)
 	if err != nil {
 		flux = make(map[string]any)
 	}

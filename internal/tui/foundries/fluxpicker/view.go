@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const footerHint = "tab: commit filter   enter: save key   d: clear   R: reset all   s: save & close   esc: cancel"
+const footerHint = "tab: commit filter   enter: edit key   ctrl+s: save & close   esc: discard / close"
 
 var (
 	pickerBox = lipgloss.NewStyle().
@@ -76,7 +76,9 @@ func (m Model) View() string {
 	}
 
 	if m.saving.active {
-		b.WriteString("\nsave: [p] project  [g] global  [o] this cast only  [esc] cancel\n")
+		fmt.Fprintf(&b,
+			"\nSave %d override(s)?  [p] project (.ailloy/flux/)  [g] global (~/.ailloy/flux/)  [o] this cast only  [esc] discard & close\n",
+			len(m.overrides))
 	}
 
 	if m.err != nil {
