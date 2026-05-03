@@ -9,16 +9,20 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 	clidocs "github.com/nimble-giant/ailloy/docs"
-	docstui "github.com/nimble-giant/ailloy/internal/tui/docs"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
-// rootDocs is the global --docs flag set by users on any command. When true
-// the persistent pre-run renders the command's associated topic and exits
-// before the command's RunE fires.
+// rootDocs is the global --docs flag set by users on any command. When
+// true the persistent pre-run renders the command's associated topic
+// to stdout (always the in-binary fallback path) and short-circuits.
 var rootDocs bool
+
+// docsExtensionName is the canonical extension that owns the rich docs
+// experience. ailloy execs it whenever it's installed; otherwise the
+// in-binary fallback (glamour-to-stdout) handles `ailloy docs`.
+const docsExtensionName = "docs"
 
 const (
 	defaultDocsWidth = 100
@@ -27,41 +31,43 @@ const (
 )
 
 var (
-	docsListOnly bool
-	docsNoTUI    bool
+	docsListOnly    bool
+	docsNoExtension bool
+	docsAutoApprove bool
 )
 
 var docsCmd = &cobra.Command{
 	Use:   "docs [topic]",
-	Short: "Browse embedded ailloy documentation in the terminal",
-	Long: `Browse embedded ailloy documentation in the terminal.
+	Short: "Browse ailloy documentation",
+	Long: `Browse ailloy documentation.
 
-Run with no arguments to launch the interactive docs browser (a
-side-by-side topic list and rendered viewport powered by bubbletea +
-glamour). Pass a topic slug to render that document directly to stdout —
-useful for piping to a pager or grep.
-
-Use --list to print the available topics as a table without launching
-the TUI, and --no-tui to render the rendered topic to stdout instead of
-opening the browser.
+The first time you run ailloy docs, ailloy offers to install the docs
+extension — a separate binary that ships the rich in-CLI TUI with
+pre-rendered glamour output for instant page loads. Subsequent runs
+exec that binary directly. Decline the install, run with --no-extension,
+or use a non-interactive shell to get the always-available stdout-based
+fallback.
 
 Examples:
-  ailloy docs                  # launch the interactive browser
-  ailloy docs flux             # render the flux variable reference
-  ailloy docs --list           # list topics as a table
-  ailloy cast --docs           # show the doc associated with ` + "`cast`" + ``,
+  ailloy docs                  # launch the rich TUI (extension) or fall back
+  ailloy docs flux             # render a topic to stdout
+  ailloy docs --list           # list available topics
+  ailloy docs --no-extension   # force the in-binary fallback
+  ailloy cast --docs           # render the doc associated with cast`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runDocs,
 }
 
 func init() {
 	rootCmd.AddCommand(docsCmd)
-	docsCmd.Flags().BoolVar(&docsListOnly, "list", false, "list topics as a table instead of opening the browser")
-	docsCmd.Flags().BoolVar(&docsNoTUI, "no-tui", false, "render output to stdout instead of opening the interactive browser")
-	rootCmd.PersistentFlags().BoolVar(&rootDocs, "docs", false, "render the command's associated documentation and exit")
+	docsCmd.Flags().BoolVar(&docsListOnly, "list", false, "list topics as a table")
+	docsCmd.Flags().BoolVar(&docsNoExtension, "no-extension", false,
+		"skip the docs extension; use the in-binary fallback")
+	docsCmd.Flags().BoolVar(&docsAutoApprove, "yes", false,
+		"auto-approve the first-run extension install prompt")
+	rootCmd.PersistentFlags().BoolVar(&rootDocs, "docs", false,
+		"render the command's associated documentation and exit")
 
-	// Hook the persistent pre-run so any command can be invoked with --docs.
-	// We chain into the existing PersistentPreRun rather than replacing it.
 	prev := rootCmd.PersistentPreRun
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		if prev != nil {
@@ -72,7 +78,6 @@ func init() {
 		if !rootDocs {
 			return nil
 		}
-		// Avoid recursion when `ailloy docs --docs` is run.
 		if cmd == docsCmd {
 			return nil
 		}
@@ -84,7 +89,6 @@ func init() {
 			return err
 		}
 		// Short-circuit: replace the command's body so its action is skipped.
-		// We can't return a sentinel error without tripping cobra's error path.
 		cmd.RunE = func(*cobra.Command, []string) error { return nil }
 		cmd.Run = nil
 		cmd.PostRun = nil
@@ -96,28 +100,86 @@ func init() {
 func runDocs(cmd *cobra.Command, args []string) error {
 	out := cmd.OutOrStdout()
 
+	// Explicit list flag → always print the table from the in-binary docs.
 	if docsListOnly {
 		return printTopicList(out)
 	}
+
+	// Topic argument → always render to stdout via the in-binary fallback.
+	// Useful for piping (`ailloy docs flux | less`) and predictable in CI.
 	if len(args) == 1 {
 		return renderTopicTo(out, args[0])
 	}
-	if docsNoTUI || !isInteractive() {
+
+	// Bare `ailloy docs`. Prefer the extension when allowed.
+	if !docsNoExtension {
+		if code, ran, err := tryExecDocsExtension(args); ran {
+			if err != nil {
+				return err
+			}
+			if code != 0 {
+				os.Exit(code)
+			}
+			return nil
+		}
+	}
+
+	// Fallback: in-binary glamour render to stdout (table when piped).
+	if !isInteractive() {
 		return printTopicList(out)
 	}
-	return docstui.Run()
+	return printTopicList(out)
 }
 
-// isInteractive reports whether stdout is attached to a terminal. The TUI
-// only runs in interactive sessions; non-TTY callers (pipes, CI) get the
-// table fallback automatically.
+// tryExecDocsExtension handles the bare `ailloy docs` happy path. Returns
+// (exitCode, ran=true, err) when the extension was used (whether
+// installed already or freshly installed via prompt). Returns ran=false
+// when the caller should fall back to the in-binary path.
+func tryExecDocsExtension(args []string) (int, bool, error) {
+	mgr, err := extensionsManager()
+	if err != nil {
+		return 0, false, nil
+	}
+
+	if mgr.IsInstalled(docsExtensionName) {
+		code, err := mgr.Run(docsExtensionName, args)
+		return code, true, err
+	}
+
+	if mgr.IsDeclined(docsExtensionName) {
+		return 0, false, nil
+	}
+
+	approved := docsAutoApprove
+	if !approved {
+		ok, err := mgr.PromptInstall(docsExtensionName)
+		if err != nil {
+			return 0, false, err
+		}
+		approved = ok
+	}
+	if !approved {
+		fmt.Fprintln(os.Stderr,
+			"Using the in-binary docs fallback. Install the extension anytime with `ailloy ext install docs`.")
+		return 0, false, nil
+	}
+	if err := mgr.Install(docsExtensionName); err != nil {
+		fmt.Fprintln(os.Stderr,
+			"Couldn't install the docs extension; using the in-binary fallback.")
+		fmt.Fprintln(os.Stderr, "  ", err)
+		return 0, false, nil
+	}
+	code, err := mgr.Run(docsExtensionName, args)
+	return code, true, err
+}
+
+// isInteractive reports whether stdout AND stdin are attached to a TTY.
 func isInteractive() bool {
-	return term.IsTerminal(int(os.Stdout.Fd()))
+	return term.IsTerminal(int(os.Stdout.Fd())) && term.IsTerminal(int(os.Stdin.Fd()))
 }
 
-// topicForCommand returns the topic slug associated with a cobra command.
-// It walks up parents so that `ailloy foundry add --docs` falls back to the
-// `foundry` topic when no entry exists for `foundry add`.
+// topicForCommand walks up parents so that `ailloy foundry add --docs`
+// falls back to the `foundry` topic when no entry exists for `foundry add`.
 func topicForCommand(cmd *cobra.Command) string {
 	for c := cmd; c != nil; c = c.Parent() {
 		if slug, ok := clidocs.CommandTopic[c.Name()]; ok {
@@ -153,7 +215,8 @@ func printTopicList(w io.Writer) error {
 		return err
 	}
 	_, err := fmt.Fprintln(w, "Render a topic with "+styles.CodeStyle.Render("ailloy docs <topic>")+
-		" or pass "+styles.CodeStyle.Render("--docs")+" to any command.")
+		" or install the docs extension for a richer experience: "+
+		styles.CodeStyle.Render("ailloy ext install docs"))
 	return err
 }
 
@@ -170,8 +233,7 @@ func renderTopicTo(w io.Writer, slug string) error {
 	return err
 }
 
-// renderMarkdown renders markdown via glamour using auto-detected style and
-// terminal width.
+// renderMarkdown is the in-binary fallback renderer.
 func renderMarkdown(md string) (string, error) {
 	width := docsRenderWidth()
 	r, err := glamour.NewTermRenderer(
@@ -185,8 +247,6 @@ func renderMarkdown(md string) (string, error) {
 	return r.Render(md)
 }
 
-// docsRenderWidth picks a sensible word-wrap width for glamour based on the
-// terminal size, capped to keep long lines comfortably readable.
 func docsRenderWidth() int {
 	width := defaultDocsWidth
 	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
