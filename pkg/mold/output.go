@@ -359,6 +359,18 @@ func parseTargetMap(v map[string]any) (OutputTarget, error) {
 		}
 		t.Set = sm
 	}
+	if strategy, ok := v["strategy"]; ok {
+		s, ok := strategy.(string)
+		if !ok {
+			return t, fmt.Errorf("strategy must be a string")
+		}
+		switch s {
+		case "", "replace", "merge":
+			t.Strategy = s
+		default:
+			return t, fmt.Errorf("unknown strategy %q: must be \"replace\" or \"merge\"", s)
+		}
+	}
 	return t, nil
 }
 

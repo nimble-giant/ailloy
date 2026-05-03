@@ -672,3 +672,35 @@ func TestResolveFiles_ExcludesReservedDirs(t *testing.T) {
 		t.Errorf("expected dest .claude/commands/hello.md, got %s", rf.DestPath)
 	}
 }
+
+func TestParseTargetMap_Strategy(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   map[string]any
+		want    string
+		wantErr bool
+	}{
+		{name: "absent", input: map[string]any{"dest": "x"}, want: ""},
+		{name: "replace", input: map[string]any{"dest": "x", "strategy": "replace"}, want: "replace"},
+		{name: "merge", input: map[string]any{"dest": "x", "strategy": "merge"}, want: "merge"},
+		{name: "unknown", input: map[string]any{"dest": "x", "strategy": "smush"}, wantErr: true},
+		{name: "non-string", input: map[string]any{"dest": "x", "strategy": 7}, wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseTargetMap(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil (target=%+v)", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Strategy != tc.want {
+				t.Fatalf("Strategy: want %q, got %q", tc.want, got.Strategy)
+			}
+		})
+	}
+}
