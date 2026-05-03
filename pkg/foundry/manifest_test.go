@@ -122,22 +122,70 @@ func TestInstalledManifest_UpsertEntry(t *testing.T) {
 	}
 }
 
+// Regression for the bug where two molds installed from the same foundry repo
+// at different subpaths collapsed into a single manifest entry: the second
+// install overwrote the first because UpsertEntry matched by Source alone.
+func TestInstalledManifest_UpsertEntry_SameSourceDifferentSubpaths(t *testing.T) {
+	m := &InstalledManifest{APIVersion: "v1"}
+
+	m.UpsertEntry(InstalledEntry{
+		Name:    "shortcut",
+		Source:  "github.com/kriscoleman/replicated-foundry",
+		Subpath: "molds/shortcut",
+		Version: "v0.3.0",
+		Commit:  "aaa",
+	})
+	m.UpsertEntry(InstalledEntry{
+		Name:    "linear",
+		Source:  "github.com/kriscoleman/replicated-foundry",
+		Subpath: "molds/linear",
+		Version: "v0.3.0",
+		Commit:  "bbb",
+	})
+	if len(m.Molds) != 2 {
+		t.Fatalf("expected 2 entries (different subpaths), got %d: %+v", len(m.Molds), m.Molds)
+	}
+
+	// Re-upserting the same (Source, Subpath) MUST still replace.
+	m.UpsertEntry(InstalledEntry{
+		Name:    "shortcut",
+		Source:  "github.com/kriscoleman/replicated-foundry",
+		Subpath: "molds/shortcut",
+		Version: "v0.4.0",
+		Commit:  "ccc",
+	})
+	if len(m.Molds) != 2 {
+		t.Fatalf("re-upsert of same (source,subpath) should replace, not append: got %d", len(m.Molds))
+	}
+	if got := m.FindBySource("github.com/kriscoleman/replicated-foundry", "molds/shortcut"); got == nil || got.Version != "v0.4.0" {
+		t.Errorf("upsert did not replace existing entry: %+v", got)
+	}
+}
+
 func TestInstalledManifest_FindBySource(t *testing.T) {
 	m := &InstalledManifest{
 		APIVersion: "v1",
 		Molds: []InstalledEntry{
 			{Name: "a", Source: "github.com/x/a"},
 			{Name: "b", Source: "github.com/x/b"},
+			{Name: "shortcut", Source: "github.com/k/foundry", Subpath: "molds/shortcut"},
+			{Name: "linear", Source: "github.com/k/foundry", Subpath: "molds/linear"},
 		},
 	}
-	if got := m.FindBySource("github.com/x/b"); got == nil || got.Name != "b" {
+	if got := m.FindBySource("github.com/x/b", ""); got == nil || got.Name != "b" {
 		t.Errorf("FindBySource(b) = %+v, want entry b", got)
 	}
-	if got := m.FindBySource("github.com/x/missing"); got != nil {
+	if got := m.FindBySource("github.com/x/missing", ""); got != nil {
 		t.Errorf("FindBySource(missing) = %+v, want nil", got)
 	}
+	if got := m.FindBySource("github.com/k/foundry", "molds/linear"); got == nil || got.Name != "linear" {
+		t.Errorf("FindBySource(foundry, molds/linear) = %+v, want linear", got)
+	}
+	if got := m.FindBySource("github.com/k/foundry", "molds/shortcut"); got == nil || got.Name != "shortcut" {
+		t.Errorf("FindBySource(foundry, molds/shortcut) = %+v, want shortcut", got)
+	}
 	var nilM *InstalledManifest
-	if got := nilM.FindBySource("any"); got != nil {
+	if got := nilM.FindBySource("any", ""); got != nil {
 		t.Errorf("nil manifest FindBySource = %+v, want nil", got)
 	}
 }

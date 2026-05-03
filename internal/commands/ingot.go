@@ -83,7 +83,7 @@ func runIngotGet(_ *cobra.Command, args []string) error {
 
 	lock, _ := foundry.ReadLockFile(foundry.LockFileName)
 	version := "latest"
-	if entry := lock.FindEntry(parsed.CacheKey()); entry != nil {
+	if entry := lock.FindEntry(parsed.CacheKey(), parsed.Subpath); entry != nil {
 		version = entry.Version
 	}
 

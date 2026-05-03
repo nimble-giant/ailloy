@@ -3,6 +3,7 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/styles"
@@ -16,7 +17,7 @@ var (
 )
 
 var uninstallCmd = &cobra.Command{
-	Use:   "uninstall <source>",
+	Use:   "uninstall <source[//subpath]>",
 	Short: "Remove a casted mold from this project (or ~/ with -g)",
 	Long: `Uninstall a previously casted mold by source identifier (e.g. github.com/owner/repo).
 
@@ -24,6 +25,10 @@ Removes the files listed in the mold's installed manifest entry, prunes any
 empty directories, and drops the entry from .ailloy/installed.yaml. If
 ailloy.lock exists alongside the manifest, the matching lock entry is also
 removed.
+
+A foundry repo may host multiple molds at different subpaths. Pass the full
+ref (e.g. github.com/owner/repo//molds/shortcut) to disambiguate. Bare
+sources are accepted when only one matching entry exists.
 
 Files modified since they were cast are retained unless --force is given.
 Files claimed by another casted mold are retained automatically.`,
@@ -39,21 +44,28 @@ func init() {
 }
 
 func runUninstall(_ *cobra.Command, args []string) error {
-	source := args[0]
-
 	manifestPath := manifestPathFor(uninstallGlobal)
 	if manifestPath == "" {
 		return fmt.Errorf("cannot determine installed manifest path")
 	}
 
-	res, err := foundry.UninstallMold(manifestPath, source, foundry.UninstallOptions{
+	source, subpath, err := resolveUninstallTarget(manifestPath, args[0])
+	if err != nil {
+		return err
+	}
+
+	res, err := foundry.UninstallMold(manifestPath, source, subpath, foundry.UninstallOptions{
 		Force:  uninstallForce,
 		DryRun: uninstallDryRun,
 	})
+	display := source
+	if subpath != "" {
+		display = source + "//" + subpath
+	}
 	if err != nil {
 		if errors.Is(err, foundry.ErrLegacyEntry) {
 			fmt.Println(styles.WarningStyle.Render("⚠️  ") + err.Error())
-			fmt.Println(styles.SubtleStyle.Render("    Run `ailloy cast " + source + "` to backfill the manifest, then retry."))
+			fmt.Println(styles.SubtleStyle.Render("    Run `ailloy cast " + display + "` to backfill the manifest, then retry."))
 			return nil
 		}
 		return err
@@ -63,7 +75,7 @@ func runUninstall(_ *cobra.Command, args []string) error {
 	if uninstallDryRun {
 		header = "Would uninstall (dry-run)"
 	}
-	fmt.Println(styles.SuccessStyle.Render(header+" ") + styles.AccentStyle.Render(source))
+	fmt.Println(styles.SuccessStyle.Render(header+" ") + styles.AccentStyle.Render(display))
 
 	if len(res.Deleted) > 0 {
 		fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("  Removed:  %d file(s)", len(res.Deleted))))
@@ -88,4 +100,50 @@ func runUninstall(_ *cobra.Command, args []string) error {
 		fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("  Already absent: %d file(s)", len(res.NotFound))))
 	}
 	return nil
+}
+
+// resolveUninstallTarget interprets the user's positional argument as a mold
+// reference. If the argument carries a //subpath, that wins. Otherwise the
+// installed manifest is consulted: a single matching entry is auto-resolved,
+// and ambiguous bare sources are rejected with a list so the user can re-run
+// with the disambiguating subpath.
+func resolveUninstallTarget(manifestPath, raw string) (source, subpath string, err error) {
+	ref, perr := foundry.ParseReference(raw)
+	if perr != nil {
+		// Fall back to treating the raw arg as an opaque source string so
+		// pre-existing scripts that pass a bare cache key still work.
+		source = raw
+	} else {
+		source = ref.CacheKey()
+		subpath = ref.Subpath
+	}
+
+	if subpath != "" {
+		return source, subpath, nil
+	}
+
+	manifest, mErr := foundry.ReadInstalledManifest(manifestPath)
+	if mErr != nil || manifest == nil {
+		return source, "", nil
+	}
+	matches := manifest.FindAllBySource(source)
+	switch len(matches) {
+	case 0, 1:
+		// 0: let UninstallMold report "not found" with its richer message.
+		// 1: the bare-source shorthand resolves unambiguously.
+		if len(matches) == 1 {
+			subpath = matches[0].Subpath
+		}
+		return source, subpath, nil
+	default:
+		var lines []string
+		for _, m := range matches {
+			sp := m.Subpath
+			if sp == "" {
+				sp = "(no subpath)"
+			}
+			lines = append(lines, "  - "+source+"//"+sp+" ("+m.Name+")")
+		}
+		return "", "", fmt.Errorf("multiple installed molds match %q; specify the full ref:\n%s", source, strings.Join(lines, "\n"))
+	}
 }

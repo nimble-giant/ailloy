@@ -40,7 +40,10 @@ var ErrLegacyEntry = errors.New("manifest entry has no install file list (legacy
 // manifestPath is the path to .ailloy/installed.yaml (project) or
 // ~/.ailloy/installed.yaml (global). The lock that mirrors it is derived by
 // looking for ailloy.lock alongside the manifest's containing directory.
-func UninstallMold(manifestPath, source string, opts UninstallOptions) (UninstallResult, error) {
+//
+// (source, subpath) identifies a single entry: a foundry repo can host
+// multiple molds at different subpaths.
+func UninstallMold(manifestPath, source, subpath string, opts UninstallOptions) (UninstallResult, error) {
 	var res UninstallResult
 
 	m, err := ReadInstalledManifest(manifestPath)
@@ -51,9 +54,9 @@ func UninstallMold(manifestPath, source string, opts UninstallOptions) (Uninstal
 		return res, fmt.Errorf("installed manifest %s does not exist", manifestPath)
 	}
 
-	entry := m.FindBySource(source)
+	entry := m.FindBySource(source, subpath)
 	if entry == nil {
-		return res, fmt.Errorf("no installed manifest entry for source %q", source)
+		return res, fmt.Errorf("no installed manifest entry for source %q (subpath %q)", source, subpath)
 	}
 
 	if entry.Files == nil {
@@ -61,10 +64,11 @@ func UninstallMold(manifestPath, source string, opts UninstallOptions) (Uninstal
 		return res, ErrLegacyEntry
 	}
 
-	// Build a set of paths claimed by other entries.
+	// Build a set of paths claimed by other entries (any (source, subpath)
+	// other than this one — sibling molds in the same repo can share files).
 	otherClaims := make(map[string]struct{})
 	for i := range m.Molds {
-		if m.Molds[i].Source == source {
+		if m.Molds[i].Source == source && m.Molds[i].Subpath == subpath {
 			continue
 		}
 		for _, f := range m.Molds[i].Files {
@@ -145,7 +149,7 @@ func UninstallMold(manifestPath, source string, opts UninstallOptions) (Uninstal
 	}
 
 	for i := range m.Molds {
-		if m.Molds[i].Source == source {
+		if m.Molds[i].Source == source && m.Molds[i].Subpath == subpath {
 			m.Molds = append(m.Molds[:i], m.Molds[i+1:]...)
 			break
 		}
@@ -159,7 +163,7 @@ func UninstallMold(manifestPath, source string, opts UninstallOptions) (Uninstal
 	if lock, lerr := ReadLockFile(lockPath); lerr == nil && lock != nil {
 		dropped := false
 		for i := range lock.Molds {
-			if lock.Molds[i].Source == source {
+			if lock.Molds[i].Source == source && lock.Molds[i].Subpath == subpath {
 				lock.Molds = append(lock.Molds[:i], lock.Molds[i+1:]...)
 				dropped = true
 				break

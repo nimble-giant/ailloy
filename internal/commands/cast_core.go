@@ -154,6 +154,14 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 		return res, fmt.Errorf("copying files: %w", err)
 	}
 
+	// Mirror what cast.go does: record install dirs in .ailloy/state.yaml so
+	// `mold list` can find blanks installed via the foundries TUI.
+	if destPrefix == "" {
+		if err := writeInstallState(dirs); err != nil {
+			log.Printf("warning: failed to write install state: %v", err)
+		}
+	}
+
 	if remoteResult != nil {
 		manifestPath := manifestPathFor(opts.Global)
 		if manifestPath != "" {
@@ -175,7 +183,7 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 					installed = append(installed, foundry.InstalledFile{RelPath: rel, SHA256: sum})
 				}
 				res.FilesCast = installed
-				_ = foundry.RecordInstalledFiles(manifestPath, source, installed)
+				_ = foundry.RecordInstalledFiles(manifestPath, source, remoteResult.Ref.Subpath, installed)
 			}
 		}
 	}

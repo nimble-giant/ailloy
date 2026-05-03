@@ -341,7 +341,7 @@ func runGetMold(_ *cobra.Command, args []string) error {
 	// Read lock to get resolved version for path display.
 	lock, _ := foundry.ReadLockFile(foundry.LockFileName)
 	version := "latest"
-	if entry := lock.FindEntry(parsed.CacheKey()); entry != nil {
+	if entry := lock.FindEntry(parsed.CacheKey(), parsed.Subpath); entry != nil {
 		version = entry.Version
 	}
 
