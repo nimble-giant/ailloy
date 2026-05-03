@@ -4,19 +4,19 @@ go 1.25.8
 
 require (
 	dario.cat/mergo v1.0.2
-	github.com/Masterminds/semver/v3 v3.4.0
+	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/glamour v1.0.0
-	github.com/charmbracelet/huh v0.8.0
+	github.com/charmbracelet/huh v1.0.0
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/goccy/go-yaml v1.19.2
 	github.com/knadh/stuffbin v1.3.0
 	github.com/muesli/termenv v0.16.0
 	github.com/nimble-giant/ailloy-extensions-sdk v0.1.0
 	github.com/sahilm/fuzzy v0.1.1
-	github.com/spf13/cobra v1.9.1
-	golang.org/x/sync v0.17.0
+	github.com/spf13/cobra v1.10.2
+	golang.org/x/sync v0.20.0
 	golang.org/x/term v0.42.0
 )
 
@@ -50,7 +50,7 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/spf13/pflag v1.0.6 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yuin/goldmark v1.7.13 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
