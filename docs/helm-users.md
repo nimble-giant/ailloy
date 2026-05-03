@@ -16,6 +16,7 @@ This guide maps what you already know to Ailloy terminology, shows every command
 | `--set` / `-f` | `--set` / `-f` | Same flags, same layering semantics |
 | Repository | Foundry | Where packages are discovered and resolved from |
 | Subchart / Dependency | Ingot | Reusable template partials included via `{{ingot "name"}}` |
+| — | Ore | Reusable flux partials — structured data objects (e.g. `ore.status`) for opt-in business logic. See [Ore](ore.md). |
 | `Chart.lock` | `ailloy.lock` (opt-in, via `ailloy quench`) | Pins dependencies to exact versions and commits |
 | — | `.ailloy/installed.yaml` | Always-on manifest of cast molds — provenance for `recast` / `quench` |
 | — | Output mapping | Maps source directories to destination paths (no Helm equivalent) |

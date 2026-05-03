@@ -343,7 +343,7 @@ For the full guide, see [docs/flux.md](docs/flux.md). For the wizard, see [docs/
 - Mold casting and forging with flux variable rendering
 - Blank management and viewing
 - Flux-based configuration with Helm-style value precedence
-- Conditional blank rendering with ore model-aware context
+- Reusable flux partials via [ore](docs/ore.md) — opt-in data structures for business logic (e.g. GitHub Project status, priority, iteration)
 - Mold packaging (tarball and self-contained binary)
 - Mold/ingot validation and linting
 - Claude Code plugin generation from blanks
