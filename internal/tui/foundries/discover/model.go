@@ -380,11 +380,16 @@ func (m Model) View() string {
 				status = "  " + statusErrStyle.Render("("+s+")")
 			}
 		}
-		fmt.Fprintf(&b, "%s%s %s%s%s %s%s\n",
+		nested := ""
+		if e.IsNested() {
+			nested = " " + descStyle.Render("via "+strings.Join(e.OwnerChain, " → "))
+		}
+		fmt.Fprintf(&b, "%s%s %s%s%s%s %s%s\n",
 			caret, mark,
 			moldNameStyle.Render(e.Name),
 			verified,
 			installedTag,
+			nested,
 			descStyle.Render("— "+e.Description),
 			status)
 	}
