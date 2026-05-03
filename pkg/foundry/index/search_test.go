@@ -1,6 +1,7 @@
 package index
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -276,9 +277,12 @@ func TestSearchTraversesNestedFoundries(t *testing.T) {
 	}
 
 	cfg := &Config{Foundries: []FoundryEntry{{Name: "parent", URL: "github.com/x/parent", Type: "git"}}}
-	results, err := searchWithLookup(cfg, "alpha", lookup)
+	results, warnings, err := searchWithLookup(cfg, "alpha", lookup)
 	if err != nil {
 		t.Fatalf("searchWithLookup: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("warnings = %+v, want none", warnings)
 	}
 	if len(results) != 2 {
 		t.Fatalf("got %d results, want 2", len(results))
@@ -299,5 +303,47 @@ func TestSearchTraversesNestedFoundries(t *testing.T) {
 	}
 	if !strings.Contains(childResult.Origin, "via parent") {
 		t.Errorf("child Origin = %q, want it to contain 'via parent'", childResult.Origin)
+	}
+}
+
+// TestSearchSurfacesNestedFoundryWarnings verifies that when a sub-foundry
+// fails to resolve (e.g. private repo the caller can't access), the parent
+// search still returns root molds AND surfaces the failure as a warning so
+// the CLI can explain why nested results are missing.
+func TestSearchSurfacesNestedFoundryWarnings(t *testing.T) {
+	parent := &Index{
+		APIVersion: "v1", Kind: "foundry-index", Name: "parent",
+		Molds: []MoldEntry{{Name: "alpha-mold", Source: "github.com/x/alpha", Description: "alpha"}},
+		Foundries: []FoundryRef{
+			{Name: "private", Source: "github.com/x/private"},
+		},
+	}
+	authErr := fmt.Errorf("git clone github.com/x/private: %w: exit status 128", ErrForbidden)
+	lookup := func(source string) (*Index, error) {
+		switch canonicalizeSource(source) {
+		case "github.com/x/parent":
+			return parent, nil
+		case "github.com/x/private":
+			return nil, authErr
+		}
+		return nil, fmt.Errorf("unexpected lookup: %s", source)
+	}
+
+	cfg := &Config{Foundries: []FoundryEntry{{Name: "parent", URL: "github.com/x/parent", Type: "git"}}}
+	results, warnings, err := searchWithLookup(cfg, "alpha", lookup)
+	if err != nil {
+		t.Fatalf("searchWithLookup: %v", err)
+	}
+	if len(results) != 1 || results[0].Name != "parent/alpha-mold" {
+		t.Fatalf("results = %+v, want [parent/alpha-mold]", results)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %+v, want exactly 1", warnings)
+	}
+	if warnings[0].Source != "github.com/x/private" {
+		t.Errorf("warnings[0].Source = %q, want github.com/x/private", warnings[0].Source)
+	}
+	if !errors.Is(warnings[0].Err, ErrForbidden) {
+		t.Errorf("warnings[0].Err should wrap ErrForbidden; got %v", warnings[0].Err)
 	}
 }

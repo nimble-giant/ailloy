@@ -65,7 +65,7 @@ func (f *Fetcher) fetchGitIndex(entry *FoundryEntry) (*Index, error) {
 		// Bare clone exists — fetch updates.
 		out, err := f.git("-C", bareDir, "fetch", "--all")
 		if err != nil {
-			return nil, fmt.Errorf("git fetch: %w\n%s", err, out)
+			return nil, fmt.Errorf("git fetch %s: %w", entry.URL, classifyGitError(err, out))
 		}
 	} else {
 		// Create bare clone.
@@ -74,7 +74,7 @@ func (f *Fetcher) fetchGitIndex(entry *FoundryEntry) (*Index, error) {
 		}
 		out, err := f.git("clone", "--bare", entry.URL, bareDir)
 		if err != nil {
-			return nil, fmt.Errorf("git clone: %w\n%s", err, out)
+			return nil, fmt.Errorf("git clone %s: %w", entry.URL, classifyGitError(err, out))
 		}
 	}
 
@@ -121,7 +121,14 @@ func (f *Fetcher) fetchURLIndex(entry *FoundryEntry) (*Index, error) {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetching index: HTTP %d", resp.StatusCode)
+		switch resp.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return nil, fmt.Errorf("fetching %s: %w (HTTP %d)", entry.URL, ErrForbidden, resp.StatusCode)
+		case http.StatusNotFound:
+			return nil, fmt.Errorf("fetching %s: %w (HTTP %d)", entry.URL, ErrNotFound, resp.StatusCode)
+		default:
+			return nil, fmt.Errorf("fetching %s: HTTP %d", entry.URL, resp.StatusCode)
+		}
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10 MB limit
