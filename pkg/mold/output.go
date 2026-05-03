@@ -44,10 +44,11 @@ type dirMapping struct {
 
 // fileMapping represents a normalized single-file output mapping.
 type fileMapping struct {
-	src     string // source file path in the mold fs
-	dest    string // destination file path
-	process bool
-	set     map[string]any
+	src      string // source file path in the mold fs
+	dest     string // destination file path
+	process  bool
+	set      map[string]any
+	strategy string
 }
 
 // resolveConfig holds configuration for ResolveFiles.
@@ -258,10 +259,11 @@ func parseMapOutput(m map[string]any, moldFS fs.FS) ([]dirMapping, []fileMapping
 				dirs = append(dirs, dirMapping{src: src, target: target})
 			} else {
 				files = append(files, fileMapping{
-					src:     src,
-					dest:    target.Dest,
-					process: target.ShouldProcess(),
-					set:     target.Set,
+					src:      src,
+					dest:     target.Dest,
+					process:  target.ShouldProcess(),
+					set:      target.Set,
+					strategy: target.Strategy,
 				})
 			}
 		}
@@ -402,6 +404,7 @@ func resolveFromMappings(dirs []dirMapping, files []fileMapping, moldFS fs.FS) (
 						DestPath: fo.dest,
 						Process:  fo.process,
 						Set:      fo.set,
+						Strategy: fo.strategy,
 					})
 				}
 				delete(fileOverrides, p) // consumed
@@ -418,6 +421,7 @@ func resolveFromMappings(dirs []dirMapping, files []fileMapping, moldFS fs.FS) (
 				DestPath: destPath,
 				Process:  dm.target.ShouldProcess(),
 				Set:      dm.target.Set,
+				Strategy: dm.target.Strategy,
 			})
 			return nil
 		})
@@ -438,6 +442,7 @@ func resolveFromMappings(dirs []dirMapping, files []fileMapping, moldFS fs.FS) (
 				DestPath: f.dest,
 				Process:  f.process,
 				Set:      f.set,
+				Strategy: f.strategy,
 			})
 		}
 	}

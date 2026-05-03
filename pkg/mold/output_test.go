@@ -704,3 +704,58 @@ func TestParseTargetMap_Strategy(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveFiles_StrategyPropagation(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"config/opencode.json": &fstest.MapFile{Data: []byte("{}")},
+		"commands/hello.md":    &fstest.MapFile{Data: []byte("hello")},
+	}
+
+	output := map[string]any{
+		"config/opencode.json": map[string]any{
+			"dest":     "opencode.json",
+			"strategy": "merge",
+		},
+		"commands": ".claude/commands",
+	}
+
+	resolved, err := ResolveFiles(output, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gotStrategy := map[string]string{}
+	for _, rf := range resolved {
+		gotStrategy[rf.SrcPath] = rf.Strategy
+	}
+	if got := gotStrategy["config/opencode.json"]; got != "merge" {
+		t.Errorf("opencode.json: want strategy=merge, got %q", got)
+	}
+	if got := gotStrategy["commands/hello.md"]; got != "" {
+		t.Errorf("hello.md: want strategy=\"\", got %q", got)
+	}
+}
+
+func TestResolveFiles_StrategyPropagation_DirOutput(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"shared/opencode.json": &fstest.MapFile{Data: []byte("{}")},
+	}
+
+	output := map[string]any{
+		"shared": map[string]any{
+			"dest":     ".",
+			"strategy": "merge",
+		},
+	}
+
+	resolved, err := ResolveFiles(output, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resolved) != 1 {
+		t.Fatalf("expected 1 resolved file, got %d", len(resolved))
+	}
+	if resolved[0].Strategy != "merge" {
+		t.Errorf("want strategy=merge, got %q", resolved[0].Strategy)
+	}
+}

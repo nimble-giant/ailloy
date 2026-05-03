@@ -76,6 +76,7 @@ type ResolvedFile struct {
 	DestPath string         // output path (e.g., ".claude/commands/hello.md")
 	Process  bool           // whether to apply template processing
 	Set      map[string]any // context overrides applied to this render pass
+	Strategy string         // "" or "replace" (default) | "merge"
 }
 
 // Mold represents a mold.yaml manifest.
