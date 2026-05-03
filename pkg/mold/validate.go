@@ -72,8 +72,8 @@ func ValidateMold(m *Mold) error {
 	}
 
 	for i, d := range m.Dependencies {
-		if d.Ingot == "" {
-			errs = append(errs, fmt.Sprintf("dependencies[%d].ingot is required", i))
+		if _, err := d.Kind(); err != nil {
+			errs = append(errs, fmt.Sprintf("dependencies[%d]: %v", i, err))
 		}
 		if d.Version == "" {
 			errs = append(errs, fmt.Sprintf("dependencies[%d].version is required", i))
