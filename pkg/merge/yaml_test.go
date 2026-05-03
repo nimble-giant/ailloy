@@ -112,3 +112,24 @@ func TestYamlToNode_RejectsUnorderedMap(t *testing.T) {
 		t.Errorf("error message should mention UseOrderedMap; got: %v", err)
 	}
 }
+
+func TestLoadYAML_DuplicateKeysLastWins(t *testing.T) {
+	// YAML keys 0 and 00 both normalize to string "0" via goccy/go-yaml
+	// UseOrderedMap. Ensure the loader dedupes n.keys so dumpYAML produces
+	// valid output rather than two "0:" lines (invalid YAML).
+	in := []byte("0:\n00:\n")
+	n, err := loadYAML(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(n.keys) != 1 {
+		t.Fatalf("expected single key entry, got %d: %v", len(n.keys), n.keys)
+	}
+	out, err := dumpYAML(n)
+	if err != nil {
+		t.Fatalf("dumpYAML: %v", err)
+	}
+	if _, err := loadYAML(out); err != nil {
+		t.Errorf("dump produced invalid YAML with duplicates: %v\nout: %s", err, out)
+	}
+}

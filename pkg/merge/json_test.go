@@ -141,3 +141,28 @@ func TestLoadJSON_RejectsTrailingGarbage(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadJSON_DuplicateKeysLastWins(t *testing.T) {
+	// JSON syntactically allows duplicate keys; we choose last-wins (matches
+	// every mainstream parser) and ensure n.keys has no duplicate entry so
+	// dumpJSON produces valid output.
+	in := []byte(`{"a":1,"a":2}`)
+	n, err := loadJSON(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(n.keys) != 1 {
+		t.Fatalf("expected single key entry, got %d: %v", len(n.keys), n.keys)
+	}
+	if got := n.fields["a"].scalar; got == nil {
+		t.Fatal("a value missing")
+	}
+	out, err := dumpJSON(n)
+	if err != nil {
+		t.Fatalf("dumpJSON: %v", err)
+	}
+	// Re-loading the dump must succeed (no duplicate keys in output).
+	if _, err := loadJSON(out); err != nil {
+		t.Errorf("dump produced invalid JSON with duplicates: %v\nout: %s", err, out)
+	}
+}

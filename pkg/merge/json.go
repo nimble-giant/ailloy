@@ -54,7 +54,9 @@ func decodeJSONFromToken(dec *json.Decoder, tok json.Token) (*node, error) {
 				if err != nil {
 					return nil, err
 				}
-				n.keys = append(n.keys, key)
+				if _, exists := n.fields[key]; !exists {
+					n.keys = append(n.keys, key)
+				}
 				n.fields[key] = val
 			}
 			// Consume closing '}'.

@@ -32,7 +32,9 @@ func yamlToNode(v any) (*node, error) {
 			if err != nil {
 				return nil, err
 			}
-			n.keys = append(n.keys, ks)
+			if _, exists := n.fields[ks]; !exists {
+				n.keys = append(n.keys, ks)
+			}
 			n.fields[ks] = child
 		}
 		return n, nil
