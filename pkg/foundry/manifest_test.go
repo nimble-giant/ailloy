@@ -190,6 +190,36 @@ func TestInstalledManifest_FindBySource(t *testing.T) {
 	}
 }
 
+// FindAllByName returns every entry sharing a name. After the (Source,
+// Subpath) identity fix, two molds at different subpaths in the same foundry
+// repo can declare the same `name` in their mold.yaml, so callers must
+// handle the ambiguous case rather than silently picking the first match.
+func TestInstalledManifest_FindAllByName(t *testing.T) {
+	m := &InstalledManifest{
+		APIVersion: "v1",
+		Molds: []InstalledEntry{
+			{Name: "shortcut", Source: "github.com/k/foundry", Subpath: "molds/shortcut"},
+			{Name: "linear", Source: "github.com/k/foundry", Subpath: "molds/linear"},
+			{Name: "shortcut", Source: "github.com/k/other-foundry", Subpath: "molds/a"},
+			{Name: "shortcut", Source: "github.com/k/other-foundry", Subpath: "molds/b"},
+		},
+	}
+
+	if got := m.FindAllByName("linear"); len(got) != 1 || got[0].Subpath != "molds/linear" {
+		t.Errorf("FindAllByName(linear) = %+v, want one match at molds/linear", got)
+	}
+	if got := m.FindAllByName("shortcut"); len(got) != 3 {
+		t.Errorf("FindAllByName(shortcut) = %d matches, want 3", len(got))
+	}
+	if got := m.FindAllByName("missing"); got != nil {
+		t.Errorf("FindAllByName(missing) = %+v, want nil", got)
+	}
+	var nilM *InstalledManifest
+	if got := nilM.FindAllByName("any"); got != nil {
+		t.Errorf("nil manifest FindAllByName = %+v, want nil", got)
+	}
+}
+
 func TestManifest_AbsentDoesNotBreakLockReads(t *testing.T) {
 	dir := t.TempDir()
 	origDir, err := os.Getwd()
