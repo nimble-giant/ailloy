@@ -186,10 +186,10 @@ func FoxArt(foxType string) string {
 	return style.Render(art)
 }
 
-// Welcome banner with ailloy fox matching the main logo
-func WelcomeBanner(ver string) string {
-	fox := FoxArt("ailloy")
-
+// WelcomeChrome is the title/subtitle/version block of the welcome banner,
+// without the fox. Useful when the fox is rendered separately so it can be
+// animated.
+func WelcomeChrome(ver string) string {
 	title := lipgloss.NewStyle().
 		Background(Primary1).
 		Foreground(White).
@@ -205,11 +205,19 @@ func WelcomeBanner(ver string) string {
 
 	return lipgloss.JoinVertical(
 		lipgloss.Center,
-		fox,
 		title,
 		subtitle,
 		"",
 		version,
+	)
+}
+
+// Welcome banner with ailloy fox matching the main logo
+func WelcomeBanner(ver string) string {
+	return lipgloss.JoinVertical(
+		lipgloss.Center,
+		FoxArt("ailloy"),
+		WelcomeChrome(ver),
 	)
 }
 

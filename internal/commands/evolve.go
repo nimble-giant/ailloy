@@ -19,7 +19,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 const (
@@ -330,13 +329,15 @@ func evolveAnimationArt() string {
 // plain success line when stdout is not a TTY or skip is set, so CI logs and
 // non-interactive shells stay clean.
 func playEvolutionAnimation(target string, skip bool) {
-	if skip || !term.IsTerminal(int(os.Stdout.Fd())) {
+	if skip {
+		styles.SetNoAnimate(true)
+		defer styles.SetNoAnimate(false)
+	}
+
+	if !styles.ShouldAnimate() {
 		fmt.Println(styles.SuccessStyle.Render("✓ 🦊 ") + "Your ailloy evolved into " + target + "!")
 		return
 	}
-
-	art := evolveAnimationArt()
-	height := strings.Count(art, "\n") + 1
 
 	headline := lipgloss.NewStyle().Bold(true).Foreground(styles.Primary1)
 	primary := lipgloss.NewStyle().Foreground(styles.Primary1)
@@ -346,36 +347,19 @@ func playEvolutionAnimation(target string, skip bool) {
 	fmt.Println()
 	fmt.Println(headline.Render("What? AILLOY is evolving!"))
 	fmt.Println()
-	fmt.Println(primary.Render(art))
 
-	cycles := []struct {
-		useFlash bool
-		delay    time.Duration
-	}{
-		{true, 280 * time.Millisecond},
-		{false, 240 * time.Millisecond},
-		{true, 200 * time.Millisecond},
-		{false, 180 * time.Millisecond},
-		{true, 160 * time.Millisecond},
-		{false, 140 * time.Millisecond},
-		{true, 120 * time.Millisecond},
-		{false, 100 * time.Millisecond},
-	}
+	styles.FlashArt(evolveAnimationArt(), primary, flash, []styles.FlashCycle{
+		{UseFlash: true, Delay: 280 * time.Millisecond},
+		{UseFlash: false, Delay: 240 * time.Millisecond},
+		{UseFlash: true, Delay: 200 * time.Millisecond},
+		{UseFlash: false, Delay: 180 * time.Millisecond},
+		{UseFlash: true, Delay: 160 * time.Millisecond},
+		{UseFlash: false, Delay: 140 * time.Millisecond},
+		{UseFlash: true, Delay: 120 * time.Millisecond},
+		{UseFlash: false, Delay: 100 * time.Millisecond},
+	})
 
-	for _, c := range cycles {
-		time.Sleep(c.delay)
-		fmt.Printf("\033[%dA", height)
-		style := primary
-		if c.useFlash {
-			style = flash
-		}
-		for _, line := range strings.Split(art, "\n") {
-			fmt.Print("\033[K")
-			fmt.Println(style.Render(line))
-		}
-	}
-
-	time.Sleep(450 * time.Millisecond)
+	styles.Pause(450 * time.Millisecond)
 	fmt.Println()
 	fmt.Println(styles.SuccessStyle.Render("✨  Congratulations! Your AILLOY evolved into " + target + "!"))
 	fmt.Println(dim.Render("    (it learned how to update itself)"))
