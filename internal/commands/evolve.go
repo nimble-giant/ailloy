@@ -323,11 +323,11 @@ func evolveAnimationArt() string {
 	return strings.TrimLeft(styles.AilloyFox, "\n")
 }
 
-// playEvolutionAnimation prints a Pokemon-style evolution sequence ending with
-// the new version. Flashes the AilloyFox mascot between its normal color and
-// a white silhouette, mimicking the in-game evolution effect. Falls back to a
-// plain success line when stdout is not a TTY or skip is set, so CI logs and
-// non-interactive shells stay clean.
+// playEvolutionAnimation prints a retro RPG-style evolution sequence ending
+// with the new version. Flashes the AilloyFox mascot between its normal color
+// and a white silhouette, mimicking the classic in-game evolution effect.
+// Falls back to a plain success line when stdout is not a TTY or skip is set,
+// so CI logs and non-interactive shells stay clean.
 func playEvolutionAnimation(target string, skip bool) {
 	if skip {
 		styles.SetNoAnimate(true)

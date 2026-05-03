@@ -28,7 +28,7 @@
 * add foundry temper command for index validation ([974e33d](https://github.com/nimble-giant/ailloy/commit/974e33d652b08ca924b806998c54f7ccb6dcbba7))
 * add reinstall alias to evolve ([aa564b9](https://github.com/nimble-giant/ailloy/commit/aa564b9a1f011f6bc748eaef4d7874b11e996597))
 * nested foundries — transitive mold aggregation across foundry indexes ([d1bdd54](https://github.com/nimble-giant/ailloy/commit/d1bdd548103e9341159d26265ff508930685540b))
-* rename refine to evolve and add Pokemon-style TUI animation ([c1018a1](https://github.com/nimble-giant/ailloy/commit/c1018a16394e5200d959b7553e10183205cc578a))
+* rename refine to evolve and add retro RPG-style TUI animation ([c1018a1](https://github.com/nimble-giant/ailloy/commit/c1018a16394e5200d959b7553e10183205cc578a))
 
 
 ### Bug Fixes

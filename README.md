@@ -257,7 +257,7 @@ by another casted mold are retained automatically.
 <details>
 <summary><strong><code>evolve</code></strong> — self-upgrade the CLI</summary>
 
-**`ailloy evolve`** (alias: `reinstall`) — Download the latest release, verify its SHA256 against the release's `checksums.txt`, and atomically swap the running binary in place. On success, plays a Pokemon-style evolution animation; falls back to a plain success line outside a TTY.
+**`ailloy evolve`** (alias: `reinstall`) — Download the latest release, verify its SHA256 against the release's `checksums.txt`, and atomically swap the running binary in place. On success, plays a retro RPG-style evolution animation; falls back to a plain success line outside a TTY.
 
 - `--check` — Print current and latest version without installing
 - `--version vX.Y.Z` — Install or downgrade to a specific release tag
