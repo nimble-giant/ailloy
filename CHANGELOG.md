@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.24](https://github.com/nimble-giant/ailloy/compare/v0.6.23...v0.6.24) (2026-05-03)
+
+
+### Features
+
+* **cast:** merge strategy for output files ([#171](https://github.com/nimble-giant/ailloy/issues/171)) ([24a3eec](https://github.com/nimble-giant/ailloy/commit/24a3eec87f63cd20713a301d169750eb541235d9))
+
+
+### Bug Fixes
+
+* surface inaccessible sub-foundry warnings on search and install ([1ac1540](https://github.com/nimble-giant/ailloy/commit/1ac15407cf9f185efef5ccd050414dcc9785a5bb))
+
 ## [0.6.23](https://github.com/nimble-giant/ailloy/compare/v0.6.22...v0.6.23) (2026-05-03)
 
 
