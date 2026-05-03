@@ -291,7 +291,7 @@ func installRelease(tag, destPath string) error {
 	hasher := sha256.New()
 	wire := io.TeeReader(resp.Body, hasher)
 
-	var src io.Reader = wire
+	src := wire
 	if strings.HasSuffix(asset, ".xz") {
 		xr, err := xz.NewReader(wire)
 		if err != nil {
