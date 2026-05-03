@@ -83,3 +83,33 @@ func TestMergeFluxSchema_OverlayConflict_Errors(t *testing.T) {
 		t.Errorf("error should name key + both sources: %s", msg)
 	}
 }
+
+func TestValidateOrphanDefaults_EmptyInputs_NoOrphans(t *testing.T) {
+	if got := ValidateOrphanDefaults(nil, nil); len(got) != 0 {
+		t.Errorf("got %v", got)
+	}
+}
+
+func TestValidateOrphanDefaults_AllKnown_NoOrphans(t *testing.T) {
+	schema := []FluxVar{{Name: "project.organization"}, {Name: "ore.status.enabled"}}
+	defaults := map[string]any{
+		"project": map[string]any{"organization": "nimble-giant"},
+		"ore":     map[string]any{"status": map[string]any{"enabled": false}},
+	}
+	if got := ValidateOrphanDefaults(schema, defaults); len(got) != 0 {
+		t.Errorf("got %v", got)
+	}
+}
+
+func TestValidateOrphanDefaults_ExtraLeaf_Reported(t *testing.T) {
+	schema := []FluxVar{{Name: "project.organization"}}
+	defaults := map[string]any{
+		"project": map[string]any{"organization": "ng", "number": 5},
+		"orphan":  "value",
+	}
+	got := ValidateOrphanDefaults(schema, defaults)
+	want := []string{"orphan", "project.number"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("got %v; want %v", got, want)
+	}
+}
