@@ -13,6 +13,7 @@ require (
 	github.com/goccy/go-yaml v1.19.2
 	github.com/knadh/stuffbin v1.3.0
 	github.com/muesli/termenv v0.16.0
+	github.com/nimble-giant/ailloy-extensions-sdk v0.1.0
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/sync v0.17.0
