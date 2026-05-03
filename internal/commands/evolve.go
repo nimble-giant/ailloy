@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/nimble-giant/ailloy/internal/tui/evolution"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
 )
@@ -318,49 +318,38 @@ func lookupChecksum(content, name string) (string, bool) {
 }
 
 // evolveAnimationArt returns the multi-line ailloy fox art used by the
-// evolution animation. Exposed for testing.
+// evolution animation. Exposed for testing — asserts the contract that the
+// fox art is non-empty multi-line so the cinematic has something to render.
 func evolveAnimationArt() string {
 	return strings.TrimLeft(styles.AilloyFox, "\n")
 }
 
-// playEvolutionAnimation prints a Pokemon-style evolution sequence ending with
-// the new version. Flashes the AilloyFox mascot between its normal color and
-// a white silhouette, mimicking the in-game evolution effect. Falls back to a
-// plain success line when stdout is not a TTY or skip is set, so CI logs and
-// non-interactive shells stay clean.
+// playEvolutionAnimation runs the evolution cinematic in the alt-screen and
+// prints a permanent receipt line to scrollback after exit. Falls back to a
+// plain success line when animation is suppressed (CI, non-TTY, --no-animate,
+// terminal too small), so automation stays clean.
 func playEvolutionAnimation(target string, skip bool) {
 	if skip {
 		styles.SetNoAnimate(true)
 		defer styles.SetNoAnimate(false)
 	}
 
-	if !styles.ShouldAnimate() {
+	current := strings.TrimSpace(evolveCurrentVersion)
+	if current == "" {
+		current = "dev"
+	}
+	if current != "dev" && !strings.HasPrefix(current, "v") {
+		current = "v" + current
+	}
+
+	played := evolution.Run(current, target)
+
+	if !played {
 		fmt.Println(styles.SuccessStyle.Render("✓ 🦊 ") + "Your ailloy evolved into " + target + "!")
 		return
 	}
 
-	headline := lipgloss.NewStyle().Bold(true).Foreground(styles.Primary1)
-	primary := lipgloss.NewStyle().Foreground(styles.Primary1)
-	flash := lipgloss.NewStyle().Foreground(styles.White)
-	dim := styles.SubtleStyle
-
-	fmt.Println()
-	fmt.Println(headline.Render("What? AILLOY is evolving!"))
-	fmt.Println()
-
-	styles.FlashArt(evolveAnimationArt(), primary, flash, []styles.FlashCycle{
-		{UseFlash: true, Delay: 280 * time.Millisecond},
-		{UseFlash: false, Delay: 240 * time.Millisecond},
-		{UseFlash: true, Delay: 200 * time.Millisecond},
-		{UseFlash: false, Delay: 180 * time.Millisecond},
-		{UseFlash: true, Delay: 160 * time.Millisecond},
-		{UseFlash: false, Delay: 140 * time.Millisecond},
-		{UseFlash: true, Delay: 120 * time.Millisecond},
-		{UseFlash: false, Delay: 100 * time.Millisecond},
-	})
-
-	styles.Pause(450 * time.Millisecond)
-	fmt.Println()
-	fmt.Println(styles.SuccessStyle.Render("✨  Congratulations! Your AILLOY evolved into " + target + "!"))
-	fmt.Println(dim.Render("    (it learned how to update itself)"))
+	// Receipt line — the alt-screen content is gone after exit, so stamp
+	// the upgrade into normal scrollback for the user's records.
+	fmt.Println(styles.SuccessStyle.Render("✨ ") + "ailloy " + current + " → " + target)
 }
