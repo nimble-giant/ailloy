@@ -73,7 +73,10 @@ func (d Dependency) Kind() (string, error) {
 	}
 }
 
-// Source returns the non-empty of Ingot or Ore. Returns "" if neither is set.
+// Source returns the non-empty of Ingot or Ore. When both are set (which is
+// invalid per Kind() and should be caught by temper), Ingot is returned —
+// callers should validate via Kind() first if they need to detect ambiguity.
+// Returns "" if neither is set.
 func (d Dependency) Source() string {
 	if d.Ingot != "" {
 		return d.Ingot

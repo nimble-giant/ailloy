@@ -503,13 +503,16 @@ dependencies:
 	}
 
 	found := false
-	for _, d := range result.Errors() {
+	for _, d := range result.Diagnostics {
+		if d.Severity != SeverityError {
+			continue
+		}
 		if strings.Contains(d.Message, "ingot") && strings.Contains(d.Message, "ore") {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected error mentioning both 'ingot' and 'ore', got: %v", result.Errors())
+		t.Errorf("expected SeverityError mentioning both 'ingot' and 'ore', got: %v", result.Errors())
 	}
 }
 
@@ -532,13 +535,16 @@ dependencies:
 	}
 
 	found := false
-	for _, d := range result.Errors() {
+	for _, d := range result.Diagnostics {
+		if d.Severity != SeverityError {
+			continue
+		}
 		if strings.Contains(d.Message, "ingot") && strings.Contains(d.Message, "ore") {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected error mentioning both 'ingot' and 'ore', got: %v", result.Errors())
+		t.Errorf("expected SeverityError mentioning both 'ingot' and 'ore', got: %v", result.Errors())
 	}
 }
 
@@ -558,10 +564,8 @@ dependencies:
 
 	result := Temper(fsys)
 
-	for _, d := range result.Errors() {
-		if strings.Contains(d.Message, "dependencies[") {
-			t.Errorf("unexpected dependency error: %s", d.Message)
-		}
+	if result.HasErrors() {
+		t.Errorf("expected no errors for valid ore-only dependency, got: %v", result.Errors())
 	}
 }
 
