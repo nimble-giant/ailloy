@@ -20,7 +20,12 @@ type CastOptions struct {
 	WithWorkflows bool     // include .github/ workflow blanks
 	ValueFiles    []string // -f layered flux value files
 	SetOverrides  []string // --set key=val overrides
-	OnProgress    func(stage, item string)
+	// ForceReplaceOnParseError, when true, allows merge-strategy
+	// destinations whose existing on-disk file is unparseable to be
+	// replaced rather than erroring. Mirrors the
+	// --force-replace-on-parse-error CLI flag.
+	ForceReplaceOnParseError bool
+	OnProgress               func(stage, item string)
 
 	// ClaudePlugin packages the rendered mold as a Claude Code plugin under
 	// .claude/plugins/<slug>/ (or ~/.claude/plugins/<slug>/ when Global is set)
@@ -150,7 +155,7 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 		}
 	}
 
-	if err := copyResolvedFiles(reader, manifest, flux, filesToCast); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, filesToCast, opts.ForceReplaceOnParseError); err != nil {
 		return res, fmt.Errorf("copying files: %w", err)
 	}
 

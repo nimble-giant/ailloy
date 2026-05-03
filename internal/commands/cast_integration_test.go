@@ -61,7 +61,7 @@ func TestIntegration_CopyResolvedFiles(t *testing.T) {
 		t.Fatal("expected resolved files, got none")
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestIntegration_CopyResolvedFiles_WithVariableSubstitution(t *testing.T) {
 		}
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, processable)
+	err = copyResolvedFiles(reader, manifest, flux, processable, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestIntegration_ResolvedFilesMatchMold(t *testing.T) {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestCopyResolvedFiles_SkipsEmptyRenderedFiles(t *testing.T) {
 		{SrcPath: "commands/nonempty.md", DestPath: filepath.Join(tmpDir, ".claude/commands/nonempty.md"), Process: true},
 	}
 
-	err := copyResolvedFiles(reader, nil, map[string]any{}, resolved)
+	err := copyResolvedFiles(reader, nil, map[string]any{}, resolved, false)
 	if err != nil {
 		t.Fatalf("copyResolvedFiles failed: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestCopyResolvedFiles_RemovesEmptyMultiDestDirs(t *testing.T) {
 		}
 	}
 
-	if err := copyResolvedFiles(reader, nil, map[string]any{}, resolved); err != nil {
+	if err := copyResolvedFiles(reader, nil, map[string]any{}, resolved, false); err != nil {
 		t.Fatalf("copyResolvedFiles failed: %v", err)
 	}
 
@@ -423,7 +423,7 @@ func TestIntegration_FilePermissions(t *testing.T) {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -534,7 +534,7 @@ func TestIntegration_WorkflowsNotProcessed(t *testing.T) {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -602,7 +602,7 @@ func TestIntegration_MergeStrategy_JSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if err := copyResolvedFiles(reader, manifest, flux, resolved); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
 		t.Fatalf("copy: %v", err)
 	}
 
@@ -664,7 +664,7 @@ func TestIntegration_MergeStrategy_TwoMolds(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolve: %v", err)
 		}
-		if err := copyResolvedFiles(reader, manifest, flux, resolved); err != nil {
+		if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
 			t.Fatalf("copy: %v", err)
 		}
 	}
@@ -679,5 +679,60 @@ func TestIntegration_MergeStrategy_TwoMolds(t *testing.T) {
 	}
 	if !strings.Contains(gs, `"replicated-docs"`) {
 		t.Errorf("mold B's replicated-docs missing:\n%s", gs)
+	}
+}
+
+func TestIntegration_MergeStrategy_ForceReplaceOnParseError(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	// Pre-seed an unparseable opencode.json (simulating user hand-edits).
+	if err := os.WriteFile("opencode.json", []byte("not json{"), 0644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: test\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  config/opencode.json:
+    dest: opencode.json
+    strategy: merge
+`)},
+		"config/opencode.json": &fstest.MapFile{Data: []byte(`{"mcp":{"replicated-docs":{"url":"https://docs"}}}`)},
+	}
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	flux, err := reader.LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("load flux: %v", err)
+	}
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	// Without force-replace: should fail with ParseError-derived message.
+	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
+	if err == nil {
+		t.Fatal("expected error without force-replace, got nil")
+	}
+	if !strings.Contains(err.Error(), "force-replace-on-parse-error") {
+		t.Errorf("expected error to mention the flag; got: %v", err)
+	}
+
+	// With force-replace: should clobber the unparseable file.
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, true); err != nil {
+		t.Fatalf("force-replace should succeed; got: %v", err)
+	}
+	got, _ := os.ReadFile("opencode.json")
+	if !strings.Contains(string(got), "replicated-docs") {
+		t.Errorf("force-replace should write new content; got: %s", got)
 	}
 }

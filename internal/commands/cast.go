@@ -292,7 +292,7 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	fmt.Println()
 
 	// Copy resolved files from mold
-	if err := copyResolvedFiles(reader, manifest, flux, filesToCast); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, filesToCast, castForceReplaceOnParseError); err != nil {
 		return fmt.Errorf("failed to copy files: %w", err)
 	}
 
@@ -609,7 +609,7 @@ func offerAgentsImport(claudePath string) {
 
 // copyResolvedFiles copies resolved mold files to the project, applying template
 // processing where indicated by the output mapping.
-func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[string]any, resolved []mold.ResolvedFile) error {
+func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[string]any, resolved []mold.ResolvedFile, forceReplaceOnParseError bool) error {
 	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
 	var schema []mold.FluxVar
 	if s, err := reader.LoadFluxSchema(); err == nil && s != nil {
@@ -655,7 +655,7 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 		switch rf.Strategy {
 		case "merge":
 			err := merge.MergeFile(rf.DestPath, outputContent, merge.Options{
-				ForceReplaceOnParseError: castForceReplaceOnParseError,
+				ForceReplaceOnParseError: forceReplaceOnParseError,
 			})
 			if err != nil {
 				var pe *merge.ParseError
