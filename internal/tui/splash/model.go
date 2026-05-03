@@ -5,11 +5,11 @@
 package splash
 
 import (
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/nimble-giant/ailloy/internal/tui/cinematic"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 )
 
@@ -46,26 +46,7 @@ type Model struct {
 // the model can center its scene; if WindowSizeMsg arrives later it will
 // adjust. Pass 0,0 if unknown — Bubble Tea will deliver dimensions on Init.
 func New(width, height int) Model {
-	art := strings.TrimLeft(styles.AilloyFox, "\n")
-	art = strings.TrimRight(art, "\n")
-	lines := strings.Split(art, "\n")
-	cols := 0
-	for _, l := range lines {
-		if w := lipgloss.Width(l); w > cols {
-			cols = w
-		}
-	}
-	// Pad every line with trailing spaces so they're all exactly `cols`
-	// wide. Without this, lipgloss centering operations (Place,
-	// JoinVertical with Center) re-center each row independently based on
-	// its rendered width — and since the fox art relies on per-row
-	// leading whitespace to express shape, that re-centering visibly
-	// skews the silhouette. Uniform width = leading whitespace preserved.
-	for i, l := range lines {
-		if pad := cols - lipgloss.Width(l); pad > 0 {
-			lines[i] = l + strings.Repeat(" ", pad)
-		}
-	}
+	lines, cols := cinematic.PadFoxLines()
 	return Model{
 		width:    width,
 		height:   height,
