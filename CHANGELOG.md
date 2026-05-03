@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.22](https://github.com/nimble-giant/ailloy/compare/v0.6.21...v0.6.22) (2026-05-03)
+
+
+### Features
+
+* cinematic splash for ailloy root help ([7417499](https://github.com/nimble-giant/ailloy/commit/74174994db4466b8806b0dc20204a01d7af8f061))
+
+
+### Bug Fixes
+
+* mask bytes before narrowing in parseHex ([444775d](https://github.com/nimble-giant/ailloy/commit/444775d18a572d06a804e169af5fb5b7a735fbb6))
+
 ## [0.6.21](https://github.com/nimble-giant/ailloy/compare/v0.6.20...v0.6.21) (2026-05-03)
 
 
