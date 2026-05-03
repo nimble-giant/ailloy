@@ -2,9 +2,11 @@ package commands
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
+	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
@@ -114,7 +116,8 @@ func runRecast(_ *cobra.Command, args []string) error {
 				changes = changes[:len(changes)-1]
 				continue
 			}
-			if _, _, fetchErr := fetcher.Fetch(ref, resolved); fetchErr != nil {
+			fetchedFS, _, fetchErr := fetcher.Fetch(ref, resolved)
+			if fetchErr != nil {
 				fmt.Printf("%s skipping %s: fetch: %v\n", styles.WarningStyle.Render("!"), entry.Name, fetchErr)
 				changes = changes[:len(changes)-1]
 				continue
@@ -128,6 +131,36 @@ func runRecast(_ *cobra.Command, args []string) error {
 				Commit:  resolved.Commit,
 				CastAt:  time.Now().UTC(),
 			})
+
+			// Reconcile the freshly resolved mold's dependency graph: install
+			// any newly declared deps and prune any that the mold no longer
+			// declares. moldKey mirrors the cast-time key (source@subpath when
+			// subpath is set) so dependent strings stay consistent.
+			moldKey := entry.Source
+			if entry.Subpath != "" {
+				moldKey += "@" + entry.Subpath
+			}
+			reader := blanks.NewMoldReader(fetchedFS)
+			freshMold, mErr := reader.LoadManifest()
+			if mErr != nil {
+				log.Printf("warning: loading fresh mold manifest for %s: %v", entry.Name, mErr)
+			} else if freshMold != nil {
+				// Auto-install newly declared deps. Recast operates on the
+				// project's installed.yaml (or global per --global). Local-path
+				// deps are refused because recast walks remote references.
+				if err := installDeclaredDeps(freshMold, moldKey, recastGlobal, false); err != nil {
+					log.Printf("warning: installing deps for %s: %v", entry.Name, err)
+				}
+				// Cascade-prune deps the mold no longer declares.
+				if err := pruneRemovedDeps(manifestPathFor(recastGlobal), moldKey, freshMold.Dependencies); err != nil {
+					log.Printf("warning: pruning removed deps for %s: %v", entry.Name, err)
+				}
+				// Re-read manifest so subsequent mold iterations see the
+				// changes from installDeclaredDeps + pruneRemovedDeps.
+				if reread, _ := foundry.ReadInstalledManifest(manifestPathFor(recastGlobal)); reread != nil {
+					manifest = reread
+				}
+			}
 
 			if existingLock != nil {
 				existingLock.UpsertEntry(foundry.LockEntry{

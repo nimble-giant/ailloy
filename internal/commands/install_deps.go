@@ -288,6 +288,123 @@ func copyFromFS(fsys fs.FS, dest string) error {
 	})
 }
 
+// pruneRemovedDeps reconciles the dependents graph for a mold whose
+// declared dependency list has changed. It walks the installed manifest at
+// manifestPath and, for every ingot/ore entry whose source is NOT in
+// currentDeps but which still lists moldKey as a dependent, strips moldKey
+// from that entry's Dependents. Entries whose Dependents become empty after
+// stripping are treated as orphans: the manifest entry is dropped and the
+// install directory under .ailloy/<kind>s/<install-name> is removed from
+// disk.
+//
+// Used by recast (to drop deps the mold no longer declares) and reused in
+// later phases by uninstall cascade. Entries whose source is still declared
+// are left untouched even if their Dependents would otherwise change.
+//
+// A nil/missing manifest is a no-op (nothing to prune).
+func pruneRemovedDeps(manifestPath, moldKey string, currentDeps []mold.Dependency) error {
+	if manifestPath == "" || moldKey == "" {
+		return nil
+	}
+	im, err := foundry.ReadInstalledManifest(manifestPath)
+	if err != nil {
+		return err
+	}
+	if im == nil {
+		return nil
+	}
+
+	// Build the set of sources still declared by the mold (post-update).
+	declaredSources := make(map[string]struct{}, len(currentDeps))
+	for _, d := range currentDeps {
+		if src := d.Source(); src != "" {
+			declaredSources[src] = struct{}{}
+		}
+	}
+
+	type prunePlan struct {
+		kind        string
+		installName string
+	}
+	var orphanPlans []prunePlan
+	mutated := false
+
+	// Walk ingots + ores. Strip moldKey from any entry whose source is no
+	// longer declared. Track orphans (Dependents drained to empty) so we can
+	// also drop them from disk + manifest.
+	for _, kind := range []string{"ingot", "ore"} {
+		var src *[]foundry.ArtifactEntry
+		switch kind {
+		case "ingot":
+			src = &im.Ingots
+		case "ore":
+			src = &im.Ores
+		}
+		kept := (*src)[:0]
+		for _, e := range *src {
+			if _, declared := declaredSources[e.Source]; declared {
+				kept = append(kept, e)
+				continue
+			}
+			if !containsString(e.Dependents, moldKey) {
+				kept = append(kept, e)
+				continue
+			}
+			// Strip moldKey from this entry.
+			e.Dependents = stripDependent(e.Dependents, moldKey)
+			mutated = true
+			if len(e.Dependents) == 0 {
+				installName := e.Name
+				if e.Alias != "" {
+					installName = e.Alias
+				}
+				orphanPlans = append(orphanPlans, prunePlan{kind: kind, installName: installName})
+				continue // drop from manifest
+			}
+			kept = append(kept, e)
+		}
+		*src = kept
+	}
+
+	if !mutated {
+		return nil
+	}
+
+	// Remove orphan install directories. These live under .ailloy/<kind>s/<name>
+	// for project scope. (recast/anneal that call this helper are project-scoped;
+	// when global support lands, this will need a scope parameter.)
+	for _, p := range orphanPlans {
+		dir := filepath.Join(".ailloy", p.kind+"s", p.installName)
+		if err := os.RemoveAll(dir); err != nil {
+			log.Printf("warning: removing %s: %v", dir, err)
+		}
+	}
+
+	if err := foundry.WriteInstalledManifest(manifestPath, im); err != nil {
+		return fmt.Errorf("writing pruned manifest: %w", err)
+	}
+	return nil
+}
+
+// stripDependent returns a copy of s with every occurrence of target removed,
+// or nil if no entries remain. Mirrors foundry.stripString without exporting
+// it.
+func stripDependent(s []string, target string) []string {
+	if len(s) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(s))
+	for _, v := range s {
+		if v != target {
+			out = append(out, v)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func artifactToLock(e foundry.ArtifactEntry) foundry.LockEntry {
 	return foundry.LockEntry{
 		Name:      e.Name,
