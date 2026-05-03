@@ -126,6 +126,119 @@ func (m *InstalledManifest) FindByName(name string) *InstalledEntry {
 	return nil
 }
 
+// UpsertArtifact adds or updates an entry by (kind, source, alias).
+// Use kind="ingot" or kind="ore". Existing dependents are merged with the
+// incoming entry's dependents (set union), preserving order.
+func (m *InstalledManifest) UpsertArtifact(kind string, entry ArtifactEntry) {
+	list := m.artifactList(kind)
+	for i := range *list {
+		if (*list)[i].Source == entry.Source && (*list)[i].Alias == entry.Alias {
+			merged := mergeDependents((*list)[i].Dependents, entry.Dependents)
+			entry.Dependents = merged
+			(*list)[i] = entry
+			return
+		}
+	}
+	*list = append(*list, entry)
+}
+
+// RemoveDependent strips moldKey from every artifact's Dependents list.
+// Returns the entries whose Dependents became empty (caller GCs).
+// Removes those orphan entries from the manifest as a side effect.
+func (m *InstalledManifest) RemoveDependent(moldKey string) []ArtifactEntry {
+	var orphans []ArtifactEntry
+	for _, kind := range []string{"ingot", "ore"} {
+		list := m.artifactList(kind)
+		kept := (*list)[:0]
+		for _, e := range *list {
+			e.Dependents = stripString(e.Dependents, moldKey)
+			if len(e.Dependents) == 0 {
+				orphans = append(orphans, e)
+				continue
+			}
+			kept = append(kept, e)
+		}
+		*list = kept
+	}
+	return orphans
+}
+
+// FindArtifact looks up an artifact entry by (kind, name). Name is the
+// install-dir name (post-aliasing) — i.e. the one used in
+// .ailloy/<kind>s/<name>/.
+func (m *InstalledManifest) FindArtifact(kind, name string) *ArtifactEntry {
+	if m == nil {
+		return nil
+	}
+	list := m.artifactList(kind)
+	for i := range *list {
+		effective := (*list)[i].Name
+		if (*list)[i].Alias != "" {
+			effective = (*list)[i].Alias
+		}
+		if effective == name {
+			return &(*list)[i]
+		}
+	}
+	return nil
+}
+
+// AllEntry is one entry from InstalledManifest.All(), tagged with its kind.
+type AllEntry struct {
+	Kind     string // "mold", "ingot", or "ore"
+	Mold     *InstalledEntry
+	Artifact *ArtifactEntry
+}
+
+// All yields every InstalledEntry plus every ArtifactEntry, tagged with kind.
+// Used by quench, uninstall, and TUI walks. Returns kind ∈ {"mold","ingot","ore"}.
+func (m *InstalledManifest) All() []AllEntry {
+	if m == nil {
+		return nil
+	}
+	out := make([]AllEntry, 0, len(m.Molds)+len(m.Ingots)+len(m.Ores))
+	for i := range m.Molds {
+		out = append(out, AllEntry{Kind: "mold", Mold: &m.Molds[i]})
+	}
+	for i := range m.Ingots {
+		out = append(out, AllEntry{Kind: "ingot", Artifact: &m.Ingots[i]})
+	}
+	for i := range m.Ores {
+		out = append(out, AllEntry{Kind: "ore", Artifact: &m.Ores[i]})
+	}
+	return out
+}
+
+func (m *InstalledManifest) artifactList(kind string) *[]ArtifactEntry {
+	if kind == "ingot" {
+		return &m.Ingots
+	}
+	return &m.Ores
+}
+
+func mergeDependents(a, b []string) []string {
+	seen := make(map[string]struct{}, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, s := range append(append([]string{}, a...), b...) {
+		if _, dup := seen[s]; dup {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+func stripString(s []string, target string) []string {
+	out := s[:0]
+	for _, v := range s {
+		if v != target {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // WriteInstalledManifest marshals and writes the manifest, creating parent dirs.
 func WriteInstalledManifest(path string, m *InstalledManifest) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil { //#nosec G301

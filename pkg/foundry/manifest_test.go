@@ -242,6 +242,73 @@ molds:
 	}
 }
 
+func TestArtifact_UpsertIdempotent(t *testing.T) {
+	m := &InstalledManifest{APIVersion: "v1"}
+	entry := ArtifactEntry{Name: "status", Source: "g/status-ore", Version: "1.0.0", Dependents: []string{"g/m1"}}
+	m.UpsertArtifact("ore", entry)
+	// Re-upsert with another dependent — should merge dependents, not duplicate.
+	m.UpsertArtifact("ore", ArtifactEntry{Name: "status", Source: "g/status-ore", Version: "1.0.0", Dependents: []string{"g/m1", "g/m2"}})
+	if len(m.Ores) != 1 {
+		t.Fatalf("len = %d, want 1: %+v", len(m.Ores), m.Ores)
+	}
+	if len(m.Ores[0].Dependents) != 2 {
+		t.Errorf("dependents should merge to 2: %+v", m.Ores[0].Dependents)
+	}
+}
+
+func TestArtifact_RemoveDependent_EmptyTriggersOrphan(t *testing.T) {
+	m := &InstalledManifest{
+		APIVersion: "v1",
+		Ores: []ArtifactEntry{
+			{Name: "status", Source: "g/status-ore", Dependents: []string{"g/m1"}},
+			{Name: "shared", Source: "g/shared-ore", Dependents: []string{"g/m1", "g/m2"}},
+		},
+	}
+	orphans := m.RemoveDependent("g/m1")
+	// "status" had only g/m1 → becomes orphan and is removed; "shared" keeps g/m2.
+	if len(orphans) != 1 || orphans[0].Name != "status" {
+		t.Errorf("orphans: %+v", orphans)
+	}
+	if len(m.Ores) != 1 || m.Ores[0].Name != "shared" {
+		t.Errorf("expected only 'shared' remaining: %+v", m.Ores)
+	}
+}
+
+func TestArtifact_FindByName_HonorsAlias(t *testing.T) {
+	m := &InstalledManifest{
+		APIVersion: "v1",
+		Ores: []ArtifactEntry{
+			{Name: "status", Source: "g/status-ore-a"},                         // canonical name
+			{Name: "status", Source: "g/status-ore-b", Alias: "github_status"}, // installed --as
+		},
+	}
+	if e := m.FindArtifact("ore", "status"); e == nil || e.Source != "g/status-ore-a" {
+		t.Errorf("canonical lookup: %+v", e)
+	}
+	if e := m.FindArtifact("ore", "github_status"); e == nil || e.Source != "g/status-ore-b" {
+		t.Errorf("alias lookup: %+v", e)
+	}
+	if e := m.FindArtifact("ore", "missing"); e != nil {
+		t.Errorf("missing should be nil: %+v", e)
+	}
+}
+
+func TestArtifact_All_YieldsAllKinds(t *testing.T) {
+	m := &InstalledManifest{
+		APIVersion: "v1",
+		Molds:      []InstalledEntry{{Name: "m"}},
+		Ingots:     []ArtifactEntry{{Name: "ig"}},
+		Ores:       []ArtifactEntry{{Name: "or"}},
+	}
+	all := m.All()
+	if len(all) != 3 {
+		t.Fatalf("len = %d, want 3: %+v", len(all), all)
+	}
+	if all[0].Kind != "mold" || all[1].Kind != "ingot" || all[2].Kind != "ore" {
+		t.Errorf("ordering: %+v", all)
+	}
+}
+
 func TestManifest_AbsentDoesNotBreakLockReads(t *testing.T) {
 	dir := t.TempDir()
 	origDir, err := os.Getwd()
