@@ -37,10 +37,10 @@ sha_for() {
   printf '%s' "$sha"
 }
 
-darwin_arm64=$(sha_for "ailloy-darwin-arm64")
-darwin_amd64=$(sha_for "ailloy-darwin-amd64")
-linux_arm64=$(sha_for "ailloy-linux-arm64")
-linux_amd64=$(sha_for "ailloy-linux-amd64")
+darwin_arm64=$(sha_for "ailloy-darwin-arm64.xz")
+darwin_amd64=$(sha_for "ailloy-darwin-amd64.xz")
+linux_arm64=$(sha_for "ailloy-linux-arm64.xz")
+linux_amd64=$(sha_for "ailloy-linux-amd64.xz")
 
 mkdir -p Formula
 cat > "$FORMULA" <<EOF
@@ -52,27 +52,30 @@ class Ailloy < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/nimble-giant/ailloy/releases/download/v#{version}/ailloy-darwin-arm64"
+      url "https://github.com/nimble-giant/ailloy/releases/download/v#{version}/ailloy-darwin-arm64.xz"
       sha256 "$darwin_arm64"
     end
     on_intel do
-      url "https://github.com/nimble-giant/ailloy/releases/download/v#{version}/ailloy-darwin-amd64"
+      url "https://github.com/nimble-giant/ailloy/releases/download/v#{version}/ailloy-darwin-amd64.xz"
       sha256 "$darwin_amd64"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/nimble-giant/ailloy/releases/download/v#{version}/ailloy-linux-arm64"
+      url "https://github.com/nimble-giant/ailloy/releases/download/v#{version}/ailloy-linux-arm64.xz"
       sha256 "$linux_arm64"
     end
     on_intel do
-      url "https://github.com/nimble-giant/ailloy/releases/download/v#{version}/ailloy-linux-amd64"
+      url "https://github.com/nimble-giant/ailloy/releases/download/v#{version}/ailloy-linux-amd64.xz"
       sha256 "$linux_amd64"
     end
   end
 
   def install
+    # Homebrew auto-decompresses single-file .xz URLs into the staging
+    # dir using the bare basename (no .xz suffix), so the install step
+    # below stays unchanged from the uncompressed era.
     suffix = OS.mac? ? "darwin" : "linux"
     arch = Hardware::CPU.arm? ? "arm64" : "amd64"
     bin.install "ailloy-#{suffix}-#{arch}" => "ailloy"
