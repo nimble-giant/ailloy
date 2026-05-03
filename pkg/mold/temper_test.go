@@ -385,6 +385,81 @@ output:
 	}
 }
 
+func TestTemper_SkipsTemplateValidationForProcessFalse(t *testing.T) {
+	// Files in a `process: false` output mapping are copied as-is at cast time,
+	// so temper must not attempt Go template parsing on them. They may contain
+	// foreign template syntax (Helm, KOTS, Jinja, GitHub Actions) that would
+	// otherwise produce false-positive parse errors.
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+`)},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`
+output:
+  skills:
+    dest: .claude/skills
+    process: false
+`)},
+		"skills/helm-skill/SKILL.md": &fstest.MapFile{Data: []byte(
+			"# Helm\nUse `{{ .Values.image.tag }}` for templated image refs.\n",
+		)},
+		"skills/kots-skill/SKILL.md": &fstest.MapFile{Data: []byte(
+			"# KOTS\nUse `{{repl ConfigOption \"x\"}}` for KOTS config.\n",
+		)},
+	}
+
+	result := Temper(fsys)
+
+	for _, d := range result.Errors() {
+		if d.File == "skills/helm-skill/SKILL.md" || d.File == "skills/kots-skill/SKILL.md" {
+			t.Errorf("should not validate template syntax on process:false file %s: %s", d.File, d.Message)
+		}
+	}
+}
+
+func TestTemper_StillValidatesTemplatesForProcessTrue(t *testing.T) {
+	// A sibling output with default (process: true) must still have its template
+	// syntax validated, even when other outputs use process: false.
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+`)},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`
+output:
+  skills:
+    dest: .claude/skills
+    process: false
+  commands: .claude/commands
+`)},
+		"skills/helm/SKILL.md": &fstest.MapFile{Data: []byte("# Helm\n{{ .Values.foo }}")},
+		"commands/broken.md":   &fstest.MapFile{Data: []byte("# Broken\n{{if .foo}")},
+	}
+
+	result := Temper(fsys)
+
+	if !result.HasErrors() {
+		t.Fatal("expected template syntax error for commands/broken.md")
+	}
+	found := false
+	for _, d := range result.Errors() {
+		if d.File == "commands/broken.md" {
+			found = true
+		}
+		if d.File == "skills/helm/SKILL.md" {
+			t.Errorf("should not validate template syntax on process:false file %s: %s", d.File, d.Message)
+		}
+	}
+	if !found {
+		t.Error("expected error referencing commands/broken.md")
+	}
+}
+
 func TestTemperResult_ErrorsAndWarnings(t *testing.T) {
 	r := &TemperResult{
 		Diagnostics: []Diagnostic{
