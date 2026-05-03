@@ -433,3 +433,7 @@ model: anthropic/claude-opus-4-20250514
 ```
 
 Keys in `set` may use dotted paths (`agent.current_target`) which expand to nested maps, or be nested maps directly. The fan-out form works for both directory mappings and individual file mappings.
+
+### Fan-in: many sources, one destination
+
+The mirror case — multiple molds (or multiple output entries within one mold) all writing to the same destination file — is solved by `strategy: merge`. When two molds each declare MCP server entries in `opencode.json`, by default the second cast overwrites the first; declaring `strategy: merge` deep-merges JSON/YAML destinations instead of clobbering. See [`strategy` in the flux reference](flux.md#strategy--merge-or-replace-output-files) for the value table, merge semantics (map order preservation, array concat-with-dedupe, type-mismatch rules), and the `--force-replace-on-parse-error` escape hatch for hand-edited destinations.
