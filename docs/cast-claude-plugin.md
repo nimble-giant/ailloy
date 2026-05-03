@@ -77,7 +77,7 @@ Re-running cast against an existing plugin replaces the contents of that single 
 
 ## Bulk install: every mold in a foundry as a plugin
 
-`ailloy foundry install <name|url> --claude-plugin` installs every mold listed by a foundry as its own Claude Code plugin. Each plugin lands at `.claude/plugins/<slug>/` (or `~/.claude/plugins/<slug>/` with `--global`), named after the mold.
+`ailloy foundry install <name|url> --claude-plugin` installs every mold listed by a foundry as its own Claude Code plugin, including molds pulled in transitively through nested foundries. Each plugin lands at `.claude/plugins/<slug>/` (or `~/.claude/plugins/<slug>/` with `--global`), named after the mold. Pass `--shallow` to skip nested foundries and install only the named foundry's direct molds.
 
 ```bash
 # Install every mold from the verified default foundry as plugins

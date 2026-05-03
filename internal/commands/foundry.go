@@ -84,6 +84,7 @@ var (
 	foundryInstallDryRun        bool
 	foundryInstallForce         bool
 	foundryInstallClaudePlugin  bool
+	foundryInstallShallow       bool
 )
 
 var foundryInstallCmd = &cobra.Command{
@@ -117,6 +118,7 @@ func init() {
 	foundryInstallCmd.Flags().BoolVar(&foundryInstallDryRun, "dry-run", false, "list what would be installed without casting")
 	foundryInstallCmd.Flags().BoolVar(&foundryInstallForce, "force", false, "re-cast molds that are already installed")
 	foundryInstallCmd.Flags().BoolVar(&foundryInstallClaudePlugin, "claude-plugin", false, "package each mold as a Claude Code plugin under .claude/plugins/<slug>/")
+	foundryInstallCmd.Flags().BoolVar(&foundryInstallShallow, "shallow", false, "install only the named foundry's direct molds (skip nested foundries)")
 }
 
 func runFoundrySearch(_ *cobra.Command, args []string) error {
@@ -225,6 +227,13 @@ func runFoundryList(_ *cobra.Command, _ []string) error {
 	fmt.Println(styles.HeaderStyle.Render(fmt.Sprintf("Registered foundries (%d):", len(foundries))))
 	fmt.Println()
 
+	cacheDir, _ := index.IndexCacheDir()
+	fetcher, _ := index.NewFetcher(defaultGitRunner())
+	var lookup index.IndexLookup
+	if cacheDir != "" && fetcher != nil {
+		lookup = index.CacheFirstLookup(cacheDir, fetcher)
+	}
+
 	for _, entry := range foundries {
 		name := styles.AccentStyle.Render(entry.Name)
 		if index.IsOfficialFoundry(entry.URL) {
@@ -240,10 +249,33 @@ func runFoundryList(_ *cobra.Command, _ []string) error {
 		fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("    URL:     %s", entry.URL)))
 		fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("    Type:    %s", entry.Type)))
 		fmt.Println(styles.SubtleStyle.Render(fmt.Sprintf("    Updated: %s", lastUpdated)))
+
+		// Render nested-foundry tree if any. Skip silently when the index
+		// can't be resolved (offline / not cached / no children).
+		if lookup != nil {
+			r := index.NewResolver(lookup)
+			root, _, err := r.Resolve(entry.URL)
+			if err == nil && len(root.Children) > 0 {
+				fmt.Println(styles.SubtleStyle.Render("    Nested foundries:"))
+				for _, child := range root.Children {
+					printFoundryTree(child, "      ")
+				}
+			}
+		}
+
 		fmt.Println()
 	}
 
 	return nil
+}
+
+// printFoundryTree recursively prints a child foundry node and its descendants.
+func printFoundryTree(node *index.ResolvedFoundry, indent string) {
+	line := fmt.Sprintf("%s└─ %s (%s)", indent, node.Index.Name, node.Source)
+	fmt.Println(styles.SubtleStyle.Render(line))
+	for _, c := range node.Children {
+		printFoundryTree(c, indent+"   ")
+	}
 }
 
 func runFoundryRemove(_ *cobra.Command, args []string) error {
@@ -297,6 +329,10 @@ func runFoundryUpdate(_ *cobra.Command, _ []string) error {
 		}
 		fmt.Println(" " + styles.SuccessStyle.Render("ok") +
 			styles.SubtleStyle.Render(fmt.Sprintf(" (%d molds)", r.MoldCount)))
+		for _, w := range r.Warnings {
+			fmt.Println(styles.SubtleStyle.Render(
+				fmt.Sprintf("    warning: nested foundry %q failed: %v", w.Source, w.Err)))
+		}
 	}
 
 	if err := index.SaveConfig(cfg); err != nil {
@@ -365,6 +401,7 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 		DryRun:        foundryInstallDryRun,
 		Force:         foundryInstallForce,
 		ClaudePlugin:  foundryInstallClaudePlugin,
+		Shallow:       foundryInstallShallow,
 	})
 	if err != nil {
 		return err
@@ -375,8 +412,21 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 		skipped   int
 		failed    int
 	)
+	lastFnd := "\x00" // sentinel so the first iteration always prints a header
 	for _, r := range reports {
-		fmt.Printf("  %s", styles.AccentStyle.Render(r.Name))
+		if r.Foundry != lastFnd {
+			if lastFnd != "\x00" {
+				fmt.Println()
+			}
+			header := "Installing from " + styles.AccentStyle.Render(r.Foundry)
+			if len(r.Chain) > 0 {
+				header += styles.SubtleStyle.Render(" (via " + strings.Join(r.Chain, " → ") + ")")
+			}
+			fmt.Println(header)
+			lastFnd = r.Foundry
+		}
+		display := r.Foundry + "/" + r.Name
+		fmt.Printf("  %s", styles.AccentStyle.Render(display))
 		switch {
 		case r.Err != nil:
 			failed++
@@ -395,6 +445,12 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 			installed++
 			fmt.Println(" " + styles.SuccessStyle.Render("ok"))
 		}
+	}
+
+	if len(reports) == 0 && foundryInstallShallow {
+		fmt.Println(styles.InfoStyle.Render("Nothing to install — this foundry only aggregates nested foundries."))
+		fmt.Println(styles.SubtleStyle.Render("Drop --shallow to install transitively."))
+		return nil
 	}
 
 	fmt.Println()
