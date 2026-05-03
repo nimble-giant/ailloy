@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -137,10 +138,12 @@ func runFoundrySearch(_ *cobra.Command, args []string) error {
 		GitHubOnly: searchGitHubOnly,
 	}
 
-	results, err := index.Search(cfg, query, opts)
+	results, warnings, err := index.Search(cfg, query, opts)
 	if err != nil {
 		return err
 	}
+
+	renderResolutionWarnings(warnings)
 
 	if len(results) == 0 {
 		fmt.Println(styles.InfoBoxStyle.Render(
@@ -330,8 +333,15 @@ func runFoundryUpdate(_ *cobra.Command, _ []string) error {
 		fmt.Println(" " + styles.SuccessStyle.Render("ok") +
 			styles.SubtleStyle.Render(fmt.Sprintf(" (%d molds)", r.MoldCount)))
 		for _, w := range r.Warnings {
+			hint := ""
+			switch {
+			case errors.Is(w.Err, index.ErrForbidden):
+				hint = " (private repo? check your git credentials)"
+			case errors.Is(w.Err, index.ErrNotFound):
+				hint = " (not found — may be private or moved)"
+			}
 			fmt.Println(styles.SubtleStyle.Render(
-				fmt.Sprintf("    warning: nested foundry %q failed: %v", w.Source, w.Err)))
+				fmt.Sprintf("    warning: nested foundry %q failed: %v%s", w.Source, w.Err, hint)))
 		}
 	}
 
@@ -395,7 +405,7 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 	fmt.Println(styles.WorkingBanner("Casting every mold from " + nameOrURL + "..."))
 	fmt.Println()
 
-	reports, err := InstallFoundryCore(context.Background(), cfg, nameOrURL, InstallFoundryOptions{
+	reports, warnings, err := InstallFoundryCore(context.Background(), cfg, nameOrURL, InstallFoundryOptions{
 		Global:        foundryInstallGlobal,
 		WithWorkflows: foundryInstallWithWorkflows,
 		DryRun:        foundryInstallDryRun,
@@ -406,6 +416,8 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	renderResolutionWarnings(warnings)
 
 	var (
 		installed int
@@ -464,4 +476,26 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("%d mold(s) failed to install", failed)
 	}
 	return nil
+}
+
+// renderResolutionWarnings prints non-fatal foundry resolution warnings —
+// typically a sub-foundry the caller couldn't access (private repo without
+// credentials). Prints nothing when there are no warnings.
+func renderResolutionWarnings(warnings []index.ResolutionWarning) {
+	if len(warnings) == 0 {
+		return
+	}
+	fmt.Println(styles.SubtleStyle.Render("Some foundries were skipped:"))
+	for _, w := range warnings {
+		hint := ""
+		switch {
+		case errors.Is(w.Err, index.ErrForbidden):
+			hint = "  (private repo? ensure your git credentials grant access)"
+		case errors.Is(w.Err, index.ErrNotFound):
+			hint = "  (repository not found — may be private or moved)"
+		}
+		fmt.Println(styles.SubtleStyle.Render(
+			fmt.Sprintf("  warning: foundry %q failed: %v%s", w.Source, w.Err, hint)))
+	}
+	fmt.Println()
 }

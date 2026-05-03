@@ -173,10 +173,15 @@ var ErrFoundryNotFound = errors.New("foundry not found")
 // Molds already present in the target lockfile are skipped unless
 // opts.Force. The first git fetch may take a while; subsequent calls reuse
 // the cache.
-func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string, opts InstallFoundryOptions) ([]InstallFoundryReport, error) {
+//
+// The returned warnings carry non-fatal sub-foundry resolution failures
+// (e.g. private nested foundries the caller cannot access). Molds from those
+// inaccessible sub-foundries are silently absent from the report; warnings
+// give the CLI a chance to explain why.
+func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string, opts InstallFoundryOptions) ([]InstallFoundryReport, []index.ResolutionWarning, error) {
 	cacheDir, err := index.IndexCacheDir()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var match *index.FoundryEntry
@@ -188,20 +193,21 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 		}
 	}
 	if match == nil {
-		return nil, fmt.Errorf("%w: %q", ErrFoundryNotFound, nameOrURL)
+		return nil, nil, fmt.Errorf("%w: %q", ErrFoundryNotFound, nameOrURL)
 	}
 
 	fetcher, ferr := index.NewFetcher(defaultGitRunner())
 	if ferr != nil {
-		return nil, ferr
+		return nil, nil, ferr
 	}
 	lookup := index.CacheFirstLookup(cacheDir, fetcher)
 
 	r := index.NewResolver(lookup)
 	root, allMolds, err := r.Resolve(match.URL)
 	if err != nil {
-		return nil, fmt.Errorf("resolving foundry %s: %w", match.Name, err)
+		return nil, nil, fmt.Errorf("resolving foundry %s: %w", match.Name, err)
 	}
+	warnings := r.Warnings()
 
 	// Build the working set of molds to install.
 	var molds []index.ResolvedMold
@@ -263,5 +269,5 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 		out = append(out, report)
 	}
 
-	return out, nil
+	return out, warnings, nil
 }

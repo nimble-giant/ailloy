@@ -68,7 +68,7 @@ func runFoundries(_ *cobra.Command, _ []string) error {
 			return out, err
 		},
 		InstallFoundry: func(ctx context.Context, cfg *index.Config, nameOrURL string, opts foundries.InstallFoundryOptions) ([]foundries.InstallFoundryReport, error) {
-			rs, err := InstallFoundryCore(ctx, cfg, nameOrURL, InstallFoundryOptions{
+			rs, _, err := InstallFoundryCore(ctx, cfg, nameOrURL, InstallFoundryOptions{
 				Global:        opts.Global,
 				WithWorkflows: opts.WithWorkflows,
 				DryRun:        opts.DryRun,

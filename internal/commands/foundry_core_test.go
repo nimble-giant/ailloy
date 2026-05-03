@@ -42,7 +42,7 @@ foundries:
 		Foundries: []index.FoundryEntry{{Name: "parent", URL: parentURL, Type: "git", Status: "ok"}},
 	}
 
-	reports, err := InstallFoundryCore(context.Background(), cfg, "parent", InstallFoundryOptions{
+	reports, warnings, err := InstallFoundryCore(context.Background(), cfg, "parent", InstallFoundryOptions{
 		DryRun:  true,
 		Shallow: true,
 	})
@@ -60,5 +60,13 @@ foundries:
 	}
 	if len(reports[0].Chain) != 0 {
 		t.Errorf("reports[0].Chain = %v, want empty (root-owned)", reports[0].Chain)
+	}
+	// The unreachable child foundry should surface as a warning so the CLI
+	// can explain why nested molds are missing.
+	if len(warnings) != 1 {
+		t.Fatalf("got %d warnings, want 1", len(warnings))
+	}
+	if warnings[0].Source != "github.com/example/missing" {
+		t.Errorf("warnings[0].Source = %q, want github.com/example/missing", warnings[0].Source)
 	}
 }

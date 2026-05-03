@@ -45,13 +45,18 @@ type ghSearchResponse struct {
 // Search queries all registered foundry indexes and optionally GitHub Topics.
 // Results from indexes appear first, followed by GitHub Topics results.
 // Duplicates (same source) are collapsed, preferring the index entry.
-func Search(cfg *Config, query string, opts SearchOptions) ([]SearchResult, error) {
+//
+// Warnings carries non-fatal sub-foundry resolution failures (e.g. a private
+// nested foundry the caller cannot access). The CLI is expected to render
+// these so users understand why some molds may be missing.
+func Search(cfg *Config, query string, opts SearchOptions) ([]SearchResult, []ResolutionWarning, error) {
 	var indexResults []SearchResult
 	var ghResults []SearchResult
+	var warnings []ResolutionWarning
 	var indexErr, ghErr error
 
 	if !opts.GitHubOnly {
-		indexResults, indexErr = searchIndexes(cfg, query)
+		indexResults, warnings, indexErr = searchIndexes(cfg, query)
 	}
 
 	if !opts.IndexOnly {
@@ -60,22 +65,22 @@ func Search(cfg *Config, query string, opts SearchOptions) ([]SearchResult, erro
 
 	// If both failed, return the first error.
 	if indexErr != nil && ghErr != nil {
-		return nil, fmt.Errorf("searching indexes: %w", indexErr)
+		return nil, warnings, fmt.Errorf("searching indexes: %w", indexErr)
 	}
 
 	// Merge and deduplicate.
 	results := mergeResults(indexResults, ghResults)
-	return results, nil
+	return results, warnings, nil
 }
 
 // searchIndexes searches all cached foundry indexes for matching molds,
 // transitively resolving any nested foundries declared in their `foundries:`
 // fields. Lookups are cache-first; child foundries not yet cached fall back
 // to the network so a freshly-added parent works without an explicit update.
-func searchIndexes(cfg *Config, query string) ([]SearchResult, error) {
+func searchIndexes(cfg *Config, query string) ([]SearchResult, []ResolutionWarning, error) {
 	cacheDir, err := IndexCacheDir()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	git := defaultGitRunnerForSearch()
 	fetcher := NewFetcherWithCacheDir(git, cacheDir)
@@ -85,9 +90,11 @@ func searchIndexes(cfg *Config, query string) ([]SearchResult, error) {
 
 // searchWithLookup is the testable core: given an explicit IndexLookup, walk
 // every registered root via a fresh Resolver and return matching molds with
-// their resolution chain.
-func searchWithLookup(cfg *Config, query string, lookup IndexLookup) ([]SearchResult, error) {
+// their resolution chain. Sub-foundry resolution failures are returned as
+// warnings rather than swallowed.
+func searchWithLookup(cfg *Config, query string, lookup IndexLookup) ([]SearchResult, []ResolutionWarning, error) {
 	var results []SearchResult
+	var warnings []ResolutionWarning
 	q := strings.ToLower(query)
 
 	for _, entry := range cfg.EffectiveFoundries() {
@@ -97,8 +104,11 @@ func searchWithLookup(cfg *Config, query string, lookup IndexLookup) ([]SearchRe
 		if err != nil {
 			// Root failed (e.g., not cached and offline). Skip — preserves
 			// the existing "skip indexes that aren't cached yet" behavior.
+			// Sub-foundry failures of an otherwise-resolvable root are still
+			// surfaced as warnings below.
 			continue
 		}
+		warnings = append(warnings, r.Warnings()...)
 		for _, m := range molds {
 			if !matchesMold(m.Entry, q) {
 				continue
@@ -114,7 +124,7 @@ func searchWithLookup(cfg *Config, query string, lookup IndexLookup) ([]SearchRe
 			})
 		}
 	}
-	return results, nil
+	return results, warnings, nil
 }
 
 // formatOrigin renders the resolution chain. Root molds get "index:<root>";
