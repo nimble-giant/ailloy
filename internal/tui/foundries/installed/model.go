@@ -3,6 +3,7 @@ package installed
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -46,6 +47,7 @@ type Model struct {
 	loading bool
 	loadErr error
 	flash   string
+	pending map[string][]string // moldRef → encoded "--set" overrides
 }
 
 type loadedMsg struct {
@@ -97,6 +99,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.flash = "update error: " + msg.err.Error()
 		} else {
 			m.flash = "updated " + msg.source
+			delete(m.pending, msg.source)
 		}
 		return m, loadCmd(m.cfg)
 	case tea.KeyMsg:
@@ -134,12 +137,70 @@ func uninstallCmd(it data.InventoryItem) tea.Cmd {
 
 func (m Model) updateCmd(it data.InventoryItem) tea.Cmd {
 	cast := m.cast
+	// Capture pending overrides at Cmd build time so concurrent picker edits
+	// don't change what's already in flight.
+	extra := append([]string(nil), m.pending[it.Entry.Source]...)
 	return func() tea.Msg {
 		if cast == nil {
 			return updateDoneMsg{source: it.Entry.Source, err: fmt.Errorf("no cast function configured")}
 		}
-		err := cast(context.Background(), it.Entry.Source, CastOptions{Global: it.Scope == data.ScopeGlobal})
+		opts := CastOptions{Global: it.Scope == data.ScopeGlobal}
+		if len(extra) > 0 {
+			opts.SetOverrides = append(opts.SetOverrides, extra...)
+		}
+		err := cast(context.Background(), it.Entry.Source, opts)
 		return updateDoneMsg{source: it.Entry.Source, err: err}
+	}
+}
+
+// CurrentMold returns the highlighted installed mold's source and its scope
+// (project or global). Returns ok=false when no item is highlighted.
+func (m Model) CurrentMold() (ref string, scope data.Scope, ok bool) {
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return "", "", false
+	}
+	it := m.items[m.cursor]
+	return it.Entry.Source, it.Scope, true
+}
+
+// ApplySessionOverrides records session overrides for the given mold ref.
+// They will be applied as --set overrides on the next cast of that mold.
+// Last-write-wins: re-applying replaces any prior pending overrides for the
+// same ref rather than merging.
+func (m Model) ApplySessionOverrides(moldRef string, overrides map[string]any) Model {
+	if m.pending == nil {
+		m.pending = map[string][]string{}
+	}
+	m.pending[moldRef] = encodeSetOverrides(overrides)
+	return m
+}
+
+// encodeSetOverrides converts a typed override map into the --set k=v strings
+// that CastOptions.SetOverrides expects. Slices are emitted as YAML flow
+// sequences ([a,b,c]) so the cast core's YAML-aware --set parser produces a
+// real list rather than parsing the Go-default "[a b c]" form as a single
+// string. Result is sorted for deterministic ordering.
+func encodeSetOverrides(overrides map[string]any) []string {
+	out := make([]string, 0, len(overrides))
+	for k, v := range overrides {
+		out = append(out, fmt.Sprintf("%s=%s", k, formatSetValue(v)))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func formatSetValue(v any) string {
+	switch x := v.(type) {
+	case []string:
+		return "[" + strings.Join(x, ",") + "]"
+	case []any:
+		parts := make([]string, len(x))
+		for i, item := range x {
+			parts[i] = fmt.Sprintf("%v", item)
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	default:
+		return fmt.Sprintf("%v", v)
 	}
 }
 

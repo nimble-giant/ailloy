@@ -91,6 +91,14 @@ ailloy cast ./my-mold --set project.organization=my-org --set scm.provider=GitLa
 ailloy cast ./my-mold -f team-values.yaml --set project.organization=my-org
 ```
 
+### Setting values from the TUI
+
+The `ailloy foundries` TUI also has a flux value picker — press `f` from
+Discover or Installed to set values for the highlighted mold without typing
+`--set` flags by hand. The picker can write to a project flux file, a global
+flux file, or thread the overrides into the next cast as session-only
+`--set` values. See [Interactive TUI → Flux value picker](foundry.md#flux-value-picker).
+
 ## Nested Values and Dotted Paths
 
 Flux values use standard YAML nesting. In blanks, reference them with dotted paths:

@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 )
@@ -258,6 +259,11 @@ func (m Model) removeCmd(urlOrName string) tea.Cmd {
 		_, err := remove(cfg, urlOrName)
 		return removeDoneMsg{name: urlOrName, err: err}
 	}
+}
+
+// CurrentMold returns ok=false; the foundries tab has no per-mold context.
+func (m Model) CurrentMold() (ref string, scope data.Scope, ok bool) {
+	return "", "", false
 }
 
 func (m Model) View() string {

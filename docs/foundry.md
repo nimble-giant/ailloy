@@ -228,8 +228,8 @@ space toggle · enter cast all · / search · c clear · r refresh · j/k move
 
 | Tab | What it does |
 | --- | --- |
-| **Discover** | Browse the merged catalog across every effective foundry. Multi-select with `space`, install all selected with `enter`. Live filter with `/`. The "Recent" section highlights molds whose foundry was indexed in the last 7 days (top 10). Already-installed molds show a blue `● installed <version>` badge. |
-| **Installed** | List every casted mold across project (`./ailloy.lock`) and global (`~/ailloy.lock`) scope. `u` re-casts to the latest version; `x` uninstalls (uses the install manifest, skips files modified since cast). Pre-manifest legacy entries display a yellow warning. |
+| **Discover** | Browse the merged catalog across every effective foundry. Nested foundries declared via `foundries:` are resolved transitively, and nested-foundry molds render with a faint `via parent → child` annotation showing their resolution chain. Multi-select with `space`, install all selected with `enter`. Live filter with `/`. The "Recent" section highlights molds whose foundry was indexed in the last 7 days (top 10). Already-installed molds show a blue `● installed <version>` badge. Press `f` on any mold to open the [flux value picker](#flux-value-picker). |
+| **Installed** | List every casted mold across project (`./ailloy.lock`) and global (`~/ailloy.lock`) scope. `u` re-casts to the latest version; `x` uninstalls (uses the install manifest, skips files modified since cast). Pre-manifest legacy entries display a yellow warning. Press `f` to edit flux values for the highlighted mold. |
 | **Foundries** | Add (`a`), remove (`d`), or refresh (`r`) registered foundry indexes. The verified default is rendered as a built-in entry and can't be removed. |
 | **Health** | Drift checks (orphaned molds whose foundry no longer indexes them, legacy install manifests) plus `assay` findings against the rendered blank directories from `.ailloy/state.yaml`. `r` re-runs the checks. |
 
@@ -251,10 +251,55 @@ space toggle · enter cast all · / search · c clear · r refresh · j/k move
 | Foundries | `a` | open add-foundry input |
 | Foundries | `d` | remove current foundry |
 | Foundries | `i` | install every mold listed by current foundry (skips already-installed) |
+| Discover, Installed | `f` | open the flux value picker scoped to the highlighted mold |
 
 The TUI requires a TTY; piping `ailloy foundries` to a file errors out with a
 hint to use the scriptable equivalents (`ailloy foundry list/search/...` and
 `ailloy uninstall`).
+
+#### Flux value picker
+
+Press `f` from Discover or Installed to open a fuzzy-filter overlay scoped to
+the highlighted mold. The picker fetches the mold's flux schema (locally for
+installed molds, on demand from the foundry for un-installed ones) and lets
+you set values without leaving the TUI — useful when you want to tweak
+something like `agents.targets=[opencode]` before casting, without crafting a
+`--set` flag or editing `flux.yaml` by hand.
+
+The picker works on nested-foundry molds too: any mold reachable from a
+registered root via `foundries:` references shows up in Discover (with a
+`via parent → child` annotation) and accepts `f` like a directly-indexed
+mold.
+
+| Key | Action |
+| --- | --- |
+| (typing) | fuzzy-filter the schema |
+| `↑` / `↓` | move cursor through results |
+| `tab` | commit top match into the type-aware editor |
+| `enter` | commit highlighted match (filter) / save value (editor) |
+| `d` | clear the override on the highlighted key |
+| `R` | reset every override in this session |
+| `s` | open the save-target prompt |
+| `esc` | cancel editor, or close picker (prompts to save when there are unsaved overrides) |
+
+Each row shows a badge: `●` set in this session, `○` value comes from
+`flux.yaml` defaults, blank for unset/required. The editor shape is
+type-driven — bool gets a yes/no confirm, list gets a multi-line editor,
+select gets a dropdown (with discovery support), int validates as you type.
+
+The save prompt routes the overrides three ways:
+
+- `[p]` project — writes `./.ailloy/flux/<slug>.yaml` (atomic; merges with
+  existing content).
+- `[g]` global — writes `~/.ailloy/flux/<slug>.yaml`.
+- `[o]` this cast only — keeps the values in TUI memory and threads them as
+  `--set` overrides into the next cast of that mold (cleared on success,
+  retained on failure for retry).
+
+The `<slug>` is derived from the full mold ref (e.g., `github.com/nimble-giant/agents` → `github.com_nimble-giant_agents`) so molds with the same final segment under different foundries — including nested foundries that re-export shared molds — don't clobber each other on disk.
+
+Required-but-unset fields block save with the missing keys called out in the
+error banner.
 
 ### Uninstalling a casted mold
 

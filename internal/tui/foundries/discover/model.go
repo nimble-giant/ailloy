@@ -64,7 +64,8 @@ type Model struct {
 	loading     bool
 	loadErr     error
 	castStat    map[string]string
-	autoFetched bool // guard so we only auto-fetch once per session
+	autoFetched bool                // guard so we only auto-fetch once per session
+	pending     map[string][]string // moldRef → encoded "--set" overrides
 }
 
 type catalogLoadedMsg struct {
@@ -155,6 +156,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.castStat[msg.source] = "err: " + msg.err.Error()
 		} else {
 			m.castStat[msg.source] = "ok"
+			delete(m.pending, msg.source)
 		}
 		// Refresh inventory so the "installed" badge updates immediately.
 		return m, loadInventoryCmd(m.cfg)
@@ -221,11 +223,18 @@ func (m Model) fetchCmd() tea.Cmd {
 
 func (m Model) castCmd(source string) tea.Cmd {
 	cast := m.cast
+	// Capture pending overrides at Cmd build time so concurrent picker edits
+	// don't change what's already in flight.
+	extra := append([]string(nil), m.pending[source]...)
 	return func() tea.Msg {
 		if cast == nil {
 			return castDoneMsg{source: source, err: fmt.Errorf("no cast function configured")}
 		}
-		return castDoneMsg{source: source, err: cast(context.Background(), source, CastOptions{})}
+		opts := CastOptions{}
+		if len(extra) > 0 {
+			opts.SetOverrides = append(opts.SetOverrides, extra...)
+		}
+		return castDoneMsg{source: source, err: cast(context.Background(), source, opts)}
 	}
 }
 
@@ -253,6 +262,62 @@ func (m *Model) applyFilter() {
 	m.filtered = out
 	if m.cursor >= len(out) {
 		m.cursor = 0
+	}
+}
+
+// CurrentMold returns the highlighted catalog entry's mold reference and the
+// scope to use when casting. Returns ok=false when no entry is highlighted.
+func (m Model) CurrentMold() (ref string, scope data.Scope, ok bool) {
+	if m.cursor < 0 || m.cursor >= len(m.filtered) {
+		return "", "", false
+	}
+	return m.filtered[m.cursor].Source, data.ScopeProject, true
+}
+
+// NewWithFiltered constructs a Model directly with a known filtered slice
+// and cursor — exported for cross-package tests in the foundries app.
+func NewWithFiltered(entries []data.CatalogEntry, cursor int) Model {
+	return Model{filtered: entries, cursor: cursor}
+}
+
+// ApplySessionOverrides records session overrides for the given mold ref.
+// They will be applied as --set overrides on the next cast of that mold.
+// Last-write-wins: re-applying replaces any prior pending overrides for the
+// same ref rather than merging.
+func (m Model) ApplySessionOverrides(moldRef string, overrides map[string]any) Model {
+	if m.pending == nil {
+		m.pending = map[string][]string{}
+	}
+	m.pending[moldRef] = encodeSetOverrides(overrides)
+	return m
+}
+
+// encodeSetOverrides converts a typed override map into the --set k=v strings
+// that CastOptions.SetOverrides expects. Slices are emitted as YAML flow
+// sequences ([a,b,c]) so the cast core's YAML-aware --set parser produces a
+// real list rather than parsing the Go-default "[a b c]" form as a single
+// string. Result is sorted for deterministic ordering.
+func encodeSetOverrides(overrides map[string]any) []string {
+	out := make([]string, 0, len(overrides))
+	for k, v := range overrides {
+		out = append(out, fmt.Sprintf("%s=%s", k, formatSetValue(v)))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func formatSetValue(v any) string {
+	switch x := v.(type) {
+	case []string:
+		return "[" + strings.Join(x, ",") + "]"
+	case []any:
+		parts := make([]string, len(x))
+		for i, item := range x {
+			parts[i] = fmt.Sprintf("%v", item)
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	default:
+		return fmt.Sprintf("%v", v)
 	}
 }
 
@@ -315,11 +380,16 @@ func (m Model) View() string {
 				status = "  " + statusErrStyle.Render("("+s+")")
 			}
 		}
-		fmt.Fprintf(&b, "%s%s %s%s%s %s%s\n",
+		nested := ""
+		if e.IsNested() {
+			nested = " " + descStyle.Render("via "+strings.Join(e.OwnerChain, " → "))
+		}
+		fmt.Fprintf(&b, "%s%s %s%s%s%s %s%s\n",
 			caret, mark,
 			moldNameStyle.Render(e.Name),
 			verified,
 			installedTag,
+			nested,
 			descStyle.Render("— "+e.Description),
 			status)
 	}

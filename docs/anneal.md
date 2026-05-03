@@ -4,6 +4,14 @@ The `anneal` command provides an interactive, mold-aware wizard for configuring 
 
 Alias: `configure`
 
+> **Quick alternative:** if you're already in `ailloy foundries`, press `f`
+> on the highlighted mold to open the flux value picker — same type-aware
+> editors as `anneal`, scoped to one mold, with fuzzy filter and a save
+> prompt for project / global / session-only. See
+> [Interactive TUI → Flux value picker](foundry.md#flux-value-picker). Use
+> `anneal` when you want a guided walkthrough of every variable, or when
+> you're scripting flux file generation outside the TUI.
+
 ## Quick Start
 
 ```bash

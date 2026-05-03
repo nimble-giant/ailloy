@@ -6,12 +6,21 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/discover"
+	"github.com/nimble-giant/ailloy/internal/tui/foundries/fluxpicker"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/health"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/installed"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/registered"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 )
+
+// MoldContexter is implemented by tabs that can identify a "currently
+// highlighted" mold. The flux picker uses this to scope its operations.
+type MoldContexter interface {
+	CurrentMold() (ref string, scope data.Scope, ok bool)
+}
 
 type discoverCtx = context.Context
 
@@ -29,6 +38,7 @@ type App struct {
 	installed  installed.Model
 	registered registered.Model
 	health     health.Model
+	picker     fluxpicker.Model
 }
 
 // New constructs an App. deps wires platform operations (cast/add/remove/update)
@@ -117,6 +127,7 @@ func New(deps Deps) App {
 		installed:  installed.New(cfg, installedCast),
 		registered: registered.New(cfg, regAdd, regRemove, regUpdate, regInstall),
 		health:     health.New(cfg),
+		picker:     fluxpicker.New(),
 	}
 }
 
@@ -133,7 +144,32 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.width, a.height = m.Width, m.Height
+		// Picker is sized here; tabs receive WindowSizeMsg via the broadcast
+		// loop below.
+		a.picker, _ = a.picker.Update(m)
+	case fluxpicker.SchemaFetchedMsg:
+		var cmd tea.Cmd
+		a.picker, cmd = a.picker.Update(m)
+		return a, cmd
+	case fluxpicker.FluxOverridesMsg:
+		if m.Target == fluxpicker.SaveTargetSession {
+			switch a.active {
+			case TabDiscover:
+				a.discover = a.discover.ApplySessionOverrides(m.MoldRef, m.Overrides)
+			case TabInstalled:
+				a.installed = a.installed.ApplySessionOverrides(m.MoldRef, m.Overrides)
+			}
+		}
+		a.picker = a.picker.Close()
+		return a, nil
 	case tea.KeyMsg:
+		// Picker captures all keys while open — including tab-switch keys —
+		// so the user can't navigate tabs behind the overlay.
+		if a.picker.IsOpen() {
+			var cmd tea.Cmd
+			a.picker, cmd = a.picker.Update(m)
+			return a, cmd
+		}
 		switch m.String() {
 		case "ctrl+c", "q":
 			return a, tea.Quit
@@ -143,6 +179,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "shift+tab", "left", "h":
 			a.active = (a.active + tabCount - 1) % tabCount
 			return a, nil
+		case "f":
+			ref, scope, ok := a.currentMold()
+			if !ok {
+				return a, nil
+			}
+			a.picker = a.picker.OpenFor(ref, scope, nil, nil).SetFetching(true)
+			return a, fetchSchemaCmd(ref)
 		}
 
 		// Key events go only to the active tab.
@@ -194,5 +237,47 @@ func (a App) View() string {
 	}
 	b.WriteString("\n")
 	b.WriteString(statusBar.Render("tab/shift-tab to switch · q quit"))
+	if a.picker.IsOpen() {
+		b.WriteString("\n")
+		b.WriteString(a.picker.View())
+	}
 	return b.String()
 }
+
+// currentMold delegates to the active tab's MoldContexter to identify the
+// currently highlighted mold reference and scope.
+func (a App) currentMold() (string, data.Scope, bool) {
+	switch a.active {
+	case TabDiscover:
+		return a.discover.CurrentMold()
+	case TabInstalled:
+		return a.installed.CurrentMold()
+	case TabFoundries:
+		return a.registered.CurrentMold()
+	case TabHealth:
+		return a.health.CurrentMold()
+	}
+	return "", "", false
+}
+
+// fetchSchemaCmd returns a Cmd that fetches the schema for the given mold ref
+// asynchronously and dispatches a SchemaFetchedMsg when complete.
+func fetchSchemaCmd(ref string) tea.Cmd {
+	return func() tea.Msg {
+		schema, defaults, err := mold.FetchSchemaFromSource(context.Background(), ref)
+		return fluxpicker.SchemaFetchedMsg{
+			MoldRef:  ref,
+			Schema:   schema,
+			Defaults: defaults,
+			Err:      err,
+		}
+	}
+}
+
+// Interface compliance — these will fail to compile if any tab drifts.
+var (
+	_ MoldContexter = discover.Model{}
+	_ MoldContexter = installed.Model{}
+	_ MoldContexter = registered.Model{}
+	_ MoldContexter = health.Model{}
+)
