@@ -111,6 +111,13 @@ func runDocs(cmd *cobra.Command, args []string) error {
 		return renderTopicTo(out, args[0])
 	}
 
+	// Non-interactive contexts (tests, pipes, CI) skip the extension — its
+	// output bypasses cmd.OutOrStdout() and goes straight to the real fd,
+	// which breaks captured-stdout tests and pipe consumers.
+	if !isInteractive() {
+		return printTopicList(out)
+	}
+
 	// Bare `ailloy docs`. Prefer the extension when allowed.
 	if !docsNoExtension {
 		if code, ran, err := tryExecDocsExtension(args); ran {
@@ -124,10 +131,6 @@ func runDocs(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Fallback: in-binary glamour render to stdout (table when piped).
-	if !isInteractive() {
-		return printTopicList(out)
-	}
 	return printTopicList(out)
 }
 
