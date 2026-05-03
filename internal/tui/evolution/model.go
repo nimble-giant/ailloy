@@ -38,6 +38,7 @@ type startMsg struct{}
 type Model struct {
 	width    int
 	height   int
+	compact  bool // true when the terminal can't fit the full fox-sized layout
 	start    time.Time
 	frame    int
 	foxLines []string
@@ -51,19 +52,30 @@ type Model struct {
 // New constructs an evolution Model. The version strings should be in the
 // form `vMAJOR.MINOR.PATCH` (or "dev"); the digit-wheel beat will fall back
 // to a static rendering of `to` if `from` and `to` have different shapes.
+//
+// When the supplied terminal height is below `compactHeight`, the model
+// flips to a compact layout: no giant fox, just headline / version chip /
+// charge / flash / digit wheel / sparkle fanfare centered tightly. The
+// beat structure stays identical so timing and skip behavior are unchanged.
 func New(width, height int, currentVersion, targetVersion string) Model {
 	lines, cols := cinematic.PadFoxLines()
-	// 14 sparkles is enough to feel like a celebration without becoming
-	// chunky in 256-color terminals. Seeded by the target version so a
-	// given upgrade replays identically.
+	// Sparkles seeded by the target version so a given upgrade replays
+	// identically. 14 sparkles for the full fox layout; 6 for the
+	// compact band so it doesn't look chunky in 256-color terminals.
 	seed := stringSeed(targetVersion)
+	compact := height < compactHeight
+	sparkleCount := 14
+	if compact {
+		sparkleCount = 6
+	}
 	return Model{
 		width:    width,
 		height:   height,
+		compact:  compact,
 		foxLines: lines,
 		foxRows:  len(lines),
 		foxCols:  cols,
-		sparkles: cinematic.NewSparkleField(14, len(lines), cols, seed),
+		sparkles: cinematic.NewSparkleField(sparkleCount, len(lines), cols, seed),
 		from:     currentVersion,
 		to:       targetVersion,
 	}

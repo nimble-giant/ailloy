@@ -31,6 +31,7 @@ var (
 	evolveForce    bool
 	evolvePin      string
 	evolveSkipAnim bool
+	evolveDemo     bool
 )
 
 var (
@@ -65,12 +66,37 @@ func init() {
 	evolveCmd.Flags().BoolVar(&evolveForce, "force", false, "evolve even if installed via Homebrew")
 	evolveCmd.Flags().StringVar(&evolvePin, "version", "", "install a specific release tag (e.g. v0.6.19)")
 	evolveCmd.Flags().BoolVar(&evolveSkipAnim, "no-animate", false, "skip the evolution animation")
+	evolveCmd.Flags().BoolVar(&evolveDemo, "demo", false, "play the evolution cinematic without performing an upgrade (for QA / showing off)")
+	_ = evolveCmd.Flags().MarkHidden("demo")
 }
 
 func runEvolve(_ *cobra.Command, _ []string) error {
 	current := strings.TrimSpace(evolveCurrentVersion)
 	if current == "" {
 		current = "dev"
+	}
+
+	// --demo: play the cinematic with mock versions, no network, no swap.
+	// Hidden flag — primarily for QA but also handy for showing off.
+	if evolveDemo {
+		to := strings.TrimSpace(evolvePin)
+		if to == "" {
+			to = "v9.9.9"
+		}
+		if !strings.HasPrefix(to, "v") {
+			to = "v" + to
+		}
+		from := current
+		if !strings.HasPrefix(from, "v") && from != "dev" {
+			from = "v" + from
+		}
+		if from == "dev" {
+			// Plausible "previous" version so the digit wheel has
+			// something interesting to cycle to/from.
+			from = "v0.0.0"
+		}
+		runEvolutionDemo(from, to, evolveSkipAnim)
+		return nil
 	}
 
 	target := strings.TrimSpace(evolvePin)
@@ -352,4 +378,21 @@ func playEvolutionAnimation(target string, skip bool) {
 	// Receipt line — the alt-screen content is gone after exit, so stamp
 	// the upgrade into normal scrollback for the user's records.
 	fmt.Println(styles.SuccessStyle.Render("✨ ") + "ailloy " + current + " → " + target)
+}
+
+// runEvolutionDemo plays the cinematic with caller-supplied versions and
+// performs no network/disk work. Drives the same evolution.Run path as a
+// real upgrade so what you see here matches what a real evolve looks like.
+func runEvolutionDemo(from, to string, skip bool) {
+	if skip {
+		styles.SetNoAnimate(true)
+		defer styles.SetNoAnimate(false)
+	}
+	played := evolution.Run(from, to)
+	if !played {
+		fmt.Println(styles.SuccessStyle.Render("✓ 🦊 ") + "demo: ailloy would evolve from " + from + " to " + to)
+		fmt.Println(styles.SubtleStyle.Render("    (cinematic suppressed — set AILLOY_DEBUG=1 for the reason)"))
+		return
+	}
+	fmt.Println(styles.SuccessStyle.Render("✨ ") + "demo: ailloy " + from + " → " + to)
 }
