@@ -70,9 +70,12 @@ Run `ailloy docs flux` for the full flux variable reference.
 
 ## In-CLI Documentation
 
-- `ailloy docs` — list available topics
+- `ailloy docs` — opens the rich documentation TUI when the docs
+  extension is installed; otherwise offers to install it (or falls back
+  to a plain glamour-rendered table)
 - `ailloy docs <topic>` — render a topic in the terminal
 - `ailloy <command> --docs` — render the command's associated topic
+- `ailloy docs --no-extension` — force the in-binary fallback
 
 For example:
 
@@ -80,3 +83,16 @@ For example:
 ailloy docs flux
 ailloy cast --docs
 ```
+
+The richer experience ships as a separate **extension** binary so the
+main `ailloy` install stays small for CI and other lean environments.
+Extensions are downloaded on demand and verified by SHA-256 checksum;
+manage them with `ailloy extensions` (alias `ext`). Install ailloy with
+the docs extension preloaded via:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nimble-giant/ailloy/main/install.sh | bash -s -- --with-docs
+brew install nimble-giant/tap/ailloy-with-docs
+```
+
+See `ailloy docs extensions/users` for the full extensions guide.

@@ -144,6 +144,36 @@ verify_checksum() {
 
 # --- Main ---
 
+# Optional flags (parsed before everything else):
+#   --with-docs   After installing ailloy, also install the docs extension
+#                 (github.com/nimble-giant/ailloy-embedded-docs) so the rich
+#                 in-CLI documentation TUI is ready immediately.
+WITH_DOCS=false
+for arg in "$@"; do
+    case "$arg" in
+        --with-docs) WITH_DOCS=true ;;
+        --help|-h)
+            cat <<'USAGE'
+Ailloy installer.
+
+Usage:
+  install.sh [flags]
+  curl -fsSL ... | bash -s -- [flags]
+
+Flags:
+  --with-docs   Install the docs extension after ailloy itself, so
+                `ailloy docs` opens the rich TUI immediately on first
+                run instead of prompting for consent.
+  --help, -h    Show this help and exit.
+
+Environment:
+  AILLOY_VERSION   Pin a specific ailloy version (defaults to latest).
+USAGE
+            exit 0
+            ;;
+    esac
+done
+
 main() {
     printf '\n\033[1;35m  %s  Ailloy Installer\033[0m\n\n' "🦊"
 
@@ -199,6 +229,23 @@ main() {
     fi
 
     success "Installed:" "${BINARY_NAME} ${version}"
+
+    # Optionally install the docs extension. Done with the freshly-
+    # installed ailloy binary so consent + manifest are recorded in the
+    # user's ~/.ailloy normally.
+    if [ "$WITH_DOCS" = "true" ]; then
+        installed_bin="${install_dir}/${BINARY_NAME}"
+        if [ -x "$installed_bin" ]; then
+            info "Extension:" "installing docs extension..."
+            if "$installed_bin" extensions install docs; then
+                success "Extension:" "docs ready"
+            else
+                warn "Extension:" "docs install failed; rerun with 'ailloy ext install docs' later"
+            fi
+        else
+            warn "Extension:" "could not exec ${installed_bin}; skipping docs install"
+        fi
+    fi
 
     # Check if install dir is on PATH
     case ":${PATH}:" in
