@@ -165,6 +165,97 @@ func TestMoveCursor_TriggersRerender(t *testing.T) {
 	}
 }
 
+func TestUpdate_HOnListFocusIsNoop(t *testing.T) {
+	m := newTestModel(t)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	m = updated.(Model)
+	if m.Focus() != FocusList {
+		t.Errorf("h on list focus should stay on list, got %v", m.Focus())
+	}
+	if m.cursor != 0 {
+		t.Errorf("h should not move cursor, got %d", m.cursor)
+	}
+}
+
+func TestUpdate_LOnBodyFocusIsNoop(t *testing.T) {
+	m := newTestModel(t)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m = updated.(Model)
+	if m.Focus() != FocusBody {
+		t.Fatalf("l should switch to body, got %v", m.Focus())
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m = updated.(Model)
+	if m.Focus() != FocusBody {
+		t.Errorf("second l should stay on body, got %v", m.Focus())
+	}
+}
+
+func TestUpdate_JOnBodyFocusScrollsViewport(t *testing.T) {
+	// Pick a long topic so the viewport actually has room to scroll.
+	m := newTestModel(t)
+	// Move cursor to "foundry" (the longest doc in the embed).
+	for m.CurrentTopic() != "foundry" && m.cursor < len(m.topics)-1 {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		m = updated.(Model)
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	beforeOffset := m.viewport.YOffset
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m = updated.(Model)
+	if m.viewport.YOffset == beforeOffset {
+		t.Errorf("j on body focus should scroll viewport down; YOffset stayed %d", beforeOffset)
+	}
+}
+
+func TestUpdate_KOnBodyFocusScrollsUp(t *testing.T) {
+	m := newTestModel(t)
+	for m.CurrentTopic() != "foundry" && m.cursor < len(m.topics)-1 {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		m = updated.(Model)
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	// Scroll down a bit, then back up with k.
+	for range 5 {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		m = updated.(Model)
+	}
+	beforeOffset := m.viewport.YOffset
+	if beforeOffset == 0 {
+		t.Skip("viewport did not scroll; topic may not be tall enough on this terminal")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m = updated.(Model)
+	if m.viewport.YOffset >= beforeOffset {
+		t.Errorf("k on body focus should scroll viewport up; before=%d after=%d", beforeOffset, m.viewport.YOffset)
+	}
+}
+
+func TestView_HighlightsActivePane(t *testing.T) {
+	m := newTestModel(t)
+	out := m.View()
+	if !strings.Contains(out, "LIST") || !strings.Contains(out, "BODY") {
+		t.Errorf("expected header to contain pane labels; got:\n%s", out)
+	}
+}
+
+func TestView_FooterChangesByFocus(t *testing.T) {
+	m := newTestModel(t)
+	listFooter := m.View()
+	if !strings.Contains(listFooter, "pick topic") {
+		t.Errorf("list-focus footer should mention 'pick topic'; got:\n%s", listFooter)
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	bodyFooter := m.View()
+	if !strings.Contains(bodyFooter, "scroll") {
+		t.Errorf("body-focus footer should mention 'scroll'; got:\n%s", bodyFooter)
+	}
+}
+
 func TestPaneWidths_RespectMinima(t *testing.T) {
 	m := New(clidocs.List())
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 20})
