@@ -73,3 +73,60 @@ func TestCommandTopic_PointsToValidTopics(t *testing.T) {
 		}
 	}
 }
+
+func TestList_DiscoversNestedTopics(t *testing.T) {
+	// docs/topics/tutorials/first-mold.md ships in the embed; ensure the
+	// recursive walk actually surfaces it so future nested docs are auto-
+	// discovered without code changes.
+	want := "topics/tutorials/first-mold"
+	topic, ok := Find(want)
+	if !ok {
+		t.Fatalf("recursive embed should expose %q via Find", want)
+	}
+	if topic.Dir != "topics/tutorials" {
+		t.Errorf("expected nested Dir 'topics/tutorials', got %q", topic.Dir)
+	}
+}
+
+func TestTree_HasDirectoriesBeforeFiles(t *testing.T) {
+	root := Tree()
+	if root == nil || len(root.Children) == 0 {
+		t.Fatal("expected a non-empty tree")
+	}
+	// Find first dir and first file indices.
+	firstFile := -1
+	firstDir := -1
+	for i, c := range root.Children {
+		if c.IsDir && firstDir == -1 {
+			firstDir = i
+		}
+		if !c.IsDir && firstFile == -1 {
+			firstFile = i
+		}
+	}
+	if firstDir == -1 {
+		t.Fatal("expected at least one directory under the tree root (topics/)")
+	}
+	if firstFile != -1 && firstDir > firstFile {
+		t.Errorf("directories should sort before files; firstDir=%d firstFile=%d", firstDir, firstFile)
+	}
+}
+
+func TestTree_NestedSlugReachable(t *testing.T) {
+	root := Tree()
+	var walk func(n *Node) bool
+	walk = func(n *Node) bool {
+		if !n.IsDir && n.Topic.Slug == "topics/tutorials/first-mold" {
+			return true
+		}
+		for _, c := range n.Children {
+			if walk(c) {
+				return true
+			}
+		}
+		return false
+	}
+	if !walk(root) {
+		t.Fatal("nested tutorial topic should be reachable through Tree()")
+	}
+}
