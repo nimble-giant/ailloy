@@ -262,12 +262,12 @@ func (m Model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
 
-// bodyContent returns either the rendered viewport or, when a render is in
-// flight, a centered branded spinner so users see immediate feedback for
-// long-loading docs (e.g. foundry.md).
+// bodyContent returns either the rendered viewport (with a thin scrollbar
+// down the right edge) or, when a render is in flight, a centered branded
+// spinner so users see immediate feedback for long-loading docs.
 func (m Model) bodyContent(width, height int) string {
 	if !m.loading {
-		return m.viewport.View()
+		return m.composeViewportWithScrollbar()
 	}
 	innerW := width - 2
 	innerH := height - 2
@@ -287,6 +287,63 @@ func (m Model) bodyContent(width, height int) string {
 		spinnerHintStyle.Render("rendering with glamour"),
 	)
 	return lipgloss.Place(innerW, innerH, lipgloss.Center, lipgloss.Center, msg)
+}
+
+// composeViewportWithScrollbar renders the viewport's current view and
+// joins it horizontally with a 1-column scrollbar. The track is dimmed,
+// the thumb is the brand orange, and both vanish when the content fits
+// entirely on screen.
+func (m Model) composeViewportWithScrollbar() string {
+	view := m.viewport.View()
+	bar := m.renderScrollbar(m.viewport.Height)
+	if bar == "" {
+		return view
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, view, bar)
+}
+
+// renderScrollbar returns a vertical scrollbar of the requested height,
+// or "" when there's nothing to scroll. The thumb height is proportional
+// to the visible fraction of the document, and its position to the
+// scroll percentage — the same math used by mainstream readers.
+func (m Model) renderScrollbar(height int) string {
+	if height <= 0 {
+		return ""
+	}
+	total := m.viewport.TotalLineCount()
+	visible := m.viewport.VisibleLineCount()
+	if total <= visible || total == 0 {
+		return ""
+	}
+
+	thumbSize := visible * height / total
+	if thumbSize < 1 {
+		thumbSize = 1
+	}
+	if thumbSize > height {
+		thumbSize = height
+	}
+	travel := height - thumbSize
+	thumbStart := 0
+	if travel > 0 {
+		thumbStart = int(float64(travel)*m.viewport.ScrollPercent() + 0.5)
+		if thumbStart > travel {
+			thumbStart = travel
+		}
+	}
+
+	var b strings.Builder
+	for i := range height {
+		if i >= thumbStart && i < thumbStart+thumbSize {
+			b.WriteString(scrollbarThumbStyle.Render("█"))
+		} else {
+			b.WriteString(scrollbarTrackStyle.Render("│"))
+		}
+		if i < height-1 {
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
 }
 
 // CurrentTopic returns the slug currently highlighted, or "" if the
@@ -497,7 +554,8 @@ func (m *Model) renderCurrent(force bool) tea.Cmd {
 
 func (m *Model) layout() {
 	_, bodyW := m.paneWidths()
-	m.viewport.Width = bodyW - 2
+	// Inner viewport width = body pane minus rounded border (2) and scrollbar (1).
+	m.viewport.Width = bodyW - 3
 	if m.viewport.Width < 1 {
 		m.viewport.Width = 1
 	}
@@ -538,7 +596,8 @@ func (m Model) bodyHeight() int {
 
 func (m Model) bodyContentWidth() int {
 	_, bodyW := m.paneWidths()
-	w := bodyW - 4
+	// Body pane − border (2) − inner padding (2) − scrollbar column (1).
+	w := bodyW - 5
 	if w < minViewportWidth {
 		w = minViewportWidth
 	}
@@ -763,6 +822,16 @@ var (
 	spinnerHintStyle = lipgloss.NewStyle().
 				Foreground(styles.Gray).
 				Italic(true)
+
+	// Reading-pane scrollbar. Thumb uses the brand orange so it stays
+	// consistent with focus borders and list highlights; the track is a
+	// muted column that disappears against most terminal backgrounds.
+	scrollbarThumbStyle = lipgloss.NewStyle().
+				Foreground(styles.Accent1)
+
+	scrollbarTrackStyle = lipgloss.NewStyle().
+				Foreground(styles.Gray).
+				Faint(true)
 
 	listRowActiveStyle = lipgloss.NewStyle().
 				Foreground(styles.White).
