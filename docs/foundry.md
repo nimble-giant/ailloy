@@ -143,6 +143,8 @@ ailloy foundry search blueprint --github-only
 
 Results from registered indexes appear first, followed by GitHub Topics results. Duplicates (same source) are collapsed, preferring the index entry.
 
+Mold names from registered indexes are namespaced as `<foundry-name>/<mold-name>`, and nested-foundry molds show their resolution chain in the origin column (e.g., `index:nimble-giant via nimble-giant → replicated`). See [Nested Foundries](#nested-foundries) below.
+
 ### Making Your Mold Discoverable
 
 To make your mold appear in GitHub Topics search results, add the `ailloy-mold` topic to your GitHub repository:
@@ -173,8 +175,11 @@ ailloy foundry list
 ailloy foundry update
 
 # Cast every mold listed by a foundry (alias: cast-all)
+# Walks nested foundries transitively — pulls in molds from any
+# foundries that the named foundry references in its `foundries:` field.
 # Skips molds already in the target lockfile unless --force.
-# Supports -g/--global, --with-workflows, --dry-run, --force, --claude-plugin.
+# Pass --shallow to install only the named foundry's direct molds.
+# Supports -g/--global, --with-workflows, --dry-run, --force, --claude-plugin, --shallow.
 ailloy foundry install foundry
 
 # Install every mold from a foundry as Claude Code plugins
@@ -304,6 +309,10 @@ molds:
     source: github.com/my-org/mold
     description: "AI workflow blanks"
     tags: ["workflows", "claude"]
+foundries:
+  - name: child-foundry
+    source: github.com/my-org/another-foundry
+    description: "Nested foundry pulled in transitively"
 ```
 
 ### Fields
@@ -320,6 +329,9 @@ molds:
 | `molds[].source` | Yes | Mold source reference (`host/owner/repo`) |
 | `molds[].description` | No | Short description for search results |
 | `molds[].tags` | No | Searchable tags/categories |
+| `foundries[].name` | No | Display label for the nested foundry (informational) |
+| `foundries[].source` | Yes | Source URL of the nested foundry index |
+| `foundries[].description` | No | Short description |
 
 ### Hosting a Foundry Index
 
@@ -342,6 +354,59 @@ To add your mold to the official Ailloy foundry index:
 1. Fork the official index repository
 2. Add your mold entry to `foundry.yaml`
 3. Submit a pull request with a description of your mold
+
+If you maintain your own foundry with multiple molds, contributing it as a single nested-foundry entry is usually preferable to per-mold entries — see the next section.
+
+## Nested Foundries
+
+A foundry can list other foundries under a top-level `foundries:` field. When a parent foundry is fetched, every child foundry it lists is resolved transitively, and all the children's molds become discoverable, searchable, and installable through the parent.
+
+This means a foundry author who wants their molds surfaced through the official `nimble-giant/foundry` only needs to add a single entry — once — pointing at their own foundry. Every mold they add to their own foundry afterwards flows into the official one automatically the next time someone runs `ailloy foundry update`. No more per-mold PRs into the parent.
+
+### Schema
+
+Add a `foundries:` block to a `foundry.yaml`:
+
+```yaml
+apiVersion: v1
+kind: foundry-index
+name: nimble-giant
+molds:
+  - name: my-direct-mold
+    source: github.com/nimble-giant/my-direct-mold
+foundries:
+  - name: replicated
+    source: github.com/kriscoleman/replicated-foundry
+    description: "Kris's molds"
+```
+
+### Behavior
+
+- **Transitive by default.** `ailloy foundry search`, `ailloy foundry list`, `ailloy foundry update`, and `ailloy foundry install` all walk children automatically.
+- **Mold names are namespaced.** Every mold from a registered foundry appears in search and install output as `<foundry-name>/<mold-name>`. The foundry name comes from the `name:` field of the foundry that *owns* the mold (the immediate parent, not the root).
+- **Resolution chain is shown.** Search results for nested molds include a `via parent → child` annotation so it's clear which root surfaced them. `ailloy foundry list` prints a tree view of nested foundries beneath each registered root.
+- **Cycles are silently broken.** If foundry A lists B, and B lists A back, the visited-set short-circuits — no infinite loop, no warning.
+- **Diamond resolution is deduplicated.** A child reachable from two parents is fetched once and its molds appear once.
+- **Child fetch failures degrade gracefully.** If a nested foundry is unreachable, the parent's resolution still succeeds; `ailloy foundry update` prints a warning per failed child.
+- **Foundry-name collisions are fatal.** If two distinct source URLs in the resolved tree declare the same `name:` field, resolution errors out with both source URLs in the message — the upstream conflict must be fixed.
+
+### Opting out (`--shallow`)
+
+`ailloy foundry install --shallow <name>` casts only the named foundry's direct molds, skipping nested ones. Useful when you want only what a parent maintainer has authored themselves and not the transitively-aggregated set.
+
+```bash
+# Install everything the official foundry transitively aggregates (default)
+ailloy foundry install foundry
+
+# Install only the official foundry's own direct molds
+ailloy foundry install foundry --shallow
+```
+
+If you `--shallow` install a foundry that has only a `foundries:` block and no direct `molds:`, the CLI prints a hint that the foundry is acting purely as an aggregator and tells you to drop `--shallow`.
+
+### Cache implications
+
+`ailloy foundry update` walks every nested foundry and writes each one's `foundry.yaml` into the on-disk cache. `ailloy foundry search` reads from that cache, so running `update` periodically keeps offline search fast and complete. If a search hits a child that hasn't been cached yet, it falls back to a one-off network fetch transparently.
 
 ## Downloading Without Installing
 
@@ -593,3 +658,4 @@ Remote mold references work with all mold-consuming commands:
 | `foundry list` | `ailloy foundry list`                                                     |
 | `foundry remove` | `ailloy foundry remove nimble-foundry`                              |
 | `foundry update` | `ailloy foundry update`                                             |
+| `foundry install` | `ailloy foundry install foundry` or `ailloy foundry install foundry --shallow` |

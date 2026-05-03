@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
@@ -83,6 +84,7 @@ type UpdateFoundryReport struct {
 	MoldCount int
 	Persisted bool // false for the virtual default
 	Err       error
+	Warnings  []index.ResolutionWarning
 }
 
 // UpdateFoundriesCore fetches every effective foundry, persists status/timestamp
@@ -107,15 +109,33 @@ func UpdateFoundriesCore(cfg *index.Config) ([]UpdateFoundryReport, error) {
 		targets = append([]target{{entry: &official, persisted: false}}, targets...)
 	}
 
+	// Network-only lookup. Fetcher writes each fetched index to disk on
+	// success, so resolving the tree also populates the on-disk cache that
+	// `foundry search` reads from.
+	networkLookup := func(source string) (*index.Index, error) {
+		url := index.NormalizeFoundryURL(source)
+		entry := &index.FoundryEntry{URL: url, Type: index.DetectType(url)}
+		return fetcher.FetchIndex(entry)
+	}
+
 	out := make([]UpdateFoundryReport, 0, len(targets))
 	for _, t := range targets {
 		report := UpdateFoundryReport{Name: t.entry.Name, URL: t.entry.URL, Persisted: t.persisted}
-		idx, err := fetcher.FetchIndex(t.entry)
-		if err != nil {
-			report.Err = err
-		} else {
-			report.MoldCount = len(idx.Molds)
+
+		r := index.NewResolver(networkLookup)
+		root, _, rerr := r.Resolve(t.entry.URL)
+		if rerr != nil {
+			report.Err = rerr
+			out = append(out, report)
+			continue
 		}
+		report.MoldCount = len(root.Index.Molds)
+		report.Warnings = r.Warnings()
+
+		// Mirror the metadata Fetcher would have set on a direct call.
+		t.entry.LastUpdated = time.Now().UTC()
+		t.entry.Status = "ok"
+
 		out = append(out, report)
 	}
 	return out, nil
@@ -128,15 +148,18 @@ type InstallFoundryOptions struct {
 	DryRun        bool // report what would be installed; don't touch disk
 	Force         bool // re-cast even if already installed in the target lockfile
 	ClaudePlugin  bool // package each mold as a Claude Code plugin
+	Shallow       bool // install only the root foundry's molds; skip nested foundries
 }
 
 // InstallFoundryReport is the per-mold result of an InstallFoundryCore run.
 type InstallFoundryReport struct {
 	Name    string
 	Source  string
-	Skipped bool   // true when already installed and !Force
-	Err     error  // non-nil if cast failed for this mold
-	Version string // populated on success or skip (from CastResult / lockfile)
+	Foundry string   // owning foundry name (e.g., "replicated")
+	Chain   []string // resolution chain from root to owning foundry, excluding owner ([] when root-owned)
+	Skipped bool     // true when already installed and !Force
+	Err     error    // non-nil if cast failed for this mold
+	Version string   // populated on success or skip (from CastResult / lockfile)
 }
 
 // ErrFoundryNotFound is returned when nameOrURL doesn't match any effective
@@ -168,21 +191,28 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 		return nil, fmt.Errorf("%w: %q", ErrFoundryNotFound, nameOrURL)
 	}
 
-	idx, err := index.LoadCachedIndex(cacheDir, match)
+	fetcher, ferr := index.NewFetcher(defaultGitRunner())
+	if ferr != nil {
+		return nil, ferr
+	}
+	lookup := index.CacheFirstLookup(cacheDir, fetcher)
+
+	r := index.NewResolver(lookup)
+	root, allMolds, err := r.Resolve(match.URL)
 	if err != nil {
-		// Try to populate the cache once before giving up.
-		git := defaultGitRunner()
-		fetcher, ferr := index.NewFetcher(git)
-		if ferr != nil {
-			return nil, fmt.Errorf("loading cached index for %s: %w", match.Name, err)
+		return nil, fmt.Errorf("resolving foundry %s: %w", match.Name, err)
+	}
+
+	// Build the working set of molds to install.
+	var molds []index.ResolvedMold
+	if opts.Shallow {
+		for _, m := range allMolds {
+			if m.Foundry == root {
+				molds = append(molds, m)
+			}
 		}
-		if _, fetchErr := fetcher.FetchIndex(match); fetchErr != nil {
-			return nil, fmt.Errorf("fetching foundry index %s: %w", match.Name, fetchErr)
-		}
-		idx, err = index.LoadCachedIndex(cacheDir, match)
-		if err != nil {
-			return nil, fmt.Errorf("loading cached index for %s: %w", match.Name, err)
-		}
+	} else {
+		molds = allMolds
 	}
 
 	// Read target lockfile to spot already-installed sources.
@@ -199,11 +229,17 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 		}
 	}
 
-	out := make([]InstallFoundryReport, 0, len(idx.Molds))
-	for _, m := range idx.Molds {
-		report := InstallFoundryReport{Name: m.Name, Source: m.Source}
+	out := make([]InstallFoundryReport, 0, len(molds))
+	for _, m := range molds {
+		chain := append([]string(nil), m.Foundry.Parents...)
+		report := InstallFoundryReport{
+			Name:    m.Entry.Name,
+			Source:  m.Entry.Source,
+			Foundry: m.Foundry.Index.Name,
+			Chain:   chain,
+		}
 
-		if v, already := installed[strings.ToLower(m.Source)]; already && !opts.Force {
+		if v, already := installed[strings.ToLower(m.Entry.Source)]; already && !opts.Force {
 			report.Skipped = true
 			report.Version = v
 			out = append(out, report)
@@ -214,7 +250,7 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 			continue
 		}
 
-		castRes, cerr := CastMold(ctx, m.Source, CastOptions{
+		castRes, cerr := CastMold(ctx, m.Entry.Source, CastOptions{
 			Global:        opts.Global,
 			WithWorkflows: opts.WithWorkflows,
 			ClaudePlugin:  opts.ClaudePlugin,
@@ -222,7 +258,7 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 		if cerr != nil {
 			report.Err = cerr
 		} else {
-			report.Version = castRes.MoldName // best-effort; real version sits in lockfile
+			report.Version = castRes.MoldName
 		}
 		out = append(out, report)
 	}

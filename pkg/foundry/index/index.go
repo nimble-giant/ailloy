@@ -9,12 +9,13 @@ import (
 
 // Index represents a parsed foundry.yaml index manifest.
 type Index struct {
-	APIVersion  string      `yaml:"apiVersion"`
-	Kind        string      `yaml:"kind"`
-	Name        string      `yaml:"name"`
-	Description string      `yaml:"description,omitempty"`
-	Author      Author      `yaml:"author,omitempty"`
-	Molds       []MoldEntry `yaml:"molds"`
+	APIVersion  string       `yaml:"apiVersion"`
+	Kind        string       `yaml:"kind"`
+	Name        string       `yaml:"name"`
+	Description string       `yaml:"description,omitempty"`
+	Author      Author       `yaml:"author,omitempty"`
+	Molds       []MoldEntry  `yaml:"molds"`
+	Foundries   []FoundryRef `yaml:"foundries,omitempty"`
 }
 
 // Author represents the author of a foundry index.
@@ -29,6 +30,15 @@ type MoldEntry struct {
 	Source      string   `yaml:"source"`
 	Description string   `yaml:"description,omitempty"`
 	Tags        []string `yaml:"tags,omitempty"`
+}
+
+// FoundryRef is a reference from one foundry to another nested foundry.
+// The Name is informational; the authoritative namespace key is the Name
+// of the fetched child index.
+type FoundryRef struct {
+	Name        string `yaml:"name"`
+	Source      string `yaml:"source"`
+	Description string `yaml:"description,omitempty"`
 }
 
 // ParseIndex parses raw YAML bytes into an Index.
@@ -60,6 +70,12 @@ func (idx *Index) Validate() error {
 		}
 		if m.Source == "" {
 			errs = append(errs, fmt.Sprintf("molds[%d].source is required", i))
+		}
+	}
+
+	for i, f := range idx.Foundries {
+		if f.Source == "" {
+			errs = append(errs, fmt.Sprintf("foundries[%d].source is required", i))
 		}
 	}
 

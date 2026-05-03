@@ -68,39 +68,92 @@ func Search(cfg *Config, query string, opts SearchOptions) ([]SearchResult, erro
 	return results, nil
 }
 
-// searchIndexes searches all cached foundry indexes for matching molds.
+// searchIndexes searches all cached foundry indexes for matching molds,
+// transitively resolving any nested foundries declared in their `foundries:`
+// fields. Lookups are cache-first; child foundries not yet cached fall back
+// to the network so a freshly-added parent works without an explicit update.
 func searchIndexes(cfg *Config, query string) ([]SearchResult, error) {
 	cacheDir, err := IndexCacheDir()
 	if err != nil {
 		return nil, err
 	}
+	git := defaultGitRunnerForSearch()
+	fetcher := NewFetcherWithCacheDir(git, cacheDir)
+	lookup := CacheFirstLookup(cacheDir, fetcher)
+	return searchWithLookup(cfg, query, lookup)
+}
 
+// searchWithLookup is the testable core: given an explicit IndexLookup, walk
+// every registered root via a fresh Resolver and return matching molds with
+// their resolution chain.
+func searchWithLookup(cfg *Config, query string, lookup IndexLookup) ([]SearchResult, error) {
 	var results []SearchResult
 	q := strings.ToLower(query)
 
 	for _, entry := range cfg.EffectiveFoundries() {
-		idx, err := LoadCachedIndex(cacheDir, &entry)
-		if err != nil {
-			continue // Skip indexes that aren't cached yet.
-		}
-
 		verified := IsOfficialFoundry(entry.URL)
-		for _, m := range idx.Molds {
-			if matchesMold(m, q) {
-				results = append(results, SearchResult{
-					Name:        m.Name,
-					Source:      m.Source,
-					Description: m.Description,
-					Tags:        m.Tags,
-					Origin:      "index:" + entry.Name,
-					URL:         sourceToURL(m.Source),
-					Verified:    verified,
-				})
+		r := NewResolver(lookup)
+		root, molds, err := r.Resolve(entry.URL)
+		if err != nil {
+			// Root failed (e.g., not cached and offline). Skip — preserves
+			// the existing "skip indexes that aren't cached yet" behavior.
+			continue
+		}
+		for _, m := range molds {
+			if !matchesMold(m.Entry, q) {
+				continue
 			}
+			results = append(results, SearchResult{
+				Name:        m.Foundry.Index.Name + "/" + m.Entry.Name,
+				Source:      m.Entry.Source,
+				Description: m.Entry.Description,
+				Tags:        m.Entry.Tags,
+				Origin:      formatOrigin(root, m.Foundry),
+				URL:         sourceToURL(m.Entry.Source),
+				Verified:    verified && m.Foundry == root,
+			})
 		}
 	}
-
 	return results, nil
+}
+
+// formatOrigin renders the resolution chain. Root molds get "index:<root>";
+// nested molds get "index:<root> via <parent> → <child>".
+func formatOrigin(root, owner *ResolvedFoundry) string {
+	base := "index:" + root.Index.Name
+	if owner == root {
+		return base
+	}
+	chain := append(append([]string(nil), owner.Parents...), owner.Index.Name)
+	return base + " via " + strings.Join(chain, " → ")
+}
+
+// CacheFirstLookup returns an IndexLookup that reads the cache when present
+// and falls back to the network (via Fetcher) otherwise. The synthesized
+// FoundryEntry mirrors what `foundry add` would build for the same URL.
+// Used by both search and the foundry list command.
+func CacheFirstLookup(cacheDir string, fetcher *Fetcher) IndexLookup {
+	return func(source string) (*Index, error) {
+		url := NormalizeFoundryURL(source)
+		entry := &FoundryEntry{
+			URL:  url,
+			Type: DetectType(url),
+		}
+		if idx, err := LoadCachedIndex(cacheDir, entry); err == nil {
+			return idx, nil
+		}
+		return fetcher.FetchIndex(entry)
+	}
+}
+
+// defaultGitRunnerForSearch returns a GitRunner used by the cache-fallback
+// fetcher inside searchIndexes. Defined locally to avoid importing
+// internal/commands from the index package.
+func defaultGitRunnerForSearch() GitRunner {
+	return func(args ...string) ([]byte, error) {
+		cmd := exec.Command("git", args...) // #nosec G204 -- args are constructed internally
+		return cmd.CombinedOutput()
+	}
 }
 
 // matchesMold checks if a mold entry matches the search query.
