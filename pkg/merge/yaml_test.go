@@ -133,3 +133,49 @@ func TestLoadYAML_DuplicateKeysLastWins(t *testing.T) {
 		t.Errorf("dump produced invalid YAML with duplicates: %v\nout: %s", err, out)
 	}
 }
+
+func TestDumpYAML_AmbiguousStringRoundTrips(t *testing.T) {
+	// goccy/go-yaml's default marshaler leaves several string scalars bare
+	// that should be quoted — document-separator tokens "---"/"...",
+	// whitespace-only strings, strings containing newlines — so re-parsing
+	// the dump yields a different value (usually nil or ""). dumpYAML
+	// detects these and force-quotes them so round-trip is stable.
+	for _, s := range []string{"---", "...", "\n", "\t", "\n\n", "a\n", "a\nb\n"} {
+		n := &node{kind: kindScalar, scalar: s}
+		out, err := dumpYAML(n)
+		if err != nil {
+			t.Fatalf("dumpYAML(%q): %v", s, err)
+		}
+		n2, err := loadYAML(out)
+		if err != nil {
+			t.Fatalf("loadYAML(%q dump): %v", s, err)
+		}
+		got, ok := n2.scalar.(string)
+		if !ok || got != s {
+			t.Errorf("round trip lost value: input=%q dump=%q parsed=%#v", s, out, n2.scalar)
+		}
+	}
+}
+
+func TestDumpYAML_MergeKeyRoundTrips(t *testing.T) {
+	// goccy/go-yaml emits the YAML merge key "<<" bare against a null value
+	// ("<<: null"), which then fails to re-parse. dumpYAML force-quotes such
+	// keys via a custom map marshaler so round-trip is stable. We construct
+	// the node directly because goccy/go-yaml refuses some "<<:" inputs.
+	n := &node{
+		kind:   kindMap,
+		keys:   []string{"<<"},
+		fields: map[string]*node{"<<": {kind: kindScalar, scalar: nil}},
+	}
+	out, err := dumpYAML(n)
+	if err != nil {
+		t.Fatalf("dumpYAML: %v", err)
+	}
+	n2, err := loadYAML(out)
+	if err != nil {
+		t.Fatalf("re-parse failed: %v\nout: %s", err, out)
+	}
+	if _, exists := n2.fields["<<"]; !exists {
+		t.Errorf("<< key lost: out=%s n2.keys=%v", out, n2.keys)
+	}
+}
