@@ -96,17 +96,21 @@ func (m *InstalledManifest) FindAllBySource(source string) []*InstalledEntry {
 	return out
 }
 
-// FindByName returns the entry matching the given name, or nil.
-func (m *InstalledManifest) FindByName(name string) *InstalledEntry {
+// FindAllByName returns every entry matching the given name. Multiple matches
+// are possible because two molds at different subpaths in the same foundry
+// repo may declare the same name in their mold.yaml; callers must handle the
+// ambiguous case rather than silently picking the first match.
+func (m *InstalledManifest) FindAllByName(name string) []*InstalledEntry {
 	if m == nil {
 		return nil
 	}
+	var out []*InstalledEntry
 	for i := range m.Molds {
 		if m.Molds[i].Name == name {
-			return &m.Molds[i]
+			out = append(out, &m.Molds[i])
 		}
 	}
-	return nil
+	return out
 }
 
 // WriteInstalledManifest marshals and writes the manifest, creating parent dirs.

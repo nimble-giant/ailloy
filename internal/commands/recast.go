@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
@@ -10,13 +11,17 @@ import (
 )
 
 var recastCmd = &cobra.Command{
-	Use:     "recast [name]",
+	Use:     "recast [name|source[//subpath]]",
 	Aliases: []string{"upgrade"},
 	Short:   "Re-resolve installed molds to newer versions",
 	Long: `Re-resolve installed molds to newer versions (alias: upgrade).
 
 Reads .ailloy/installed.yaml and refreshes each mold to its latest matching
 version. If ailloy.lock exists, also updates lock entries in lockstep.
+
+A foundry repo may host multiple molds at different subpaths that declare the
+same name. Pass the full ref (e.g. github.com/owner/repo//molds/shortcut) to
+disambiguate; bare names are accepted when only one matching entry exists.
 
 Use --dry-run to preview changes without applying them.`,
 	Args: cobra.MaximumNArgs(1),
@@ -57,12 +62,12 @@ func runRecast(_ *cobra.Command, args []string) error {
 			styles.CodeStyle.Render("ailloy cast"))
 	}
 
-	// Optional name filter.
+	// Optional filter: bare name, or full source[//subpath] ref.
 	entries := manifest.Molds
 	if len(args) == 1 {
-		match := manifest.FindByName(args[0])
-		if match == nil {
-			return fmt.Errorf("mold %q not found in installed manifest", args[0])
+		match, err := resolveRecastTarget(manifest, args[0])
+		if err != nil {
+			return err
 		}
 		entries = []foundry.InstalledEntry{*match}
 	}
@@ -179,4 +184,43 @@ func runRecast(_ *cobra.Command, args []string) error {
 		fmt.Println(styles.SuccessBanner("Recast complete!"))
 	}
 	return nil
+}
+
+// resolveRecastTarget interprets the user's positional argument as either a
+// bare mold name or a full source[//subpath] reference, and returns the
+// single matching installed entry. A bare name with multiple matches (same
+// name declared in two molds at different subpaths in the same foundry) is
+// rejected with a disambiguation list so the user can re-run with the full
+// ref.
+func resolveRecastTarget(manifest *foundry.InstalledManifest, raw string) (*foundry.InstalledEntry, error) {
+	// If the arg parses as a remote-style reference, look up by (source, subpath).
+	if foundry.IsRemoteReference(raw) {
+		ref, err := foundry.ParseReference(raw)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %q: %w", raw, err)
+		}
+		match := manifest.FindBySource(ref.CacheKey(), ref.Subpath)
+		if match == nil {
+			return nil, fmt.Errorf("mold %q not found in installed manifest", raw)
+		}
+		return match, nil
+	}
+
+	matches := manifest.FindAllByName(raw)
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("mold %q not found in installed manifest", raw)
+	case 1:
+		return matches[0], nil
+	default:
+		var lines []string
+		for _, m := range matches {
+			ref := m.Source
+			if m.Subpath != "" {
+				ref += "//" + m.Subpath
+			}
+			lines = append(lines, "  - "+ref)
+		}
+		return nil, fmt.Errorf("multiple installed molds named %q; specify the full ref:\n%s", raw, strings.Join(lines, "\n"))
+	}
 }
