@@ -179,6 +179,77 @@ func TestLockFile_UpsertEntry_SameSourceDifferentSubpaths(t *testing.T) {
 	}
 }
 
+func TestLockFile_RoundTripIngotsAndOres(t *testing.T) {
+	lf := &LockFile{
+		APIVersion: "v1",
+		Molds:      []LockEntry{{Name: "m", Source: "g/m", Version: "1.0.0"}},
+		Ingots:     []LockEntry{{Name: "ig", Source: "g/ig", Version: "1.0.0"}},
+		Ores:       []LockEntry{{Name: "or", Source: "g/or", Version: "1.0.0"}},
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ailloy.lock")
+	if err := WriteLockFile(path, lf); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadLockFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Molds) != 1 || len(got.Ingots) != 1 || len(got.Ores) != 1 {
+		t.Errorf("counts: molds=%d ingots=%d ores=%d", len(got.Molds), len(got.Ingots), len(got.Ores))
+	}
+}
+
+func TestLockFile_BackCompat_OldMoldsOnly(t *testing.T) {
+	old := []byte(`apiVersion: v1
+molds:
+  - name: m
+    source: g/m
+    version: 1.0.0
+`)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ailloy.lock")
+	if err := os.WriteFile(path, old, 0644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadLockFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Molds) != 1 {
+		t.Errorf("molds: %+v", got.Molds)
+	}
+	if len(got.Ingots) != 0 || len(got.Ores) != 0 {
+		t.Errorf("expected empty Ingots/Ores: %+v / %+v", got.Ingots, got.Ores)
+	}
+}
+
+func TestLockFile_UpsertArtifactLockIdempotent(t *testing.T) {
+	lf := &LockFile{APIVersion: "v1"}
+	e := LockEntry{Name: "status", Source: "g/status-ore", Version: "1.0.0"}
+	lf.UpsertArtifactLock("ore", e)
+	lf.UpsertArtifactLock("ore", LockEntry{Name: "status", Source: "g/status-ore", Version: "1.1.0"})
+	if len(lf.Ores) != 1 {
+		t.Fatalf("len = %d, want 1: %+v", len(lf.Ores), lf.Ores)
+	}
+	if lf.Ores[0].Version != "1.1.0" {
+		t.Errorf("version should update: %+v", lf.Ores[0])
+	}
+}
+
+func TestLockFile_All_YieldsAllKinds(t *testing.T) {
+	lf := &LockFile{
+		APIVersion: "v1",
+		Molds:      []LockEntry{{Name: "m"}},
+		Ingots:     []LockEntry{{Name: "ig"}},
+		Ores:       []LockEntry{{Name: "or"}},
+	}
+	all := lf.All()
+	if len(all) != 3 || all[0].Kind != "mold" || all[1].Kind != "ingot" || all[2].Kind != "ore" {
+		t.Errorf("all: %+v", all)
+	}
+}
+
 func TestLockFile_OldFilesFieldIgnored(t *testing.T) {
 	// Pre-migration locks may have files: / fileHashes: keys. With the schema
 	// move, those fields no longer exist on LockEntry — YAML unmarshal must
