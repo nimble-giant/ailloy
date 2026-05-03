@@ -108,6 +108,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Focus-toggle keys work in both states so vim-style h/l always
+		// produces visible movement instead of becoming a no-op when the
+		// user is already on the destination pane.
+		switch {
+		case key.Matches(msg, m.keys.FocusBody):
+			if m.focus == FocusList {
+				m.focus = FocusBody
+				return m, nil
+			}
+		case key.Matches(msg, m.keys.FocusList):
+			if m.focus == FocusBody {
+				m.focus = FocusList
+				return m, nil
+			}
+		}
+
 		if m.focus == FocusList {
 			switch {
 			case key.Matches(msg, m.keys.Up):
@@ -116,20 +132,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keys.Down):
 				m.moveCursor(1)
 				return m, nil
-			case key.Matches(msg, m.keys.FocusBody):
-				m.focus = FocusBody
-				return m, nil
 			}
-		} else {
-			switch {
-			case key.Matches(msg, m.keys.FocusList):
-				m.focus = FocusList
-				return m, nil
-			}
-			var cmd tea.Cmd
-			m.viewport, cmd = m.viewport.Update(msg)
-			return m, cmd
+			return m, nil
 		}
+
+		// Body focus: handle vim scroll keys explicitly so we don't depend
+		// on viewport's default keymap matching, then forward the rest
+		// (pgup/pgdn/space/u/d/etc) to the viewport.
+		switch {
+		case key.Matches(msg, m.keys.Up):
+			m.viewport.ScrollUp(1)
+			return m, nil
+		case key.Matches(msg, m.keys.Down):
+			m.viewport.ScrollDown(1)
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
@@ -315,16 +335,43 @@ func (m Model) renderHeader() string {
 		Bold(true).
 		Foreground(styles.Primary1).
 		Render(" ailloy docs ")
+
+	listLabel := paneLabel("LIST", m.focus == FocusList)
+	bodyLabel := paneLabel("BODY", m.focus == FocusBody)
+	focusInfo := listLabel + " " + bodyLabel
+
 	right := ""
 	if len(m.topics) > 0 {
 		t := m.topics[m.cursor]
-		right = styles.SubtleStyle.Render(fmt.Sprintf(" %s — %s ", t.Title, t.Summary))
+		summary := fmt.Sprintf(" %s — %s ", t.Title, t.Summary)
+		if m.focus == FocusBody {
+			summary = fmt.Sprintf(" %s — %3.0f%% ", t.Title, m.viewport.ScrollPercent()*100)
+		}
+		right = styles.SubtleStyle.Render(summary)
 	}
-	gap := m.width - lipgloss.Width(title) - lipgloss.Width(right)
+
+	gap := m.width - lipgloss.Width(title) - lipgloss.Width(focusInfo) - lipgloss.Width(right) - 1
 	if gap < 1 {
 		gap = 1
 	}
-	return title + strings.Repeat(" ", gap) + right
+	return title + " " + focusInfo + strings.Repeat(" ", gap) + right
+}
+
+// paneLabel renders a small "[LIST]" / "[BODY]" pill that highlights the
+// currently focused pane so the user always knows which keys do what.
+func paneLabel(name string, active bool) string {
+	style := lipgloss.NewStyle().Padding(0, 1)
+	if active {
+		style = style.
+			Foreground(lipgloss.Color("0")).
+			Background(styles.Primary1).
+			Bold(true)
+	} else {
+		style = style.
+			Foreground(styles.Primary2).
+			Faint(true)
+	}
+	return style.Render(name)
 }
 
 func (m Model) renderFooter() string {
@@ -339,7 +386,12 @@ func (m Model) renderFooter() string {
 		}
 		return styles.SubtleStyle.Render(" " + strings.Join(help, "  ·  ") + " ")
 	}
-	hint := "↑/↓ navigate  ·  →/enter read  ·  ←/esc list  ·  ?: help  ·  q: quit"
+	var hint string
+	if m.focus == FocusList {
+		hint = "j/k or ↑/↓ pick topic  ·  l/→/enter read  ·  ?: help  ·  q: quit"
+	} else {
+		hint = "j/k or ↑/↓ scroll  ·  pgup/pgdn page  ·  h/←/esc back to list  ·  q: quit"
+	}
 	return styles.SubtleStyle.Render(" " + hint + " ")
 }
 
