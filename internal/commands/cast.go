@@ -40,13 +40,14 @@ Use -g/--global to install into the user's home directory (~/) instead.`,
 }
 
 var (
-	withWorkflows        bool
-	castGlobal           bool
-	castSetFlags         []string
-	castValFiles         []string
-	castClaudePluginFlag bool
-	castPluginName       string
-	castPluginVer        string
+	withWorkflows                bool
+	castGlobal                   bool
+	castSetFlags                 []string
+	castValFiles                 []string
+	castClaudePluginFlag         bool
+	castPluginName               string
+	castPluginVer                string
+	castForceReplaceOnParseError bool
 	// castSilent suppresses interactive output from copyResolvedFiles and
 	// related helpers. Set by CastMold (the programmatic core used by the
 	// foundries TUI) so per-file "✅ Created" lines don't corrupt the
@@ -64,6 +65,10 @@ func init() {
 	castCmd.Flags().BoolVar(&castClaudePluginFlag, "claude-plugin", false, "package the rendered mold as a Claude Code plugin instead of installing blanks at their cast destinations")
 	castCmd.Flags().StringVar(&castPluginName, "plugin-name", "", "override the plugin name (defaults to the mold's name; requires a plugin output flag such as --claude-plugin)")
 	castCmd.Flags().StringVar(&castPluginVer, "plugin-version", "", "override the plugin version (defaults to the mold's version; requires a plugin output flag such as --claude-plugin)")
+	castCmd.Flags().BoolVar(&castForceReplaceOnParseError,
+		"force-replace-on-parse-error",
+		false,
+		"if a destination uses strategy: merge but is unparseable, replace it instead of erroring")
 }
 
 func runCast(_ *cobra.Command, args []string) error {
