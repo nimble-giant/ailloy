@@ -102,7 +102,7 @@ func writeAll(destPath string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(destPath), 0750); err != nil { // #nosec G301 -- project directories need group read access
 		return fmt.Errorf("create dir for %s: %w", destPath, err)
 	}
-	//#nosec G306 -- mold outputs need to be readable
+	//#nosec G306,G703 -- mold outputs need to be readable; destPath is caller-controlled cast destination
 	if err := os.WriteFile(destPath, data, 0644); err != nil {
 		return fmt.Errorf("write %s: %w", destPath, err)
 	}
