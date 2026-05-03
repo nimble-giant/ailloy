@@ -144,6 +144,7 @@ var removeCmd = &cobra.Command{
 
 Available subcommands:
   foundry    Remove a registered foundry index
+  ingot      Remove an installed ingot
   ore        Remove an installed ore`,
 }
 
@@ -152,6 +153,13 @@ var removeFoundrySubCmd = &cobra.Command{
 	Short: "Remove a registered foundry index",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runFoundryRemove,
+}
+
+var removeIngotSubCmd = &cobra.Command{
+	Use:   "ingot <name>",
+	Short: "Remove an installed ingot",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runIngotRemove,
 }
 
 var removeOreSubCmd = &cobra.Command{
@@ -192,6 +200,10 @@ func init() {
 	removeOreSubCmd.Flags().BoolVar(&oreRemoveForce, "force", false, "remove even if other molds depend on this ore")
 	removeOreSubCmd.Flags().BoolVar(&oreRemoveGlobal, "global", false, "remove from ~/.ailloy/ores/ instead of ./.ailloy/ores/")
 
+	// Flags for bidirectional "remove ingot" must mirror "ingot remove" flags.
+	removeIngotSubCmd.Flags().BoolVar(&ingotRemoveForce, "force", false, "remove even if other molds depend on this ingot")
+	removeIngotSubCmd.Flags().BoolVar(&ingotRemoveGlobal, "global", false, "remove from ~/.ailloy/ingots/ instead of ./.ailloy/ingots/")
+
 	// search <noun>
 	rootCmd.AddCommand(searchCmd)
 	searchCmd.AddCommand(searchFoundrySubCmd)
@@ -221,6 +233,7 @@ func init() {
 	// remove <noun>
 	rootCmd.AddCommand(removeCmd)
 	removeCmd.AddCommand(removeFoundrySubCmd)
+	removeCmd.AddCommand(removeIngotSubCmd)
 	removeCmd.AddCommand(removeOreSubCmd)
 
 	// update <noun>

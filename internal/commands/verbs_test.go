@@ -45,3 +45,14 @@ func TestVerbs_OreRemoveRegistered(t *testing.T) {
 		t.Errorf("'remove ore' verb not registered: %v", err)
 	}
 }
+
+func TestVerbs_RemoveIngotRegistered(t *testing.T) {
+	removeCmd, _, err := rootCmd.Find([]string{"remove"})
+	if err != nil {
+		t.Fatalf("'remove' command not found: %v", err)
+	}
+	ingotSubCmd, _, err := removeCmd.Find([]string{"ingot"})
+	if err != nil || ingotSubCmd == nil {
+		t.Errorf("'remove ingot' verb not registered: %v", err)
+	}
+}
