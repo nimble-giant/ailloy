@@ -256,6 +256,24 @@ func TestArtifact_UpsertIdempotent(t *testing.T) {
 	}
 }
 
+func TestArtifact_UpsertDistinctSubpathsCoexist(t *testing.T) {
+	m := &InstalledManifest{APIVersion: "v1"}
+	m.UpsertArtifact("ore", ArtifactEntry{Name: "a", Source: "g/foundry", Subpath: "ore-a", Version: "1.0.0"})
+	m.UpsertArtifact("ore", ArtifactEntry{Name: "b", Source: "g/foundry", Subpath: "ore-b", Version: "1.0.0"})
+	if len(m.Ores) != 2 {
+		t.Fatalf("two distinct subpaths should coexist; got %d: %+v", len(m.Ores), m.Ores)
+	}
+}
+
+func TestArtifact_UpsertDistinctAliasesCoexist(t *testing.T) {
+	m := &InstalledManifest{APIVersion: "v1"}
+	m.UpsertArtifact("ore", ArtifactEntry{Name: "status", Source: "g/status-ore", Version: "1.0.0"})
+	m.UpsertArtifact("ore", ArtifactEntry{Name: "status", Source: "g/status-ore", Version: "1.0.0", Alias: "github_status"})
+	if len(m.Ores) != 2 {
+		t.Fatalf("alias variant should coexist with canonical; got %d: %+v", len(m.Ores), m.Ores)
+	}
+}
+
 func TestArtifact_RemoveDependent_EmptyTriggersOrphan(t *testing.T) {
 	m := &InstalledManifest{
 		APIVersion: "v1",

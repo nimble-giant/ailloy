@@ -126,13 +126,17 @@ func (m *InstalledManifest) FindByName(name string) *InstalledEntry {
 	return nil
 }
 
-// UpsertArtifact adds or updates an entry by (kind, source, alias).
+// UpsertArtifact adds or updates an entry by (kind, source, subpath, alias).
 // Use kind="ingot" or kind="ore". Existing dependents are merged with the
 // incoming entry's dependents (set union), preserving order.
+//
+// Subpath is part of the identity because a single foundry can host multiple
+// artifacts at different subpaths. Alias is part of the identity because two
+// installs of the same source with different aliases must coexist.
 func (m *InstalledManifest) UpsertArtifact(kind string, entry ArtifactEntry) {
 	list := m.artifactList(kind)
 	for i := range *list {
-		if (*list)[i].Source == entry.Source && (*list)[i].Alias == entry.Alias {
+		if (*list)[i].Source == entry.Source && (*list)[i].Subpath == entry.Subpath && (*list)[i].Alias == entry.Alias {
 			merged := mergeDependents((*list)[i].Dependents, entry.Dependents)
 			entry.Dependents = merged
 			(*list)[i] = entry
@@ -210,10 +214,14 @@ func (m *InstalledManifest) All() []AllEntry {
 }
 
 func (m *InstalledManifest) artifactList(kind string) *[]ArtifactEntry {
-	if kind == "ingot" {
+	switch kind {
+	case "ingot":
 		return &m.Ingots
+	case "ore":
+		return &m.Ores
+	default:
+		panic("foundry: unknown artifact kind: " + kind)
 	}
-	return &m.Ores
 }
 
 func mergeDependents(a, b []string) []string {
@@ -230,7 +238,10 @@ func mergeDependents(a, b []string) []string {
 }
 
 func stripString(s []string, target string) []string {
-	out := s[:0]
+	if len(s) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(s))
 	for _, v := range s {
 		if v != target {
 			out = append(out, v)

@@ -237,6 +237,24 @@ func TestLockFile_UpsertArtifactLockIdempotent(t *testing.T) {
 	}
 }
 
+func TestLockFile_UpsertDistinctSubpathsCoexist(t *testing.T) {
+	lf := &LockFile{APIVersion: "v1"}
+	lf.UpsertArtifactLock("ore", LockEntry{Source: "g/foundry", Subpath: "ore-a", Version: "1.0.0"})
+	lf.UpsertArtifactLock("ore", LockEntry{Source: "g/foundry", Subpath: "ore-b", Version: "1.0.0"})
+	if len(lf.Ores) != 2 {
+		t.Fatalf("two distinct subpaths should coexist; got %d: %+v", len(lf.Ores), lf.Ores)
+	}
+}
+
+func TestLockFile_UpsertDistinctAliasesCoexist(t *testing.T) {
+	lf := &LockFile{APIVersion: "v1"}
+	lf.UpsertArtifactLock("ore", LockEntry{Source: "g/status-ore", Version: "1.0.0"})
+	lf.UpsertArtifactLock("ore", LockEntry{Source: "g/status-ore", Version: "1.0.0", Alias: "github_status"})
+	if len(lf.Ores) != 2 {
+		t.Fatalf("alias variant should coexist with canonical; got %d: %+v", len(lf.Ores), lf.Ores)
+	}
+}
+
 func TestLockFile_All_YieldsAllKinds(t *testing.T) {
 	lf := &LockFile{
 		APIVersion: "v1",

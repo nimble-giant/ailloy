@@ -22,6 +22,7 @@ type LockEntry struct {
 	Version   string    `yaml:"version"`
 	Commit    string    `yaml:"commit"`
 	Subpath   string    `yaml:"subpath,omitempty"`
+	Alias     string    `yaml:"alias,omitempty"` // populated when ore was installed --as <alias>
 	Timestamp time.Time `yaml:"timestamp"`
 }
 
@@ -120,12 +121,18 @@ func (lf *LockFile) UpsertEntry(entry LockEntry) {
 	lf.Molds = append(lf.Molds, entry)
 }
 
-// UpsertArtifactLock adds or updates a lock entry by (kind, source, subpath).
+// UpsertArtifactLock adds or updates a lock entry by (kind, source, subpath, alias).
 // Use kind="ingot" or kind="ore".
+//
+// Subpath is part of the identity because a single foundry can host multiple
+// artifacts at different subpaths. Alias is part of the identity because two
+// installs of the same source with different aliases must coexist; this keeps
+// lock-side keying symmetric with InstalledManifest.UpsertArtifact so manifest
+// ↔ lock round-trips do not corrupt entries.
 func (lf *LockFile) UpsertArtifactLock(kind string, entry LockEntry) {
 	list := lf.artifactLockList(kind)
 	for i := range *list {
-		if (*list)[i].Source == entry.Source && (*list)[i].Subpath == entry.Subpath {
+		if (*list)[i].Source == entry.Source && (*list)[i].Subpath == entry.Subpath && (*list)[i].Alias == entry.Alias {
 			(*list)[i] = entry
 			return
 		}
@@ -158,8 +165,12 @@ func (lf *LockFile) All() []AllLockEntry {
 }
 
 func (lf *LockFile) artifactLockList(kind string) *[]LockEntry {
-	if kind == "ingot" {
+	switch kind {
+	case "ingot":
 		return &lf.Ingots
+	case "ore":
+		return &lf.Ores
+	default:
+		panic("foundry: unknown artifact kind: " + kind)
 	}
-	return &lf.Ores
 }
