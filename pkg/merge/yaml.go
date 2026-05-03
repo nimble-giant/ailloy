@@ -26,7 +26,7 @@ func yamlToNode(v any) (*node, error) {
 		for _, item := range x {
 			ks, ok := item.Key.(string)
 			if !ok {
-				ks = fmt.Sprintf("%v", item.Key)
+				return nil, fmt.Errorf("non-string YAML key: %v (only string keys are supported)", item.Key)
 			}
 			child, err := yamlToNode(item.Value)
 			if err != nil {
@@ -47,18 +47,10 @@ func yamlToNode(v any) (*node, error) {
 		}
 		return n, nil
 	case map[string]any:
-		// Fallback for unordered map (shouldn't happen with UseOrderedMap,
-		// but be defensive — keys appear in arbitrary order).
-		n := &node{kind: kindMap, fields: map[string]*node{}}
-		for k, vv := range x {
-			child, err := yamlToNode(vv)
-			if err != nil {
-				return nil, err
-			}
-			n.keys = append(n.keys, k)
-			n.fields[k] = child
-		}
-		return n, nil
+		// UseOrderedMap should always produce yaml.MapSlice. Hitting this
+		// branch means key order has already been lost, which would make
+		// merge output non-deterministic across runs.
+		return nil, fmt.Errorf("yaml decoded as unordered map; UseOrderedMap not applied")
 	default:
 		return &node{kind: kindScalar, scalar: x}, nil
 	}

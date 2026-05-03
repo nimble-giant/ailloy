@@ -3,6 +3,8 @@ package merge
 import (
 	"strings"
 	"testing"
+
+	"github.com/goccy/go-yaml"
 )
 
 func TestLoadYAML_PreservesOrder(t *testing.T) {
@@ -76,5 +78,37 @@ func TestYAMLMergeRoundTrip(t *testing.T) {
 	// Order: outline before replicated-docs.
 	if strings.Index(got, "outline") > strings.Index(got, "replicated-docs") {
 		t.Errorf("expected outline before replicated-docs in:\n%s", got)
+	}
+}
+
+func TestLoadYAML_RejectsNonStringKey(t *testing.T) {
+	// The goccy/go-yaml library normalizes scalar keys to strings during
+	// UseOrderedMap decoding, so we exercise yamlToNode directly with a
+	// constructed MapSlice carrying a non-string key. This guards the
+	// defensive check that prevents 123 and "123" from silently colliding
+	// on the same Go map key if a future decoder change preserves types.
+	ms := yaml.MapSlice{
+		{Key: 123, Value: "foo"},
+		{Key: true, Value: "bar"},
+	}
+	_, err := yamlToNode(ms)
+	if err == nil {
+		t.Fatal("expected error for non-string YAML keys, got nil")
+	}
+	if !strings.Contains(err.Error(), "non-string YAML key") {
+		t.Errorf("error message should mention non-string YAML key; got: %v", err)
+	}
+}
+
+func TestYamlToNode_RejectsUnorderedMap(t *testing.T) {
+	// Direct test on the helper, since UseOrderedMap should always produce
+	// MapSlice in the production path. We pass a Go map[string]any here to
+	// confirm the defensive branch errors instead of silently losing order.
+	_, err := yamlToNode(map[string]any{"a": 1, "b": 2})
+	if err == nil {
+		t.Fatal("expected error for unordered map, got nil")
+	}
+	if !strings.Contains(err.Error(), "UseOrderedMap") {
+		t.Errorf("error message should mention UseOrderedMap; got: %v", err)
 	}
 }
