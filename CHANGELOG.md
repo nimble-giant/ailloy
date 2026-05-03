@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.26](https://github.com/nimble-giant/ailloy/compare/v0.6.25...v0.6.26) (2026-05-03)
+
+
+### Bug Fixes
+
+* reflect cast state on Discover tab and detect updates ([563b0a5](https://github.com/nimble-giant/ailloy/commit/563b0a55dc67a81a25ae0e7dda21d89ccaf92f29))
+* resolve monorepo-prefixed semver tags for subpath references ([d1ed0a3](https://github.com/nimble-giant/ailloy/commit/d1ed0a333d63b95e4f1db0f345e597ce29208e6b))
+* skip docs extension in non-interactive contexts ([404ae8f](https://github.com/nimble-giant/ailloy/commit/404ae8f2d2bcbad10e41da821eade2c195286b72))
+
 ## [0.6.25](https://github.com/nimble-giant/ailloy/compare/v0.6.24...v0.6.25) (2026-05-03)
 
 
