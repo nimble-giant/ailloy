@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -71,6 +72,21 @@ type row struct {
 	topic   *clidocs.Topic
 }
 
+// renderCacheKey combines a slug with the render width so cached output is
+// reused when the user revisits a topic at the same window size and
+// invalidated automatically on resize.
+type renderCacheKey struct {
+	slug  string
+	width int
+}
+
+// topicRenderedMsg is dispatched when an async glamour render completes.
+type topicRenderedMsg struct {
+	key      renderCacheKey
+	rendered string
+	err      error
+}
+
 // Model is the bubbletea model for the docs browser.
 type Model struct {
 	tree      *clidocs.Node
@@ -80,6 +96,10 @@ type Model struct {
 	rendered  string
 	renderErr error
 	loadedFor string
+	cache     map[renderCacheKey]string
+	loading   bool   // a render is currently in flight
+	pending   string // slug whose render is in flight
+	spinner   spinner.Model
 	focus     Focus
 	width     int
 	height    int
@@ -93,9 +113,15 @@ type Model struct {
 func New(tree *clidocs.Node) Model {
 	vp := viewport.New(0, 0)
 	vp.MouseWheelEnabled = true
+
+	sp := spinner.New(spinner.WithSpinner(brandSpinner))
+	sp.Style = spinnerStyle
+
 	m := Model{
 		tree:     tree,
 		expanded: map[string]bool{},
+		cache:    map[renderCacheKey]string{},
+		spinner:  sp,
 		viewport: vp,
 		keys:     defaultKeys(),
 		focus:    FocusList,
@@ -104,22 +130,63 @@ func New(tree *clidocs.Node) Model {
 	// open. They can still collapse anything they don't want with h/←.
 	expandAll(tree, m.expanded)
 	m.rebuildRows()
+	// Prefer "getting-started" so first-time users land on the quickstart
+	// rather than a nested tutorial. Fall back to the first available leaf.
+	startCursor := -1
+	for i, r := range m.rows {
+		if r.topic == nil {
+			continue
+		}
+		if r.topic.Slug == "getting-started" {
+			startCursor = i
+			break
+		}
+		if startCursor < 0 {
+			startCursor = i
+		}
+	}
+	if startCursor >= 0 {
+		m.cursor = startCursor
+	}
 	return m
 }
 
-// Init satisfies tea.Model. The TUI does not start any commands.
-func (m Model) Init() tea.Cmd { return nil }
+// Init kicks the spinner so it animates while a render is in flight. The
+// spinner is harmless when no render is loading.
+func (m Model) Init() tea.Cmd { return m.spinner.Tick }
 
-// Update handles input and resize events.
+// Update handles input, resize, async render results, and spinner ticks.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.layout()
-		m.renderCurrent(true)
+		// Width changed → invalidate the cache so renders match the new
+		// glamour word-wrap width.
+		m.cache = map[renderCacheKey]string{}
+		cmd := m.renderCurrent(true)
 		m.ready = true
+		return m, cmd
+
+	case topicRenderedMsg:
+		m.cache[msg.key] = msg.rendered
+		// Apply only if it still matches what the user is looking at.
+		if msg.key.slug == m.pending {
+			m.loading = false
+			m.pending = ""
+			m.loadedFor = msg.key.slug
+			m.renderErr = msg.err
+			m.rendered = msg.rendered
+			m.viewport.SetContent(msg.rendered)
+			m.viewport.GotoTop()
+		}
 		return m, nil
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 
 	case tea.KeyMsg:
 		// Globals.
@@ -140,19 +207,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	switch {
 	case key.Matches(msg, m.keys.Up):
-		m.moveCursor(-1)
+		cmd = m.moveCursor(-1)
 	case key.Matches(msg, m.keys.Down):
-		m.moveCursor(1)
+		cmd = m.moveCursor(1)
 	case key.Matches(msg, m.keys.Expand):
-		m.expandOrFocus()
+		cmd = m.expandOrFocus()
 	case key.Matches(msg, m.keys.Collapse):
 		m.collapseOrJumpToParent()
 	case key.Matches(msg, m.keys.OpenBody):
-		m.expandOrFocus()
+		cmd = m.expandOrFocus()
 	}
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) updateBody(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -182,7 +250,7 @@ func (m Model) View() string {
 	bodyH := m.bodyHeight()
 
 	left := m.renderList(listW)
-	right := m.viewport.View()
+	right := m.bodyContent(bodyW, bodyH)
 
 	leftPane := paneStyle(m.focus == FocusList).Width(listW).Height(bodyH).Render(left)
 	rightPane := paneStyle(m.focus == FocusBody).Width(bodyW).Height(bodyH).Render(right)
@@ -192,6 +260,33 @@ func (m Model) View() string {
 	footer := m.renderFooter()
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+}
+
+// bodyContent returns either the rendered viewport or, when a render is in
+// flight, a centered branded spinner so users see immediate feedback for
+// long-loading docs (e.g. foundry.md).
+func (m Model) bodyContent(width, height int) string {
+	if !m.loading {
+		return m.viewport.View()
+	}
+	innerW := width - 2
+	innerH := height - 2
+	if innerW < 1 {
+		innerW = 1
+	}
+	if innerH < 1 {
+		innerH = 1
+	}
+	title := m.pending
+	if r := m.currentRow(); r != nil && r.topic != nil {
+		title = r.topic.Title
+	}
+	msg := lipgloss.JoinVertical(
+		lipgloss.Center,
+		spinnerLineStyle.Render(m.spinner.View()+"  Forging "+title+"…"),
+		spinnerHintStyle.Render("rendering with glamour"),
+	)
+	return lipgloss.Place(innerW, innerH, lipgloss.Center, lipgloss.Center, msg)
 }
 
 // CurrentTopic returns the slug currently highlighted, or "" if the
@@ -217,9 +312,9 @@ func (m Model) Rendered() string { return m.rendered }
 // for tests.
 func (m Model) IsExpanded(dir string) bool { return m.expanded[dir] }
 
-func (m *Model) moveCursor(delta int) {
+func (m *Model) moveCursor(delta int) tea.Cmd {
 	if len(m.rows) == 0 {
-		return
+		return nil
 	}
 	m.cursor += delta
 	if m.cursor < 0 {
@@ -228,32 +323,33 @@ func (m *Model) moveCursor(delta int) {
 	if m.cursor >= len(m.rows) {
 		m.cursor = len(m.rows) - 1
 	}
-	m.renderCurrent(false)
+	return m.renderCurrent(false)
 }
 
 // expandOrFocus is bound to →/l/enter on the list. Behavior:
 //   - If the row is a collapsed directory: expand it.
 //   - If the row is an expanded directory: jump to its first child.
 //   - If the row is a file: focus the body pane.
-func (m *Model) expandOrFocus() {
+func (m *Model) expandOrFocus() tea.Cmd {
 	if len(m.rows) == 0 {
-		return
+		return nil
 	}
 	r := m.rows[m.cursor]
 	if r.isDir {
 		if !m.expanded[r.dirPath] {
 			m.expanded[r.dirPath] = true
 			m.rebuildRows()
-			return
+			return nil
 		}
 		// Already expanded — step into the first child if there is one.
 		if m.cursor+1 < len(m.rows) && m.rows[m.cursor+1].depth > r.depth {
 			m.cursor++
-			m.renderCurrent(false)
+			return m.renderCurrent(false)
 		}
-		return
+		return nil
 	}
 	m.focus = FocusBody
+	return nil
 }
 
 // collapseOrJumpToParent is bound to ←/h on the list. Behavior:
@@ -269,11 +365,10 @@ func (m *Model) collapseOrJumpToParent() {
 		m.rebuildRows()
 		return
 	}
-	// Find the closest ancestor row above us with a lower depth.
 	for i := m.cursor - 1; i >= 0; i-- {
 		if m.rows[i].depth < r.depth {
 			m.cursor = i
-			m.renderCurrent(false)
+			_ = m.renderCurrent(false)
 			return
 		}
 	}
@@ -354,36 +449,50 @@ func (m *Model) rebuildRows() {
 	}
 }
 
-// renderCurrent ensures rendered+viewport reflect the highlighted row.
-func (m *Model) renderCurrent(force bool) {
-	if len(m.rows) == 0 || m.rows[m.cursor].topic == nil {
+// renderCurrent ensures the viewport reflects the highlighted row. If the
+// rendered output is already cached, it is applied synchronously and no
+// command is returned. Otherwise a tea.Cmd is returned that performs the
+// glamour render off the Update goroutine and dispatches a topicRenderedMsg
+// when complete; the spinner shows in the body until the message arrives.
+func (m *Model) renderCurrent(force bool) tea.Cmd {
+	if len(m.rows) == 0 || m.cursor < 0 || m.cursor >= len(m.rows) {
+		return nil
+	}
+	r := m.rows[m.cursor]
+	if r.topic == nil {
 		// Directory row — leave the body intact rather than blanking it.
-		return
+		return nil
 	}
-	slug := m.rows[m.cursor].topic.Slug
+	slug := r.topic.Slug
 	if !force && slug == m.loadedFor {
-		return
+		return nil
 	}
-	body, err := clidocs.Read(slug)
-	if err != nil {
-		m.renderErr = err
-		m.rendered = err.Error()
+	key := renderCacheKey{slug: slug, width: m.bodyContentWidth()}
+	if cached, ok := m.cache[key]; ok {
+		m.loading = false
+		m.pending = ""
 		m.loadedFor = slug
-		m.viewport.SetContent(m.rendered)
-		m.viewport.GotoTop()
-		return
-	}
-	rendered, rerr := renderMarkdown(string(body), m.bodyContentWidth())
-	if rerr != nil {
-		m.renderErr = rerr
-		m.rendered = rerr.Error()
-	} else {
 		m.renderErr = nil
-		m.rendered = rendered
+		m.rendered = cached
+		m.viewport.SetContent(cached)
+		m.viewport.GotoTop()
+		return nil
 	}
-	m.loadedFor = slug
-	m.viewport.SetContent(m.rendered)
-	m.viewport.GotoTop()
+	// Cache miss — render asynchronously so the UI stays responsive on big
+	// docs. The body shows the branded spinner until the result arrives.
+	m.loading = true
+	m.pending = slug
+	return func() tea.Msg {
+		body, err := clidocs.Read(slug)
+		if err != nil {
+			return topicRenderedMsg{key: key, rendered: err.Error(), err: err}
+		}
+		rendered, rerr := renderMarkdown(string(body), key.width)
+		if rerr != nil {
+			return topicRenderedMsg{key: key, rendered: rerr.Error(), err: rerr}
+		}
+		return topicRenderedMsg{key: key, rendered: rendered}
+	}
 }
 
 func (m *Model) layout() {
@@ -475,32 +584,55 @@ func (m Model) renderList(width int) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// renderHeader draws the thin branded top bar with logo + active topic.
+// renderHeader draws the full-width branded top bar. The entire line has
+// an orange background so it's unmistakable on any terminal theme: logo
+// hard-left, active topic title centered, focus + scroll status hard-right.
 func (m Model) renderHeader() string {
-	logo := headerLogoStyle.Render(" 🦊 Ailloy Docs ")
+	logo := "🦊 Ailloy Docs"
 
 	var center string
 	if cur := m.currentRow(); cur != nil {
 		if cur.topic != nil {
-			center = headerCenterStyle.Render(cur.topic.Title)
+			center = cur.topic.Title
 		} else {
-			center = headerCenterStyle.Render(cur.name + "/")
+			center = cur.name + "/"
 		}
 	}
 
-	right := headerRightStyle.Render(m.headerStatus())
+	right := m.headerStatus()
 
-	gap := m.width - lipgloss.Width(logo) - lipgloss.Width(center) - lipgloss.Width(right)
-	if gap < 2 {
-		gap = 2
+	// Compose the inner string at the exact terminal width with the title
+	// centered. We measure raw widths first, then pad with spaces, then run
+	// the whole line through a single orange-bg style so the bar fills the
+	// row even if the active style chips don't.
+	inner := layoutHeaderRow(m.width, logo, center, right)
+	return headerBarStyle.Width(m.width).Render(inner)
+}
+
+// layoutHeaderRow positions logo, center, and right text within width by
+// padding with spaces. Truncates the center when there isn't room.
+func layoutHeaderRow(width int, logo, center, right string) string {
+	if width < 1 {
+		return ""
 	}
-	leftPad := gap / 2
-	rightPad := gap - leftPad
-	return logo +
-		strings.Repeat(" ", leftPad) +
-		center +
-		strings.Repeat(" ", rightPad) +
-		right
+	logoW := lipgloss.Width(logo)
+	rightW := lipgloss.Width(right)
+	available := width - logoW - rightW - 4 // 1ch padding on each side + 2 buffer
+	if available < 0 {
+		available = 0
+	}
+	if lipgloss.Width(center) > available {
+		center = clipLine(center, available)
+	}
+	centerW := lipgloss.Width(center)
+	// Pad equally around the center.
+	totalPad := width - logoW - rightW - centerW - 2 // 1ch outer padding each side
+	if totalPad < 2 {
+		totalPad = 2
+	}
+	left := totalPad / 2
+	right2 := totalPad - left
+	return " " + logo + strings.Repeat(" ", left) + center + strings.Repeat(" ", right2) + right + " "
 }
 
 // headerStatus is a short right-aligned indicator: focused pane + (in body
@@ -595,22 +727,42 @@ func renderMarkdown(md string, width int) (string, error) {
 // purple (Primary1/Primary2) provides supporting structure.
 // ----------------------------------------------------------------------
 
+// brandSpinner is a fox/forge themed spinner. The frames evoke ailloy's
+// metalwork motif so the loading state ties into the rest of the brand.
+var brandSpinner = spinner.Spinner{
+	Frames: []string{
+		"🦊 ⚒  ",
+		"🦊 ⚒ ✦",
+		"🦊  ⚒ ",
+		"🦊 ⚒  ",
+		"🦊✦⚒  ",
+		"🦊 ⚒ ✦",
+	},
+	FPS: 8,
+}
+
 var (
-	headerLogoStyle = lipgloss.NewStyle().
+	// headerBarStyle paints the entire header line with the brand orange
+	// background so it's visible at a glance no matter the terminal theme.
+	headerBarStyle = lipgloss.NewStyle().
 			Foreground(styles.White).
 			Background(styles.Accent1).
 			Bold(true)
 
-	headerCenterStyle = lipgloss.NewStyle().
+	footerStyle = lipgloss.NewStyle().
+			Foreground(styles.Gray)
+
+	spinnerStyle = lipgloss.NewStyle().
+			Foreground(styles.Accent1).
+			Bold(true)
+
+	spinnerLineStyle = lipgloss.NewStyle().
 				Foreground(styles.Accent1).
 				Bold(true)
 
-	headerRightStyle = lipgloss.NewStyle().
+	spinnerHintStyle = lipgloss.NewStyle().
 				Foreground(styles.Gray).
 				Italic(true)
-
-	footerStyle = lipgloss.NewStyle().
-			Foreground(styles.Gray)
 
 	listRowActiveStyle = lipgloss.NewStyle().
 				Foreground(styles.White).
