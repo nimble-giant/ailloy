@@ -81,7 +81,20 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 		res.MoldName = manifest.Name
 	}
 
-	flux, err := layerFluxForCore(reader, source, opts.ValueFiles, opts.SetOverrides)
+	// Auto-install declared ingot/ore deps before flux merge so the merged
+	// schema/defaults pick up the just-installed ore overlays.
+	moldKey := ""
+	if remoteResult != nil {
+		moldKey = remoteResult.Ref.CacheKey()
+		if remoteResult.Ref.Subpath != "" {
+			moldKey += "@" + remoteResult.Ref.Subpath
+		}
+	}
+	if err := installDeclaredDeps(manifest, moldKey, opts.Global); err != nil {
+		return res, fmt.Errorf("installing declared dependencies: %w", err)
+	}
+
+	flux, mergedSchema, err := layerFluxForCore(reader, source, opts.ValueFiles, opts.SetOverrides, opts.Global)
 	if err != nil {
 		return res, err
 	}
@@ -155,7 +168,7 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 		}
 	}
 
-	if err := copyResolvedFiles(reader, manifest, flux, filesToCast, opts.ForceReplaceOnParseError); err != nil {
+	if err := copyResolvedFilesWithSchema(reader, manifest, mergedSchema, flux, filesToCast, opts.ForceReplaceOnParseError); err != nil {
 		return res, fmt.Errorf("copying files: %w", err)
 	}
 
@@ -224,39 +237,51 @@ func openMoldReaderForCore(ref string, global bool) (*blanks.MoldReader, *foundr
 // doesn't depend on package-level cast flag vars. `source` is the resolved
 // mold ref used to pick up persisted flux files (~/.ailloy/flux/<slug>.yaml
 // then ./.ailloy/flux/<slug>.yaml). Empty source skips persisted-file lookup.
-func layerFluxForCore(reader *blanks.MoldReader, source string, valueFiles, setOverrides []string) (map[string]any, error) {
-	defaults, err := reader.LoadFluxDefaults()
+//
+// Returns the layered flux map plus the merged schema (mold + ore overlays);
+// callers thread the schema into copyResolvedFilesWithSchema so ValidateFlux
+// sees ore.<name>.* entries.
+func layerFluxForCore(reader *blanks.MoldReader, source string, valueFiles, setOverrides []string, global bool) (map[string]any, []mold.FluxVar, error) {
+	mergedSchema, defaults, _, err := mold.LoadMoldFluxWithOres(reader.FS(), readerSearchPaths(reader, global))
 	if err != nil {
-		defaults = make(map[string]any)
+		// Fall back to the legacy single-mold path.
+		defaults, err = reader.LoadFluxDefaults()
+		if err != nil {
+			defaults = make(map[string]any)
+		}
 	}
-	manifest, _ := reader.LoadManifest()
-	if manifest != nil && len(manifest.Flux) > 0 {
+	// Merge mold.yaml's in-line flux: schema in for molds that declare their
+	// schema inline rather than via a separate flux.schema.yaml.
+	if manifest, _ := reader.LoadManifest(); manifest != nil && len(manifest.Flux) > 0 {
 		defaults = mold.ApplyFluxDefaults(manifest.Flux, defaults)
+		if len(mergedSchema) == 0 {
+			mergedSchema = manifest.Flux
+		}
 	}
 	flux := make(map[string]any, len(defaults))
 	for k, v := range defaults {
 		flux[k] = v
 	}
 	if persisted := mold.PersistedFluxPaths(source); len(persisted) > 0 {
-		overlay, err := mold.LayerFluxFiles(persisted)
-		if err != nil {
-			return nil, err
+		overlay, perr := mold.LayerFluxFiles(persisted)
+		if perr != nil {
+			return nil, nil, perr
 		}
 		for k, v := range overlay {
 			flux[k] = v
 		}
 	}
 	if len(valueFiles) > 0 {
-		overlay, err := mold.LayerFluxFiles(valueFiles)
-		if err != nil {
-			return nil, err
+		overlay, lerr := mold.LayerFluxFiles(valueFiles)
+		if lerr != nil {
+			return nil, nil, lerr
 		}
 		for k, v := range overlay {
 			flux[k] = v
 		}
 	}
 	if err := mold.ApplySetOverrides(flux, setOverrides); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return flux, nil
+	return flux, mergedSchema, nil
 }
