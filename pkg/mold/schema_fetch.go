@@ -103,8 +103,12 @@ func LoadMoldFluxWithOres(moldFS fs.FS, paths []OreSearchPath) ([]FluxVar, map[s
 
 	// Layer ore defaults under mold defaults: ores first, then mold wins.
 	merged := map[string]any{}
-	_ = mergo.Merge(&merged, allOreDefaults)
-	_ = mergo.Merge(&merged, baseDefaults, mergo.WithOverride)
+	if err := mergo.Merge(&merged, allOreDefaults); err != nil {
+		return nil, nil, report, fmt.Errorf("merging ore defaults: %w", err)
+	}
+	if err := mergo.Merge(&merged, baseDefaults, mergo.WithOverride); err != nil {
+		return nil, nil, report, fmt.Errorf("merging mold defaults over ore defaults: %w", err)
+	}
 
 	return mergedSchema, merged, report, nil
 }

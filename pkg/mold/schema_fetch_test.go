@@ -141,6 +141,39 @@ func TestLoadMoldFluxWithOres_MergesAcrossSearchPaths(t *testing.T) {
 	}
 }
 
+func TestLoadMoldFluxWithOres_MoldDefaultsWinOverOreDefaults(t *testing.T) {
+	// The mold's own flux.yaml sets a value under ore.status.enabled.
+	// The installed ore's flux.yaml sets a different value for the same key.
+	// Mold-wins: the merged defaults should reflect the mold's value.
+	moldFS := fstest.MapFS{
+		"flux.schema.yaml": &fstest.MapFile{Data: []byte(`- name: ore.status.enabled
+  type: bool
+`)},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`ore:
+  status:
+    enabled: true
+`)},
+		"ores/status/ore.yaml":         &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: ore\nname: status\nversion: 1.0.0\n")},
+		"ores/status/flux.schema.yaml": &fstest.MapFile{Data: []byte("- name: enabled\n  type: bool\n")},
+		"ores/status/flux.yaml":        &fstest.MapFile{Data: []byte("enabled: false\n")},
+	}
+	_, defaults, _, err := mold.LoadMoldFluxWithOres(moldFS, []mold.OreSearchPath{{Name: "mold-local", FS: moldFS, Root: "ores"}})
+	if err != nil {
+		t.Fatalf("LoadMoldFluxWithOres: %v", err)
+	}
+	oreNs, ok := defaults["ore"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing ore namespace: %+v", defaults)
+	}
+	statusNs, ok := oreNs["status"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing ore.status: %+v", oreNs)
+	}
+	if statusNs["enabled"] != true {
+		t.Errorf("mold should win on ore.status.enabled; got %v (want true)", statusNs["enabled"])
+	}
+}
+
 func TestFetchSchemaFromSource_RemoteResolverError(t *testing.T) {
 	prev := mold.ResolveSchemaFunc
 	t.Cleanup(func() { mold.ResolveSchemaFunc = prev })

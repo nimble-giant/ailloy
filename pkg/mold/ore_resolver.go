@@ -1,6 +1,7 @@
 package mold
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -20,8 +21,11 @@ import (
 func LoadOreOverlaysFromFS(fsys fs.FS, root string, seen map[string]struct{}) ([]OverlaySchema, map[string]any, error) {
 	entries, err := fs.ReadDir(fsys, root)
 	if err != nil {
-		// No ores dir — empty result, not an error.
-		return nil, map[string]any{}, nil
+		if errors.Is(err, fs.ErrNotExist) {
+			// No ores dir — empty result, not an error.
+			return nil, map[string]any{}, nil
+		}
+		return nil, nil, fmt.Errorf("reading ore search root %s: %w", root, err)
 	}
 
 	defaults := map[string]any{}
