@@ -228,7 +228,7 @@ space toggle · enter cast all · / search · c clear · r refresh · j/k move
 
 | Tab | What it does |
 | --- | --- |
-| **Discover** | Browse the merged catalog across every effective foundry. Multi-select with `space`, install all selected with `enter`. Live filter with `/`. The "Recent" section highlights molds whose foundry was indexed in the last 7 days (top 10). Already-installed molds show a blue `● installed <version>` badge. Press `f` on any mold to open the [flux value picker](#flux-value-picker). |
+| **Discover** | Browse the merged catalog across every effective foundry. Nested foundries declared via `foundries:` are resolved transitively, and nested-foundry molds render with a faint `via parent → child` annotation showing their resolution chain. Multi-select with `space`, install all selected with `enter`. Live filter with `/`. The "Recent" section highlights molds whose foundry was indexed in the last 7 days (top 10). Already-installed molds show a blue `● installed <version>` badge. Press `f` on any mold to open the [flux value picker](#flux-value-picker). |
 | **Installed** | List every casted mold across project (`./ailloy.lock`) and global (`~/ailloy.lock`) scope. `u` re-casts to the latest version; `x` uninstalls (uses the install manifest, skips files modified since cast). Pre-manifest legacy entries display a yellow warning. Press `f` to edit flux values for the highlighted mold. |
 | **Foundries** | Add (`a`), remove (`d`), or refresh (`r`) registered foundry indexes. The verified default is rendered as a built-in entry and can't be removed. |
 | **Health** | Drift checks (orphaned molds whose foundry no longer indexes them, legacy install manifests) plus `assay` findings against the rendered blank directories from `.ailloy/state.yaml`. `r` re-runs the checks. |
@@ -265,6 +265,11 @@ installed molds, on demand from the foundry for un-installed ones) and lets
 you set values without leaving the TUI — useful when you want to tweak
 something like `agents.targets=[opencode]` before casting, without crafting a
 `--set` flag or editing `flux.yaml` by hand.
+
+The picker works on nested-foundry molds too: any mold reachable from a
+registered root via `foundries:` references shows up in Discover (with a
+`via parent → child` annotation) and accepts `f` like a directly-indexed
+mold.
 
 | Key | Action |
 | --- | --- |
