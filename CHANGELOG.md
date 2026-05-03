@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.20](https://github.com/nimble-giant/ailloy/compare/v0.6.19...v0.6.20) (2026-05-03)
+
+
+### Features
+
+* add ailloy self-upgrade command ([b9471d7](https://github.com/nimble-giant/ailloy/commit/b9471d7b7fe46d4db6053f4b891819f2dda7449e))
+* add foundry temper command for index validation ([974e33d](https://github.com/nimble-giant/ailloy/commit/974e33d652b08ca924b806998c54f7ccb6dcbba7))
+* add reinstall alias to evolve ([aa564b9](https://github.com/nimble-giant/ailloy/commit/aa564b9a1f011f6bc748eaef4d7874b11e996597))
+* nested foundries — transitive mold aggregation across foundry indexes ([d1bdd54](https://github.com/nimble-giant/ailloy/commit/d1bdd548103e9341159d26265ff508930685540b))
+* rename refine to evolve and add Pokemon-style TUI animation ([c1018a1](https://github.com/nimble-giant/ailloy/commit/c1018a16394e5200d959b7553e10183205cc578a))
+
+
+### Bug Fixes
+
+* identify installed molds by (source, subpath), not source alone ([5f6b13c](https://github.com/nimble-giant/ailloy/commit/5f6b13ce3cfc10c96042743b0ba3128addbf2f05))
+
 ## [0.6.19](https://github.com/nimble-giant/ailloy/compare/v0.6.18...v0.6.19) (2026-05-02)
 
 
