@@ -190,6 +190,58 @@ func TestInstalledManifest_FindBySource(t *testing.T) {
 	}
 }
 
+func TestInstalledManifest_RoundTripIngotsAndOres(t *testing.T) {
+	m := &InstalledManifest{
+		APIVersion: "v1",
+		Molds:      []InstalledEntry{{Name: "m", Source: "g/m", Version: "1.0.0"}},
+		Ingots: []ArtifactEntry{
+			{Name: "github-patterns", Source: "g/gp", Version: "1.0.0", Dependents: []string{"g/m"}},
+		},
+		Ores: []ArtifactEntry{
+			{Name: "status", Source: "g/status-ore", Version: "1.0.0", Alias: "", Dependents: []string{"g/m", "user"}},
+		},
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "installed.yaml")
+	if err := WriteInstalledManifest(path, m); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadInstalledManifest(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Ingots) != 1 || got.Ingots[0].Name != "github-patterns" {
+		t.Errorf("ingots: %+v", got.Ingots)
+	}
+	if len(got.Ores) != 1 || got.Ores[0].Name != "status" || got.Ores[0].Dependents[1] != "user" {
+		t.Errorf("ores: %+v", got.Ores)
+	}
+}
+
+func TestInstalledManifest_BackCompat_OldMoldsOnly(t *testing.T) {
+	old := []byte(`apiVersion: v1
+molds:
+  - name: m
+    source: g/m
+    version: 1.0.0
+`)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "installed.yaml")
+	if err := os.WriteFile(path, old, 0644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadInstalledManifest(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Molds) != 1 {
+		t.Errorf("molds: %+v", got.Molds)
+	}
+	if len(got.Ingots) != 0 || len(got.Ores) != 0 {
+		t.Errorf("expected empty Ingots/Ores: %+v / %+v", got.Ingots, got.Ores)
+	}
+}
+
 func TestManifest_AbsentDoesNotBreakLockReads(t *testing.T) {
 	dir := t.TempDir()
 	origDir, err := os.Getwd()

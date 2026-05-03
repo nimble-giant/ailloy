@@ -28,10 +28,27 @@ type InstalledEntry struct {
 	FileHashes map[string]string `yaml:"fileHashes,omitempty"`
 }
 
-// InstalledManifest is the on-disk manifest of cast molds.
+// ArtifactEntry records an installed ingot or ore. Mirrors InstalledEntry
+// minus the file-provenance fields (which are mold-specific) and adds
+// Dependents for reference-counted cascade uninstall.
+type ArtifactEntry struct {
+	Name        string    `yaml:"name"`
+	Source      string    `yaml:"source"`
+	Subpath     string    `yaml:"subpath,omitempty"`
+	Version     string    `yaml:"version"`
+	Commit      string    `yaml:"commit"`
+	InstalledAt time.Time `yaml:"installedAt"`
+	Alias       string    `yaml:"alias,omitempty"`      // populated when ore installed --as <alias>
+	Dependents  []string  `yaml:"dependents,omitempty"` // mold source@subpath strings; "user" sentinel for direct installs
+}
+
+// InstalledManifest is the on-disk manifest of cast molds and installed
+// artifacts (ingots, ores).
 type InstalledManifest struct {
 	APIVersion string           `yaml:"apiVersion"`
 	Molds      []InstalledEntry `yaml:"molds"`
+	Ingots     []ArtifactEntry  `yaml:"ingots,omitempty"`
+	Ores       []ArtifactEntry  `yaml:"ores,omitempty"`
 }
 
 // ReadInstalledManifest reads and parses the manifest at the given path.
