@@ -563,3 +563,62 @@ func TestIntegration_WorkflowsNotProcessed(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegration_MergeStrategy_JSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	// Pre-seed an existing opencode.json with the "outline" MCP server.
+	preExisting := []byte(`{"mcp":{"outline":{"url":"https://outline"}}}`)
+	if err := os.WriteFile("opencode.json", preExisting, 0644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Build a synthetic mold that produces opencode.json with strategy: merge.
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: test\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`output:
+  config/opencode.json:
+    dest: opencode.json
+    strategy: merge
+`)},
+		"config/opencode.json": &fstest.MapFile{Data: []byte(`{"mcp":{"replicated-docs":{"url":"https://docs"}}}`)},
+	}
+
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	flux, err := reader.LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("load flux: %v", err)
+	}
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := copyResolvedFiles(reader, manifest, flux, resolved); err != nil {
+		t.Fatalf("copy: %v", err)
+	}
+
+	got, err := os.ReadFile("opencode.json")
+	if err != nil {
+		t.Fatalf("readback: %v", err)
+	}
+	gs := string(got)
+	if !strings.Contains(gs, `"outline"`) {
+		t.Errorf("outline missing after merge:\n%s", gs)
+	}
+	if !strings.Contains(gs, `"replicated-docs"`) {
+		t.Errorf("replicated-docs missing after merge:\n%s", gs)
+	}
+	// Order: outline comes first (from pre-existing file).
+	if strings.Index(gs, "outline") > strings.Index(gs, "replicated-docs") {
+		t.Errorf("expected outline before replicated-docs, got:\n%s", gs)
+	}
+}
