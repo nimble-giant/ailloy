@@ -347,6 +347,46 @@ foundries:
 2. Users register it with: `ailloy foundry add https://example.com/foundry.yaml` (a bare `example.com/foundry.yaml` is also accepted and defaults to `https://`)
 3. URLs ending in `.yaml` or `.yml` are automatically detected as static files
 
+### Validating a Foundry Index
+
+`ailloy foundry temper [path]` (alias `validate`) checks a foundry index file before publishing or merging.
+
+```bash
+# Validate ./foundry.yaml (default path) — schema + every mold source + every nested foundry
+ailloy foundry temper
+
+# Validate a specific file
+ailloy foundry temper path/to/foundry.yaml
+
+# Schema check only — no network
+ailloy foundry temper --offline
+
+# Don't recurse into nested foundries (still verifies this index's own molds)
+ailloy foundry temper --no-recurse
+```
+
+What it checks:
+
+- **Schema** — `apiVersion`, `kind`, `name`, every mold's `name`/`source`, every nested foundry's `source`.
+- **Mold sources** — each direct mold's source URL is parsed and its version reference is resolved against the remote via `git ls-remote` (no clone). Per-entry errors are reported with the mold's array index and name.
+- **Nested foundries** — each nested foundry index is fetched, schema-validated, and its molds are verified the same way. Recursion is depth-first with cycle protection (a foundry referenced more than once is checked once).
+
+The command exits non-zero on the first error finding. Designed to wire into CI on a foundry-index repo:
+
+```yaml
+# .github/workflows/validate.yml
+on:
+  pull_request:
+    paths: [foundry.yaml]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: curl -sSL https://raw.githubusercontent.com/nimble-giant/ailloy/main/install.sh | bash
+      - run: ailloy foundry temper foundry.yaml
+```
+
 ### Submitting to the Official Index
 
 To add your mold to the official Ailloy foundry index:
@@ -659,3 +699,4 @@ Remote mold references work with all mold-consuming commands:
 | `foundry remove` | `ailloy foundry remove nimble-foundry`                              |
 | `foundry update` | `ailloy foundry update`                                             |
 | `foundry install` | `ailloy foundry install foundry` or `ailloy foundry install foundry --shallow` |
+| `foundry temper` | `ailloy foundry temper foundry.yaml` (alias: `foundry validate`)             |
