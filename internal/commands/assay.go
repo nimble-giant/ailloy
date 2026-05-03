@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/assay"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 	"github.com/nimble-giant/ailloy/pkg/styles"
@@ -67,8 +68,7 @@ func runAssay(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Println(styles.WorkingBanner("Assaying..."))
-	fmt.Println()
+	ceremony.Open(ceremony.Assay)
 
 	// Resolve path
 	startDir := "."
@@ -148,14 +148,19 @@ func runAssay(_ *cobra.Command, args []string) error {
 		failOnSeverity = mold.SeverityError
 	}
 
+	stampSummary := fmt.Sprintf("%d file(s), %d error(s), %d warning(s), %d suggestion(s)",
+		result.FilesScanned, errors, warnings, suggestions)
+
 	if result.HasFailures(failOnSeverity) {
 		fmt.Println(styles.ErrorStyle.Render(fmt.Sprintf("%d error(s), %d warning(s), %d suggestion(s)",
 			errors, warnings, suggestions)))
+		ceremony.FailStamp(ceremony.Assay, stampSummary)
 		return fmt.Errorf("assay: findings exceed --%s threshold", assayFailOn)
 	}
 
 	fmt.Println(styles.SuccessStyle.Render(fmt.Sprintf("%d error(s), %d warning(s), %d suggestion(s)",
 		errors, warnings, suggestions)))
+	ceremony.Stamp(ceremony.Assay, stampSummary)
 
 	// Handle --fix: collect unknown frontmatter fields from all command-frontmatter diagnostics
 	// and add them to extra-allowed-fields in .ailloyrc.yaml.

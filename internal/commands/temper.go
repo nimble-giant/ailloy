@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/assay"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -55,8 +56,7 @@ func init() {
 }
 
 func runTemper(_ *cobra.Command, args []string) error {
-	fmt.Println(styles.WorkingBanner("Tempering..."))
-	fmt.Println()
+	ceremony.Open(ceremony.Temper)
 
 	moldDir := "."
 	if len(args) > 0 {
@@ -99,11 +99,13 @@ func runTemper(_ *cobra.Command, args []string) error {
 	if result.HasErrors() {
 		fmt.Println(styles.ErrorStyle.Render(fmt.Sprintf("Validation failed: %d error(s), %d warning(s)",
 			len(errors), len(warnings))))
+		ceremony.FailStamp(ceremony.Temper, fmt.Sprintf("%d error(s), %d warning(s)", len(errors), len(warnings)))
 		return fmt.Errorf("temper: %d error(s) found", len(errors))
 	}
 
 	msg := fmt.Sprintf("Validation passed: 0 errors, %d warning(s)", len(warnings))
 	fmt.Println(styles.SuccessStyle.Render(msg))
+	ceremony.Stamp(ceremony.Temper, fmt.Sprintf("0 errors, %d warning(s)", len(warnings)))
 
 	// Run assay (lint) on rendered blanks if requested
 	if temperLint {
