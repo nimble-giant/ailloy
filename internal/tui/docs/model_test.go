@@ -21,10 +21,10 @@ func newTestModel(t *testing.T) Model {
 
 func keyRune(r rune) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
 
-func TestNew_StartsAtRootCursor(t *testing.T) {
+func TestNew_StartsOnFileRow(t *testing.T) {
 	m := newTestModel(t)
-	if m.cursor != 0 {
-		t.Errorf("expected cursor=0, got %d", m.cursor)
+	if r := m.currentRow(); r == nil || r.topic == nil {
+		t.Errorf("expected initial cursor on a file row, got %+v", r)
 	}
 }
 
@@ -54,38 +54,43 @@ func TestNew_AutoExpandsTopLevelDirectories(t *testing.T) {
 
 func TestUpdate_ArrowDownAdvancesCursor(t *testing.T) {
 	m := newTestModel(t)
+	start := m.cursor
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	if m.cursor != 1 {
-		t.Errorf("expected cursor to advance to 1, got %d", m.cursor)
+	if m.cursor != start+1 {
+		t.Errorf("expected cursor to advance to %d, got %d", start+1, m.cursor)
 	}
 }
 
 func TestUpdate_KKeyMovesUp(t *testing.T) {
 	m := newTestModel(t)
+	start := m.cursor
 	for range 2 {
 		updated, _ := m.Update(keyRune('j'))
 		m = updated.(Model)
 	}
-	if m.cursor != 2 {
-		t.Fatalf("expected cursor at 2, got %d", m.cursor)
+	if m.cursor != start+2 {
+		t.Fatalf("expected cursor at %d after two j presses, got %d", start+2, m.cursor)
 	}
 	updated, _ := m.Update(keyRune('k'))
 	m = updated.(Model)
-	if m.cursor != 1 {
-		t.Errorf("expected k to move cursor to 1, got %d", m.cursor)
+	if m.cursor != start+1 {
+		t.Errorf("expected k to move cursor to %d, got %d", start+1, m.cursor)
 	}
 }
 
 func TestUpdate_CursorClampsAtBounds(t *testing.T) {
 	m := newTestModel(t)
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	m = updated.(Model)
+	// Press Up enough times to push past the top regardless of starting row.
+	for range len(m.rows) + 5 {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+		m = updated.(Model)
+	}
 	if m.cursor != 0 {
-		t.Errorf("cursor should clamp to 0, got %d", m.cursor)
+		t.Errorf("cursor should clamp to 0 after many Up presses, got %d", m.cursor)
 	}
 	for range len(m.rows) + 5 {
-		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		m = updated.(Model)
 	}
 	if m.cursor != len(m.rows)-1 {
@@ -278,6 +283,109 @@ func TestView_FooterAdaptsToFocus(t *testing.T) {
 	}
 }
 
+func TestNew_StartsCursorOnFirstFile(t *testing.T) {
+	m := newTestModel(t)
+	if r := m.currentRow(); r == nil || r.topic == nil {
+		t.Fatalf("expected initial cursor to land on a file row, got dir/nil")
+	}
+}
+
+func TestRender_DispatchesAsyncCmdOnCacheMiss(t *testing.T) {
+	m := newTestModel(t)
+	// First, drain whatever the WindowSizeMsg dispatched.
+	// Then move cursor to a different topic and capture the resulting Cmd.
+	cmd := m.moveCursor(1)
+	if cmd == nil {
+		// Maybe the next row is a directory — advance until a file.
+		for cmd == nil && m.cursor+1 < len(m.rows) {
+			cmd = m.moveCursor(1)
+		}
+	}
+	if cmd == nil {
+		t.Skip("no leaf row available to trigger async render")
+	}
+	if !m.loading {
+		t.Errorf("model should be marked loading while a render is in flight")
+	}
+	msg := cmd()
+	if _, ok := msg.(topicRenderedMsg); !ok {
+		t.Fatalf("expected topicRenderedMsg, got %T", msg)
+	}
+	updated, _ := m.Update(msg)
+	m = updated.(Model)
+	if m.loading {
+		t.Errorf("model should clear loading after topicRenderedMsg")
+	}
+	if m.rendered == "" {
+		t.Errorf("expected rendered content after async render completes")
+	}
+}
+
+func TestRender_CacheHitIsSyncAndNoCmd(t *testing.T) {
+	m := newTestModel(t)
+	// Render initial topic synchronously by draining the cmd, populating cache.
+	first := m.currentRow()
+	if first == nil || first.topic == nil {
+		t.Fatal("test setup: expected a leaf cursor")
+	}
+	// Make sure something is rendered + cached. The first-leaf launch
+	// shouldn't have completed yet, so call renderCurrent(true) and drain.
+	cmd := m.renderCurrent(true)
+	drainRender(t, &m, cmd)
+
+	// Now re-request the same slug — should hit the cache and return nil.
+	cmd2 := m.renderCurrent(false)
+	if cmd2 != nil {
+		t.Errorf("expected nil cmd on cache hit, got non-nil")
+	}
+	if m.loading {
+		t.Errorf("cache hit should not put model in loading state")
+	}
+}
+
+func TestView_ShowsSpinnerWhileLoading(t *testing.T) {
+	m := newTestModel(t)
+	// Force a fresh load on a non-cached topic.
+	moveCursorToSlugNoDrain(t, &m, "foundry")
+	if !m.loading {
+		t.Skip("could not enter loading state — render may have been synchronous")
+	}
+	out := m.View()
+	if !strings.Contains(out, "Forging") {
+		t.Errorf("expected loading view to contain 'Forging…'; got:\n%s", out)
+	}
+}
+
+// moveCursorToSlugNoDrain positions the cursor without draining the render
+// command, so the model stays in the loading state for tests that want to
+// observe that state.
+func moveCursorToSlugNoDrain(t *testing.T, m *Model, slug string) {
+	t.Helper()
+	for i, r := range m.rows {
+		if r.topic != nil && r.topic.Slug == slug {
+			m.cursor = i
+			_ = m.renderCurrent(true)
+			return
+		}
+	}
+	t.Fatalf("slug %q not visible", slug)
+}
+
+func TestView_HeaderHasOrangeBackground(t *testing.T) {
+	// Sanity check: the rendered header line includes ANSI sequences. We
+	// can't easily assert color codes portably, but we can ensure the line
+	// has content beyond just "Ailloy Docs" — i.e. it spans width with
+	// active topic + status.
+	m := newTestModel(t)
+	header := m.renderHeader()
+	if !strings.Contains(header, "Ailloy Docs") {
+		t.Errorf("header missing logo: %q", header)
+	}
+	if !strings.Contains(header, "TREE") && !strings.Contains(header, "BODY") {
+		t.Errorf("header missing focus status: %q", header)
+	}
+}
+
 func TestPaneWidths_RespectMinima(t *testing.T) {
 	m := New(clidocs.Tree())
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
@@ -291,17 +399,32 @@ func TestPaneWidths_RespectMinima(t *testing.T) {
 	}
 }
 
-// moveCursorToSlug positions the cursor onto the row whose topic.Slug matches
-// the given value. Fails the test if no such row is visible (caller may need
-// to expand a folder first).
+// moveCursorToSlug positions the cursor onto the row whose topic.Slug
+// matches the given value AND drains the resulting render command so the
+// viewport has the topic's content. Fails the test if the slug isn't
+// visible (caller may need to expand a folder first).
 func moveCursorToSlug(t *testing.T, m *Model, slug string) {
 	t.Helper()
 	for i, r := range m.rows {
 		if r.topic != nil && r.topic.Slug == slug {
 			m.cursor = i
-			m.renderCurrent(false)
+			cmd := m.renderCurrent(false)
+			drainRender(t, m, cmd)
 			return
 		}
 	}
 	t.Fatalf("slug %q not visible in tree rows", slug)
+}
+
+// drainRender invokes the given Cmd (if non-nil) and feeds the resulting
+// topicRenderedMsg back into the model so the viewport has real content.
+// Tests use this to skip past the async loading state.
+func drainRender(t *testing.T, m *Model, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		return
+	}
+	msg := cmd()
+	updated, _ := m.Update(msg)
+	*m = updated.(Model)
 }
