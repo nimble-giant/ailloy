@@ -31,6 +31,14 @@ import (
 //  7. Assert .ailloy/ores/status/ is gone (cascade-removed alongside the
 //     mold).
 func TestE2E_PublishOreThenCastConsumerMold(t *testing.T) {
+	// Disabled: gitInitTagAndCommit in test_helpers_ore_test.go has been
+	// observed to leak commits onto the parent worktree's branch under
+	// `go test -race` during pre-push. Re-enable once the helper is hardened
+	// (e.g. by passing `git -C <dir>` plus an explicit GIT_DIR/GIT_WORK_TREE
+	// pair, or by replacing the local-path harness with a real foundry
+	// resolver injection).
+	t.Skip("disabled pending hermetic fake-foundry harness; see helper note")
+
 	tmp := t.TempDir()
 
 	cwd, _ := os.Getwd()
@@ -144,6 +152,10 @@ func TestE2E_PublishOreThenCastConsumerMold(t *testing.T) {
 // API) but exercises the full installDeclaredDeps + cascade pipeline that
 // remote-foundry casts share.
 func TestE2E_TwoMoldsShareOre_FirstUninstallKeepsOre(t *testing.T) {
+	// See TestE2E_PublishOreThenCastConsumerMold above for the disable
+	// rationale. Same helper, same hazard.
+	t.Skip("disabled pending hermetic fake-foundry harness; see helper note")
+
 	tmp := t.TempDir()
 	cwd, _ := os.Getwd()
 	t.Cleanup(func() { _ = os.Chdir(cwd) })
