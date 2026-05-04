@@ -54,6 +54,58 @@ func TestLoadOre_MissingFile(t *testing.T) {
 	}
 }
 
+func TestOre_EffectiveNamespace_FallsBackToName(t *testing.T) {
+	o := &Ore{Name: "status"}
+	if got := o.EffectiveNamespace(); got != "status" {
+		t.Errorf("EffectiveNamespace() = %q; want status", got)
+	}
+}
+
+func TestOre_EffectiveNamespace_NamespaceWinsOverName(t *testing.T) {
+	o := &Ore{Name: "status_ore", Namespace: "status"}
+	if got := o.EffectiveNamespace(); got != "status" {
+		t.Errorf("EffectiveNamespace() = %q; want status", got)
+	}
+}
+
+func TestParseOre_NamespaceField(t *testing.T) {
+	data := []byte(`apiVersion: v1
+kind: ore
+name: status_ore
+namespace: status
+version: 1.0.0
+`)
+	ore, err := ParseOre(data)
+	if err != nil {
+		t.Fatalf("ParseOre: %v", err)
+	}
+	if ore.Namespace != "status" {
+		t.Errorf("Namespace = %q; want status", ore.Namespace)
+	}
+	if ore.Name != "status_ore" {
+		t.Errorf("Name = %q; want status_ore", ore.Name)
+	}
+}
+
+func TestResolveOreNamespace_Precedence(t *testing.T) {
+	// (a) install-dir == ore.Name + no manifest namespace → fallback to name.
+	if got := resolveOreNamespace("status", &Ore{Name: "status"}); got != "status" {
+		t.Errorf("(a) got %q; want status", got)
+	}
+	// (b) install-dir == ore.Name + manifest namespace set → publisher namespace wins.
+	if got := resolveOreNamespace("status_ore", &Ore{Name: "status_ore", Namespace: "status"}); got != "status" {
+		t.Errorf("(b) got %q; want status", got)
+	}
+	// (c) install-dir != ore.Name → alias is in play, install-dir wins over manifest namespace.
+	if got := resolveOreNamespace("github_status", &Ore{Name: "status_ore", Namespace: "status"}); got != "github_status" {
+		t.Errorf("(c) got %q; want github_status (alias overrides namespace)", got)
+	}
+	// (d) install-dir != ore.Name with no namespace → install-dir still wins (alias).
+	if got := resolveOreNamespace("foo", &Ore{Name: "status"}); got != "foo" {
+		t.Errorf("(d) got %q; want foo", got)
+	}
+}
+
 func TestParseOre_HappyPath(t *testing.T) {
 	data := []byte(`apiVersion: v1
 kind: ore

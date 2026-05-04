@@ -223,11 +223,23 @@ This creates the directory layout above with placeholder content. Edit the files
 |-------|----------|-------------|
 | `apiVersion` | Yes | Always `v1` |
 | `kind` | Yes | Always `ore` |
-| `name` | Yes | Snake_case identifier; becomes the namespace (`ore.<name>.*`) |
+| `name` | Yes | Snake_case identifier (the package name) |
+| `namespace` | No | Snake_case flux namespace (`ore.<namespace>.*`); falls back to `name` when omitted |
 | `version` | Yes | Semver |
 | `description` | No | Human-readable description |
 | `author` | No | `{name, url}` |
 | `requires.ailloy` | No | Minimum ailloy version |
+
+### Namespace Precedence
+
+The flux namespace an ore lands at — the `<X>` in `ore.<X>.*` — is resolved with this precedence chain (highest wins):
+
+1. **`as:` in the consuming mold's `dependencies[]` entry** — per-cast override.
+2. **`--as <alias>` at install time** — recorded in `installed.yaml` and pins the on-disk install dir name.
+3. **`namespace:` in `ore.yaml`** — publisher-declared canonical namespace.
+4. **`name:` in `ore.yaml`** — fallback when none of the above is set.
+
+Layers 1–2 also control the on-disk install dir name; layers 3–4 are layered on top by the resolver. Set `namespace:` when the package's external name differs from the canonical flux key (e.g. publish a package called `status_ore` that lands at `ore.status.*`). Omit it when the two are the same — temper warns about redundant `namespace:` fields.
 
 ## Resolution Order
 

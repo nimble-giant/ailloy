@@ -86,7 +86,10 @@ func ResolveDepsEphemeral(manifest *mold.Mold, allowLocalDeps bool) (*EphemeralO
 			return nil, fmt.Errorf("manifest at %s has kind=%q, expected 'ore'", ref, ore.Kind)
 		}
 
-		name := ore.Name
+		// Namespace precedence: mold.yaml `as:` (consumer override) wins;
+		// otherwise the publisher's manifest namespace (Namespace if set,
+		// else Name).
+		name := ore.EffectiveNamespace()
 		if d.As != "" {
 			name = d.As
 		}

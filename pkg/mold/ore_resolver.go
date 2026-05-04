@@ -9,12 +9,16 @@ import (
 )
 
 // LoadOreOverlaysFromFS scans <root>/*/ for ore packages and returns one
-// OverlaySchema per ore (with entries prefixed by ore.<install-dir-name>.)
-// plus a defaults map of the form { "ore": { <install-dir-name>: <flux.yaml contents> } }.
+// OverlaySchema per ore (with entries prefixed by ore.<namespace>.)
+// plus a defaults map of the form { "ore": { <namespace>: <flux.yaml contents> } }.
 //
-// The install directory name (not the ore.yaml's "name" field) is used as
-// the namespace, so callers that installed an ore --as <alias> get the alias
-// reflected in the prefix.
+// The namespace is resolved with the consumer-overrides-publisher precedence
+// chain documented on Ore.Namespace:
+//   - When the install-dir name differs from ore.Name (i.e. an alias was
+//     applied via mold.yaml `as:` or `ailloy ore add --as`), the install-dir
+//     name wins — that's the alias.
+//   - Otherwise, the publisher's declared namespace wins (Ore.Namespace if
+//     set, else Ore.Name via EffectiveNamespace).
 //
 // `seen` lets the caller skip ores already loaded from a higher-priority
 // search path. Pass nil to load everything.
@@ -48,16 +52,19 @@ func LoadOreOverlaysFromFS(fsys fs.FS, root string, seen map[string]struct{}) ([
 		}
 		oreDir := path.Join(root, name)
 		manifestPath := path.Join(oreDir, "ore.yaml")
-		if _, err := LoadOreFromFS(fsys, manifestPath); err != nil {
+		ore, err := LoadOreFromFS(fsys, manifestPath)
+		if err != nil {
 			return nil, nil, fmt.Errorf("loading ore at %s: %w", oreDir, err)
 		}
+
+		ns := resolveOreNamespace(name, ore)
 
 		// Schema overlay
 		schema, err := LoadFluxSchema(fsys, path.Join(oreDir, "flux.schema.yaml"))
 		if err != nil {
 			return nil, nil, fmt.Errorf("loading ore schema at %s: %w", oreDir, err)
 		}
-		prefix := "ore." + name + "."
+		prefix := "ore." + ns + "."
 		prefixed := make([]FluxVar, 0, len(schema))
 		for _, e := range schema {
 			pe := e
@@ -65,11 +72,11 @@ func LoadOreOverlaysFromFS(fsys fs.FS, root string, seen map[string]struct{}) ([
 			prefixed = append(prefixed, pe)
 		}
 		overlays = append(overlays, OverlaySchema{
-			Source:  "ore:" + name,
+			Source:  "ore:" + ns,
 			Entries: prefixed,
 		})
 
-		// Defaults overlay (wrap unprefixed flux.yaml under ore.<name>:)
+		// Defaults overlay (wrap unprefixed flux.yaml under ore.<ns>:)
 		oreDefaults, err := LoadFluxFile(fsys, path.Join(oreDir, "flux.yaml"))
 		if err != nil {
 			return nil, nil, fmt.Errorf("loading ore defaults at %s: %w", oreDir, err)
@@ -82,7 +89,26 @@ func LoadOreOverlaysFromFS(fsys fs.FS, root string, seen map[string]struct{}) ([
 			oreNs = map[string]any{}
 			defaults["ore"] = oreNs
 		}
-		oreNs[name] = oreDefaults
+		oreNs[ns] = oreDefaults
 	}
 	return overlays, defaults, nil
+}
+
+// resolveOreNamespace implements the publisher-vs-consumer precedence chain
+// for an ore loaded from .ailloy/ores/<installDirName>/. Highest-priority
+// layers (mold.yaml `as:` and `--as <alias>`) are reflected in
+// installDirName; this helper layers the publisher's manifest on top:
+//
+//   - If installDirName != ore.Name, an alias was applied — return the
+//     install-dir name (the alias).
+//   - Otherwise, return EffectiveNamespace (Ore.Namespace if set, else
+//     Ore.Name).
+func resolveOreNamespace(installDirName string, o *Ore) string {
+	if o == nil {
+		return installDirName
+	}
+	if installDirName != o.Name {
+		return installDirName
+	}
+	return o.EffectiveNamespace()
 }

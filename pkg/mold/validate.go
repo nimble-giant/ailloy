@@ -159,6 +159,9 @@ func ValidateOre(o *Ore) error {
 	} else if !snakeCaseRegex.MatchString(o.Name) {
 		errs = append(errs, fmt.Sprintf("name %q must be snake_case (lowercase + underscore)", o.Name))
 	}
+	if o.Namespace != "" && !snakeCaseRegex.MatchString(o.Namespace) {
+		errs = append(errs, fmt.Sprintf("namespace %q must be snake_case (lowercase + underscore)", o.Namespace))
+	}
 	if o.Version == "" {
 		errs = append(errs, "version is required")
 	} else if !semverRegex.MatchString(o.Version) {
@@ -203,6 +206,14 @@ func temperOre(fsys fs.FS, result *TemperResult) {
 				File:     "ore.yaml",
 			})
 		}
+	}
+
+	if o.Namespace != "" && o.Namespace == o.Name {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityWarning,
+			Message:  "namespace matches name; field is redundant and can be omitted",
+			File:     "ore.yaml",
+		})
 	}
 
 	schema, err := LoadFluxSchema(fsys, "flux.schema.yaml")

@@ -140,6 +140,10 @@ The output should be identical. If it isn't, check:
 - Did you preserve all default values?
 - Did your discover blocks reference the correct parent flux variables?
 
+## Note: `namespace:` field
+
+Newer ailloy versions support an optional `namespace:` field in `ore.yaml` that decouples the package name from the canonical flux namespace. **Existing ores without `namespace:` keep working unchanged** — when the field is absent the namespace falls back to `name:`, matching the pre-`namespace:` behavior. Add `namespace:` only when you want the package's external name to differ from the flux key (e.g. publishing `status_ore` that lands at `ore.status.*`). See [docs/ore.md](ore.md) for the full precedence chain.
+
 ## See Also
 
 - [Ore](ore.md) — concept and authoring guide
