@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.6.26](https://github.com/nimble-giant/ailloy/compare/v0.6.25...v0.6.26) (2026-05-03)
+
+
+### Bug Fixes
+
+* reflect cast state on Discover tab and detect updates ([563b0a5](https://github.com/nimble-giant/ailloy/commit/563b0a55dc67a81a25ae0e7dda21d89ccaf92f29))
+* resolve monorepo-prefixed semver tags for subpath references ([d1ed0a3](https://github.com/nimble-giant/ailloy/commit/d1ed0a333d63b95e4f1db0f345e597ce29208e6b))
+* skip docs extension in non-interactive contexts ([404ae8f](https://github.com/nimble-giant/ailloy/commit/404ae8f2d2bcbad10e41da821eade2c195286b72))
+
+## [0.6.25](https://github.com/nimble-giant/ailloy/compare/v0.6.24...v0.6.25) (2026-05-03)
+
+
+### Features
+
+* extension subsystem; docs delegates to ailloy-embedded-docs ([e27413f](https://github.com/nimble-giant/ailloy/commit/e27413fbb16076442ae43702ca2c90a0b24b072d))
+* full-width branded header + async render w/ spinner ([d82a667](https://github.com/nimble-giant/ailloy/commit/d82a667ba3506bf5fb37aa7615648803a5a2b9c1))
+* in-cli documentation system with glamour rendering ([1d9aa45](https://github.com/nimble-giant/ailloy/commit/1d9aa450c4017e79e56dcb3e08a9a9b5bf0b7ee3)), closes [#29](https://github.com/nimble-giant/ailloy/issues/29)
+* install integration and docs for the extension subsystem ([72f101d](https://github.com/nimble-giant/ailloy/commit/72f101d19ed838a5a082f01cd90e58e2462b16ba))
+* navigable bubbletea TUI for `ailloy docs` ([5c8629f](https://github.com/nimble-giant/ailloy/commit/5c8629f927c23af83f1ff6a7e8e96c7e8dbf2127))
+* recursive docs auto-discovery + tree TUI w/ brand chrome ([c881673](https://github.com/nimble-giant/ailloy/commit/c881673862ad0ca175fe8cd5448a39c6a5624b47))
+* scrollbar on docs reading pane ([38127f2](https://github.com/nimble-giant/ailloy/commit/38127f2788c7052909b326ab7a123b3ea0193868))
+
+
+### Bug Fixes
+
+* make vim-style keys reliable in docs TUI ([4a4737a](https://github.com/nimble-giant/ailloy/commit/4a4737aee1d8dd0d7588df8087df436f155f3b91))
+* visible 2-line header + clip tree rows to prevent wrapping ([afc7a48](https://github.com/nimble-giant/ailloy/commit/afc7a48b7c7571907b795d518494c270090d5b5b))
+
 ## [0.6.24](https://github.com/nimble-giant/ailloy/compare/v0.6.23...v0.6.24) (2026-05-03)
 
 

@@ -128,7 +128,8 @@ var listCmd = &cobra.Command{
 	Long: `List registered resources.
 
 Available subcommands:
-  foundry    List registered foundry indexes`,
+  foundry      List registered foundry indexes
+  extensions   List available and installed CLI extensions`,
 }
 
 var listFoundrySubCmd = &cobra.Command{
@@ -143,9 +144,10 @@ var removeCmd = &cobra.Command{
 	Long: `Remove registered resources.
 
 Available subcommands:
-  foundry    Remove a registered foundry index
-  ingot      Remove an installed ingot
-  ore        Remove an installed ore`,
+  foundry      Remove a registered foundry index
+  ingot        Remove an installed ingot
+  ore          Remove an installed ore
+  extension    Remove an installed extension`,
 }
 
 var removeFoundrySubCmd = &cobra.Command{
@@ -175,13 +177,23 @@ var updateCmd = &cobra.Command{
 	Long: `Update registered resources.
 
 Available subcommands:
-  foundry    Refresh cached foundry indexes`,
+  foundry      Refresh cached foundry indexes
+  extension    Update an installed extension`,
 }
 
 var updateFoundrySubCmd = &cobra.Command{
 	Use:   "foundry",
 	Short: "Refresh cached foundry indexes",
 	RunE:  runFoundryUpdate,
+}
+
+var installCmd = &cobra.Command{
+	Use:   "install",
+	Short: "Install resources",
+	Long: `Install resources.
+
+Available subcommands:
+  extension    Install an ailloy extension`,
 }
 
 func init() {
@@ -229,14 +241,24 @@ func init() {
 	// list <noun>
 	rootCmd.AddCommand(listCmd)
 	listCmd.AddCommand(listFoundrySubCmd)
+	listCmd.AddCommand(listExtensionsSubCmd)
 
 	// remove <noun>
 	rootCmd.AddCommand(removeCmd)
 	removeCmd.AddCommand(removeFoundrySubCmd)
 	removeCmd.AddCommand(removeIngotSubCmd)
 	removeCmd.AddCommand(removeOreSubCmd)
+	removeCmd.AddCommand(removeExtensionSubCmd)
 
 	// update <noun>
 	rootCmd.AddCommand(updateCmd)
 	updateCmd.AddCommand(updateFoundrySubCmd)
+	updateCmd.AddCommand(updateExtensionSubCmd)
+
+	// install <noun>  (added with extensions)
+	rootCmd.AddCommand(installCmd)
+	installCmd.AddCommand(installExtensionSubCmd)
+
+	// show <noun>  (showCmd is declared in mold.go; we just hang another sub on it)
+	showCmd.AddCommand(showExtensionSubCmd)
 }

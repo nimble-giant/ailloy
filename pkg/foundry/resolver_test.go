@@ -225,3 +225,150 @@ func TestHighestVersion_Empty(t *testing.T) {
 		t.Fatal("expected error for empty tags")
 	}
 }
+
+// monorepoTagsOutput models a foundry repo (e.g. kriscoleman/replicated-foundry)
+// that uses per-mold prefixed tags (`<mold>-v<semver>`) for current releases
+// while still carrying older plain `v*` tags from before the split.
+const monorepoTagsOutput = `1111111111111111111111111111111111111111	refs/tags/v0.1.0
+2222222222222222222222222222222222222222	refs/tags/v0.2.0
+3333333333333333333333333333333333333333	refs/tags/v0.3.0
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	refs/tags/wiki-v0.4.0
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb	refs/tags/docs-v0.4.0
+cccccccccccccccccccccccccccccccccccccccc	refs/tags/launch-v0.4.0
+dddddddddddddddddddddddddddddddddddddddd	refs/tags/wiki-v0.5.0
+`
+
+func TestResolveVersion_Latest_PrefixedMonorepoTag(t *testing.T) {
+	git := mockGitRunner(map[string]string{
+		"[ls-remote --tags https://github.com/kriscoleman/replicated-foundry.git]": monorepoTagsOutput,
+	})
+
+	ref := &Reference{
+		Host:    "github.com",
+		Owner:   "kriscoleman",
+		Repo:    "replicated-foundry",
+		Subpath: "molds/wiki",
+		Type:    Latest,
+	}
+	resolved, err := ResolveVersion(ref, git)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Tag != "wiki-v0.5.0" {
+		t.Errorf("Tag = %q, want wiki-v0.5.0 (highest prefixed match for subpath)", resolved.Tag)
+	}
+	if resolved.Commit != "dddddddddddddddddddddddddddddddddddddddd" {
+		t.Errorf("Commit = %q, want dddd... (wiki-v0.5.0 SHA)", resolved.Commit)
+	}
+}
+
+func TestResolveVersion_Latest_PrefixedFallsBackToPlain(t *testing.T) {
+	git := mockGitRunner(map[string]string{
+		"[ls-remote --tags https://github.com/kriscoleman/replicated-foundry.git]": monorepoTagsOutput,
+	})
+
+	// Subpath has no matching prefixed tags → fall back to plain v*.
+	ref := &Reference{
+		Host:    "github.com",
+		Owner:   "kriscoleman",
+		Repo:    "replicated-foundry",
+		Subpath: "molds/nonexistent",
+		Type:    Latest,
+	}
+	resolved, err := ResolveVersion(ref, git)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Tag != "v0.3.0" {
+		t.Errorf("Tag = %q, want v0.3.0 (fallback to plain semver)", resolved.Tag)
+	}
+}
+
+func TestResolveVersion_Latest_NoSubpathIgnoresPrefixed(t *testing.T) {
+	git := mockGitRunner(map[string]string{
+		"[ls-remote --tags https://github.com/kriscoleman/replicated-foundry.git]": monorepoTagsOutput,
+	})
+
+	// No subpath → only plain v* tags are eligible (today's behaviour).
+	ref := &Reference{
+		Host:  "github.com",
+		Owner: "kriscoleman",
+		Repo:  "replicated-foundry",
+		Type:  Latest,
+	}
+	resolved, err := ResolveVersion(ref, git)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Tag != "v0.3.0" {
+		t.Errorf("Tag = %q, want v0.3.0 (no subpath → plain only)", resolved.Tag)
+	}
+}
+
+func TestResolveVersion_Exact_PrefixedMonorepoTag(t *testing.T) {
+	git := mockGitRunner(map[string]string{
+		"[ls-remote --tags https://github.com/kriscoleman/replicated-foundry.git]": monorepoTagsOutput,
+	})
+
+	// User says @v0.4.0 with a wiki subpath → resolve to wiki-v0.4.0.
+	ref := &Reference{
+		Host:    "github.com",
+		Owner:   "kriscoleman",
+		Repo:    "replicated-foundry",
+		Subpath: "molds/wiki",
+		Version: "v0.4.0",
+		Type:    Exact,
+	}
+	resolved, err := ResolveVersion(ref, git)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Tag != "wiki-v0.4.0" {
+		t.Errorf("Tag = %q, want wiki-v0.4.0", resolved.Tag)
+	}
+	if resolved.Commit != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Errorf("Commit = %q, want aaaa... (wiki-v0.4.0 SHA)", resolved.Commit)
+	}
+}
+
+func TestResolveVersion_Constraint_PrefixedMonorepoTag(t *testing.T) {
+	git := mockGitRunner(map[string]string{
+		"[ls-remote --tags https://github.com/kriscoleman/replicated-foundry.git]": monorepoTagsOutput,
+	})
+
+	ref := &Reference{
+		Host:    "github.com",
+		Owner:   "kriscoleman",
+		Repo:    "replicated-foundry",
+		Subpath: "molds/wiki",
+		Version: ">=0.4.0",
+		Type:    Constraint,
+	}
+	resolved, err := ResolveVersion(ref, git)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// >=0.4.0 against wiki-prefixed semvers (0.4.0, 0.5.0) → 0.5.0.
+	if resolved.Tag != "wiki-v0.5.0" {
+		t.Errorf("Tag = %q, want wiki-v0.5.0", resolved.Tag)
+	}
+}
+
+func TestReference_ReleasePrefix(t *testing.T) {
+	cases := []struct {
+		subpath string
+		want    string
+	}{
+		{"", ""},
+		{"molds/wiki", "wiki"},
+		{"molds/launch/", "launch"},
+		{"wiki", "wiki"},
+		{"a/b/c", "c"},
+	}
+	for _, tc := range cases {
+		ref := &Reference{Subpath: tc.subpath}
+		if got := ref.ReleasePrefix(); got != tc.want {
+			t.Errorf("ReleasePrefix(subpath=%q) = %q, want %q", tc.subpath, got, tc.want)
+		}
+	}
+}

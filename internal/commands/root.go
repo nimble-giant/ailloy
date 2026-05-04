@@ -56,7 +56,9 @@ func quickStartBlock() string {
 		"Quick Start:\n\n" +
 			"🦊 ailloy cast            # Cast project (alias: install)\n" +
 			"🦊 ailloy mold list       # View molds\n" +
-			"🦊 ailloy anneal          # Anneal settings (alias: configure)",
+			"🦊 ailloy anneal          # Anneal settings (alias: configure)\n" +
+			"🦊 ailloy docs            # Browse in-CLI documentation\n" +
+			"🦊 ailloy <cmd> --docs    # Render the command's documentation",
 	)
 }
 

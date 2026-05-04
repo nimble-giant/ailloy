@@ -160,6 +160,20 @@ func (r *Reference) CacheKey() string {
 	return fmt.Sprintf("%s/%s/%s", r.Host, r.Owner, r.Repo)
 }
 
+// ReleasePrefix returns the last segment of Subpath, used to match monorepo-
+// style per-mold tags like `<prefix>-v1.2.3` (e.g. `wiki-v0.4.0`). Returns ""
+// when there is no subpath.
+func (r *Reference) ReleasePrefix() string {
+	s := strings.Trim(r.Subpath, "/")
+	if s == "" {
+		return ""
+	}
+	if idx := strings.LastIndex(s, "/"); idx != -1 {
+		return s[idx+1:]
+	}
+	return s
+}
+
 // String returns a human-readable representation of the reference.
 func (r *Reference) String() string {
 	s := r.CacheKey()
