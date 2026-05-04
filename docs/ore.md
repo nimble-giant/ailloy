@@ -281,6 +281,14 @@ dependencies:
 
 `ailloy cast` and `ailloy recast` auto-install declared deps. `ailloy forge` and `ailloy temper` resolve declared deps ephemerally (no on-disk side effects).
 
+For CI, pass `--frozen` to `cast` (or `recast`) to fail loudly on any declared dep that isn't already installed:
+
+```bash
+ailloy cast my-mold --frozen
+```
+
+With `--frozen` set, a typo or unpinned bump in `mold.yaml` becomes an error referencing the missing dep instead of a silent network fetch + `installed.yaml` / `ailloy.lock` mutation. When every declared dep is already installed, `--frozen` is a no-op and cast proceeds normally.
+
 ## Validating Ores
 
 ```bash

@@ -25,7 +25,12 @@ type CastOptions struct {
 	// replaced rather than erroring. Mirrors the
 	// --force-replace-on-parse-error CLI flag.
 	ForceReplaceOnParseError bool
-	OnProgress               func(stage, item string)
+	// Frozen, when true, makes cast fail (not auto-install) on any declared
+	// ingot/ore dep that is missing from .ailloy/. Intended for CI: a typo
+	// or unpinned bump in mold.yaml becomes a loud error rather than a
+	// silent network fetch + manifest/lock mutation.
+	Frozen     bool
+	OnProgress func(stage, item string)
 
 	// ClaudePlugin packages the rendered mold as a Claude Code plugin under
 	// .claude/plugins/<slug>/ (or ~/.claude/plugins/<slug>/ when Global is set)
@@ -94,7 +99,7 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 	// otherwise a malicious foundry could declare e.g. `- ore: /etc` and
 	// have it copied into the project tree.
 	allowLocalDeps := remoteResult == nil
-	if err := installDeclaredDeps(manifest, moldKey, opts.Global, allowLocalDeps); err != nil {
+	if err := installDeclaredDeps(manifest, moldKey, opts.Global, allowLocalDeps, opts.Frozen); err != nil {
 		return res, fmt.Errorf("installing declared dependencies: %w", err)
 	}
 

@@ -29,12 +29,16 @@ Use --dry-run to preview changes without applying them.`,
 var (
 	recastDryRun bool
 	recastGlobal bool
+	// recastFrozen mirrors --frozen on cast: fail (do not auto-install) on
+	// any declared ingot/ore dep that's missing from .ailloy/.
+	recastFrozen bool
 )
 
 func init() {
 	rootCmd.AddCommand(recastCmd)
 	recastCmd.Flags().BoolVar(&recastDryRun, "dry-run", false, "preview changes without applying")
 	recastCmd.Flags().BoolVarP(&recastGlobal, "global", "g", false, "operate on the global manifest/lock under ~/")
+	recastCmd.Flags().BoolVar(&recastFrozen, "frozen", false, "fail (do not auto-install) when a declared ingot/ore dep is missing from .ailloy/; intended for CI")
 }
 
 type recastChange struct {
@@ -148,7 +152,7 @@ func runRecast(_ *cobra.Command, args []string) error {
 				// Auto-install newly declared deps. Recast operates on the
 				// project's installed.yaml (or global per --global). Local-path
 				// deps are refused because recast walks remote references.
-				if err := installDeclaredDeps(freshMold, moldKey, recastGlobal, false); err != nil {
+				if err := installDeclaredDeps(freshMold, moldKey, recastGlobal, false, recastFrozen); err != nil {
 					log.Printf("warning: installing deps for %s: %v", entry.Name, err)
 				}
 				// Cascade-prune deps the mold no longer declares.

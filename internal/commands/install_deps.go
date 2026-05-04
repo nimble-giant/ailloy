@@ -29,9 +29,15 @@ import (
 // refusing local-path deps inside a remotely-resolved mold prevents a
 // malicious foundry from exfiltrating files via the cast pipeline.
 //
+// `frozen`, when true, makes the walker error on any missing dep instead of
+// auto-installing it. Intended for CI: a typo or unpinned bump in mold.yaml
+// becomes a loud failure rather than a silent network fetch + manifest/lock
+// mutation. Already-installed deps are still indexed (so dependents lists
+// stay accurate).
+//
 // Pre-collision check: ore deps with explicit aliases that resolve to the
 // same install-dir name fail BEFORE any download.
-func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocalDeps bool) error {
+func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocalDeps, frozen bool) error {
 	if manifest == nil || len(manifest.Dependencies) == 0 {
 		return nil
 	}
@@ -82,6 +88,10 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 				_ = foundry.WriteInstalledManifest(manifestPath, im)
 			}
 			continue
+		}
+
+		if frozen {
+			return fmt.Errorf("dependency %s %q is not installed and --frozen blocks auto-install; run `ailloy %s add %s` to satisfy it", kind, ref, kind, ref)
 		}
 
 		if !castSilent.Load() {

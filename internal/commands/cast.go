@@ -50,6 +50,10 @@ var (
 	castPluginName               string
 	castPluginVer                string
 	castForceReplaceOnParseError bool
+	// castFrozen, when true, blocks auto-install of declared ingot/ore deps
+	// at cast time. Missing deps surface as errors instead of being fetched
+	// silently. Intended for CI; see --frozen flag.
+	castFrozen bool
 	// castSilent suppresses interactive output from copyResolvedFiles and
 	// related helpers. Set by CastMold (the programmatic core used by the
 	// foundries TUI) so per-file "✅ Created" lines don't corrupt the
@@ -71,6 +75,10 @@ func init() {
 		"force-replace-on-parse-error",
 		false,
 		"if a destination uses strategy: merge but is unparseable, replace it instead of erroring")
+	castCmd.Flags().BoolVar(&castFrozen,
+		"frozen",
+		false,
+		"fail (do not auto-install) when a declared ingot/ore dep is missing from .ailloy/; intended for CI")
 }
 
 func runCast(_ *cobra.Command, args []string) error {
@@ -265,7 +273,7 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	// otherwise a malicious foundry could declare e.g. `- ore: /etc` and
 	// have it copied into the project tree.
 	allowLocalDeps := resolvedRemote == nil
-	if err := installDeclaredDeps(manifest, moldKey, castGlobal, allowLocalDeps); err != nil {
+	if err := installDeclaredDeps(manifest, moldKey, castGlobal, allowLocalDeps, castFrozen); err != nil {
 		return fmt.Errorf("installing declared dependencies: %w", err)
 	}
 

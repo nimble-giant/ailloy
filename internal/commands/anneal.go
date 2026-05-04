@@ -93,7 +93,7 @@ func runAnneal(_ *cobra.Command, args []string) error {
 			}
 		}
 		allowLocalDeps := !foundry.IsRemoteReference(moldDir)
-		if err := installDeclaredDeps(manifest, moldKey, false, allowLocalDeps); err != nil {
+		if err := installDeclaredDeps(manifest, moldKey, false, allowLocalDeps, false); err != nil {
 			log.Printf("warning: installing declared deps for %s: %v", moldDir, err)
 		}
 	}
