@@ -330,6 +330,73 @@ func TestIntegration_ReplicatedFoundryShape_SingleTargetOnly(t *testing.T) {
 	}
 }
 
+// TestIntegration_MultiDest_DifferentDirs_SkipsEmptyRender: literal
+// reproduction of issue #195. A single source file fans out to two
+// different destination directories via per-dest `set` overrides; the
+// template uses conditionals so only one destination's render produces
+// content. The inactive destination's render is empty and must NOT be
+// written as a zero-byte file.
+func TestIntegration_MultiDest_DifferentDirs_SkipsEmptyRender(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	flux := `agent:
+  targets:
+    - opencode
+
+output:
+  agents:
+    - dest: .claude/agents
+      set:
+        agent.current_target: claude
+    - dest: .opencode/agents
+      set:
+        agent.current_target: opencode
+`
+
+	template := `{{- if and (eq .agent.current_target "claude") (has "claude" .agent.targets) -}}
+---
+name: coding-agent
+model: opus
+---
+claude body
+{{- else if and (eq .agent.current_target "opencode") (has "opencode" .agent.targets) -}}
+---
+description: coding agent
+mode: primary
+---
+opencode body
+{{- end -}}`
+
+	moldFS := fstest.MapFS{
+		"mold.yaml":              &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: agents\nversion: 0.1.0\n")},
+		"flux.yaml":              &fstest.MapFile{Data: []byte(flux)},
+		"agents/coding-agent.md": &fstest.MapFile{Data: []byte(template)},
+	}
+
+	castFoundryMold(t, moldFS)
+
+	// Active destination must exist with content.
+	openPath := filepath.Join(".opencode", "agents", "coding-agent.md")
+	openBytes, err := os.ReadFile(openPath)
+	if err != nil {
+		t.Fatalf("expected %s to be created, got: %v", openPath, err)
+	}
+	if !strings.Contains(string(openBytes), "opencode body") {
+		t.Errorf("expected opencode content, got:\n%s", openBytes)
+	}
+
+	// Inactive destination must NOT be written as a zero-byte file.
+	claudePath := filepath.Join(".claude", "agents", "coding-agent.md")
+	if info, err := os.Stat(claudePath); err == nil {
+		t.Errorf("regression #195: %s should not exist (template renders empty for inactive target), but it does (size=%d)", claudePath, info.Size())
+	}
+}
+
 // TestIntegration_ReplicatedFoundryShape_ThreeMolds: a more demanding scenario
 // — three molds all writing to the same destination files. Verifies merge
 // behaves transitively (mold C reads the result of mold A + mold B).
