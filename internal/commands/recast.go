@@ -152,7 +152,7 @@ func runRecast(_ *cobra.Command, args []string) error {
 				// Auto-install newly declared deps. Recast operates on the
 				// project's installed.yaml (or global per --global). Local-path
 				// deps are refused because recast walks remote references.
-				if err := installDeclaredDeps(freshMold, moldKey, recastGlobal, false, recastFrozen); err != nil {
+				if err := installDeclaredDeps(freshMold, moldKey, recastGlobal, false, recastFrozen, false, nil); err != nil {
 					log.Printf("warning: installing deps for %s: %v", entry.Name, err)
 				}
 				// Cascade-prune deps the mold no longer declares.

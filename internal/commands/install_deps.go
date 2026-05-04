@@ -35,11 +35,19 @@ import (
 // mutation. Already-installed deps are still indexed (so dependents lists
 // stay accurate).
 //
+// `silent` suppresses the "Installing %s %s…" / "Installed:" status prints —
+// CastMold (the foundries TUI path) sets this true so concurrent casts can't
+// corrupt the Bubble Tea alt-screen. `logger` receives the non-fatal
+// "warning: writing installed manifest" notice; nil falls back to log.Default().
+//
 // Pre-collision check: ore deps with explicit aliases that resolve to the
 // same install-dir name fail BEFORE any download.
-func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocalDeps, frozen bool) error {
+func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocalDeps, frozen, silent bool, logger *log.Logger) error {
 	if manifest == nil || len(manifest.Dependencies) == 0 {
 		return nil
+	}
+	if logger == nil {
+		logger = log.Default()
 	}
 
 	// Pre-validate kinds and pre-collide explicit aliases.
@@ -94,7 +102,7 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 			return fmt.Errorf("dependency %s %q is not installed and --frozen blocks auto-install; run `ailloy %s add %s` to satisfy it", kind, ref, kind, ref)
 		}
 
-		if !castSilent.Load() {
+		if !silent {
 			fmt.Println(styles.WorkingBanner(fmt.Sprintf("Installing %s %s...", kind, ref)))
 		}
 		fsys, resolvedSource, resolvedSubpath, version, commit, err := resolveDepFS(ref, d.Version, global)
@@ -166,13 +174,13 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 		}
 		im.UpsertArtifact(kind, entry)
 
-		if !castSilent.Load() {
+		if !silent {
 			fmt.Println(styles.SuccessStyle.Render("  Installed: ") + styles.AccentStyle.Render(manifestName+" "+version))
 		}
 	}
 
 	if err := foundry.WriteInstalledManifest(manifestPath, im); err != nil {
-		log.Printf("warning: writing installed manifest: %v", err)
+		logger.Printf("warning: writing installed manifest: %v", err)
 	}
 
 	// Update ailloy.lock if it exists (project-scope only).
@@ -479,9 +487,7 @@ func cascadeUninstallArtifacts(manifestPath, moldKey string, global bool) error 
 		if err := os.RemoveAll(baseDir); err != nil {
 			log.Printf("warning: removing %s: %v", baseDir, err)
 		}
-		if !castSilent.Load() {
-			fmt.Println(styles.SuccessStyle.Render("  Cascade-removed: ") + styles.AccentStyle.Render(kind+" "+installName))
-		}
+		fmt.Println(styles.SuccessStyle.Render("  Cascade-removed: ") + styles.AccentStyle.Render(kind+" "+installName))
 	}
 
 	if err := foundry.WriteInstalledManifest(manifestPath, im); err != nil {
