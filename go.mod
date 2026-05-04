@@ -16,6 +16,7 @@ require (
 	github.com/nimble-giant/ailloy-extensions-sdk v0.1.0
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/spf13/cobra v1.9.1
+	github.com/ulikunitz/xz v0.5.15
 	golang.org/x/sync v0.17.0
 	golang.org/x/term v0.42.0
 )
