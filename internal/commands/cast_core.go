@@ -69,7 +69,7 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 	}
 	source := ""
 	if remoteResult != nil {
-		source = remoteResult.Ref.CacheKey()
+		source = remoteResult.Ref.OverrideKey()
 	}
 	res.Source = source
 

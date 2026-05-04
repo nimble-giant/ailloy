@@ -121,7 +121,7 @@ func resolveMoldReader(args []string) (*blanks.MoldReader, string, error) {
 				return nil, "", fmt.Errorf("resolving remote mold: %w", err)
 			}
 			resolvedRemote = result
-			return blanks.NewMoldReaderFromFS(fsys, result.Root), result.Ref.CacheKey(), nil
+			return blanks.NewMoldReaderFromFS(fsys, result.Root), result.Ref.OverrideKey(), nil
 		}
 		reader, err := blanks.NewMoldReaderFromPath(args[0])
 		return reader, "", err
