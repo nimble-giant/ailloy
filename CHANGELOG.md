@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.27](https://github.com/nimble-giant/ailloy/compare/v0.6.26...v0.6.27) (2026-05-04)
+
+
+### Bug Fixes
+
+* apply .ailloy/flux/ overrides for subpath molds during cast ([7b7a53c](https://github.com/nimble-giant/ailloy/commit/7b7a53c7d0c31fe180e03a8fa19e5b692dfc2dbe)), closes [#196](https://github.com/nimble-giant/ailloy/issues/196)
+* clean up empty multi-dest dirs in CastMold path ([082671c](https://github.com/nimble-giant/ailloy/commit/082671c5b1e69cee8fa6c4b19f7a647ae2ab4ed9)), closes [#195](https://github.com/nimble-giant/ailloy/issues/195)
+
 ## [0.6.26](https://github.com/nimble-giant/ailloy/compare/v0.6.25...v0.6.26) (2026-05-03)
 
 
