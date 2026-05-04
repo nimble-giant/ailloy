@@ -69,12 +69,19 @@ type resolveConfig struct {
 	// updated) when a file already exists at this path. Resolve never creates
 	// the lock — that is the job of `ailloy quench`.
 	lockPath string
+	// logger is used for non-fatal warnings (lock-file read/write failures,
+	// "using locked version" notices). Defaults to log.Default(). Callers
+	// running inside a TUI should pass a logger writing to io.Discard.
+	logger *log.Logger
 }
 
 // applyResolveDefaults sets the default lockPath. Exposed for tests.
 func applyResolveDefaults(c *resolveConfig) {
 	if c.lockPath == "" {
 		c.lockPath = LockFileName
+	}
+	if c.logger == nil {
+		c.logger = log.Default()
 	}
 }
 
@@ -83,6 +90,15 @@ func applyResolveDefaults(c *resolveConfig) {
 func WithLockPath(path string) ResolveOption {
 	return func(c *resolveConfig) {
 		c.lockPath = path
+	}
+}
+
+// WithLogger overrides the logger used for non-fatal resolve warnings. Pass a
+// logger writing to io.Discard to silence warnings — useful when Resolve runs
+// inside a Bubble Tea TUI where stray writes corrupt the alt-screen.
+func WithLogger(logger *log.Logger) ResolveOption {
+	return func(c *resolveConfig) {
+		c.logger = logger
 	}
 }
 
@@ -165,12 +181,12 @@ func resolveWithMeta(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.F
 	if useLock {
 		lock, err := ReadLockFile(cfg.lockPath)
 		if err != nil {
-			log.Printf("warning: reading lock file: %v", err)
+			cfg.logger.Printf("warning: reading lock file: %v", err)
 		}
 		if entry := lock.FindEntry(ref.CacheKey(), ref.Subpath); entry != nil && ref.Type != Branch && ref.Type != SHA {
 			if lockedSatisfies(ref, entry) {
 				resolved = &ResolvedVersion{Tag: entry.Version, Commit: entry.Commit}
-				log.Printf("using locked version %s@%s", ref.CacheKey(), entry.Version)
+				cfg.logger.Printf("using locked version %s@%s", ref.CacheKey(), entry.Version)
 			}
 		}
 	}
@@ -194,7 +210,7 @@ func resolveWithMeta(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.F
 
 	if useLock {
 		if err := updateLockAt(cfg.lockPath, ref, resolved); err != nil {
-			log.Printf("warning: updating lock file: %v", err)
+			cfg.logger.Printf("warning: updating lock file: %v", err)
 		}
 	}
 

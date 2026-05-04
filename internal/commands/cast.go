@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/huh"
@@ -50,12 +49,31 @@ var (
 	castPluginName               string
 	castPluginVer                string
 	castForceReplaceOnParseError bool
-	// castSilent suppresses interactive output from copyResolvedFiles and
-	// related helpers. Set by CastMold (the programmatic core used by the
-	// foundries TUI) so per-file "✅ Created" lines don't corrupt the
-	// Bubble Tea alt-screen.
-	castSilent atomic.Bool
 )
+
+// copyOpts configures copyResolvedFiles. Centralising these as a struct lets
+// callers like CastMold (used by the foundries TUI) request a fully silent
+// run — no per-file stdout writes, all warnings to a discarding logger — so
+// concurrent casts can't race on global silencing flags.
+type copyOpts struct {
+	ForceReplaceOnParseError bool
+	// Silent suppresses the per-file "✅ Created" stdout lines. The Bubble
+	// Tea alt-screen is corrupted by any stray Println, so the TUI path sets
+	// this true.
+	Silent bool
+	// Logger receives non-fatal warnings (template validation, skipped empty
+	// renders). Nil falls back to log.Default(); the TUI path passes a
+	// discarding logger so concurrent casts can't race on log.SetOutput.
+	Logger *log.Logger
+}
+
+// logger returns opts.Logger or log.Default() when unset.
+func (o copyOpts) logger() *log.Logger {
+	if o.Logger != nil {
+		return o.Logger
+	}
+	return log.Default()
+}
 
 func init() {
 	rootCmd.AddCommand(castCmd)
@@ -292,7 +310,9 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	fmt.Println()
 
 	// Copy resolved files from mold
-	if err := copyResolvedFiles(reader, manifest, flux, filesToCast, castForceReplaceOnParseError); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, filesToCast, copyOpts{
+		ForceReplaceOnParseError: castForceReplaceOnParseError,
+	}); err != nil {
 		return fmt.Errorf("failed to copy files: %w", err)
 	}
 
@@ -301,7 +321,7 @@ func castProject(reader *blanks.MoldReader, source string) error {
 
 	// Record the cast in the installed manifest (provenance for `recast` / `quench`).
 	if resolvedRemote != nil {
-		if err := recordInstalled(resolvedRemote, castGlobal); err != nil {
+		if err := recordInstalled(resolvedRemote, castGlobal, nil); err != nil {
 			log.Printf("warning: failed to update installed manifest: %v", err)
 		}
 	}
@@ -609,7 +629,9 @@ func offerAgentsImport(claudePath string) {
 
 // copyResolvedFiles copies resolved mold files to the project, applying template
 // processing where indicated by the output mapping.
-func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[string]any, resolved []mold.ResolvedFile, forceReplaceOnParseError bool) error {
+func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[string]any, resolved []mold.ResolvedFile, opts copyOpts) error {
+	logger := opts.logger()
+
 	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
 	var schema []mold.FluxVar
 	if s, err := reader.LoadFluxSchema(); err == nil && s != nil {
@@ -618,12 +640,15 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 		schema = manifest.Flux
 	}
 	if err := mold.ValidateFlux(schema, flux); err != nil {
-		log.Printf("warning: %v", err)
+		logger.Printf("warning: %v", err)
 	}
 
 	// Build ingot resolver
 	resolver := buildIngotResolver(flux, reader.Root())
-	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
+	tplOpts := []mold.TemplateOption{
+		mold.WithIngotResolver(resolver),
+		mold.WithLogger(logger),
+	}
 
 	for _, rf := range resolved {
 		content, err := fs.ReadFile(reader.FS(), rf.SrcPath)
@@ -637,7 +662,7 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 			if len(rf.Set) > 0 {
 				fluxForFile = mold.MergeSet(flux, rf.Set)
 			}
-			processed, err := mold.ProcessTemplate(string(content), fluxForFile, opts...)
+			processed, err := mold.ProcessTemplate(string(content), fluxForFile, tplOpts...)
 			if err != nil {
 				return fmt.Errorf("failed to process %s: %w", rf.SrcPath, err)
 			}
@@ -648,14 +673,14 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 
 		// Skip files that render to empty or whitespace-only content (#130)
 		if rf.Process && strings.TrimSpace(string(outputContent)) == "" {
-			log.Printf("skipping %s: rendered to empty content", rf.SrcPath)
+			logger.Printf("skipping %s: rendered to empty content", rf.SrcPath)
 			continue
 		}
 
 		switch rf.Strategy {
 		case "merge":
 			err := merge.MergeFile(rf.DestPath, outputContent, merge.Options{
-				ForceReplaceOnParseError: forceReplaceOnParseError,
+				ForceReplaceOnParseError: opts.ForceReplaceOnParseError,
 			})
 			if err != nil {
 				var pe *merge.ParseError
@@ -689,7 +714,7 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 			return fmt.Errorf("unknown strategy %q on output for %s", rf.Strategy, rf.DestPath)
 		}
 
-		if !castSilent.Load() {
+		if !opts.Silent {
 			fmt.Println(styles.SuccessStyle.Render("✅ Created: ") + styles.CodeStyle.Render(rf.DestPath))
 		}
 	}
@@ -698,14 +723,19 @@ func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[
 }
 
 // recordInstalled upserts the just-cast mold into the installed manifest.
-func recordInstalled(result *foundry.ResolveResult, global bool) error {
+// logger receives the "corrupt manifest, resetting" warning; pass a discarding
+// logger from TUI callers to keep the alt-screen clean.
+func recordInstalled(result *foundry.ResolveResult, global bool, logger *log.Logger) error {
+	if logger == nil {
+		logger = log.Default()
+	}
 	path := manifestPathFor(global)
 	if path == "" {
 		return nil // global path unresolvable — silently skip rather than write to cwd
 	}
 	manifest, err := foundry.ReadInstalledManifest(path)
 	if err != nil {
-		log.Printf("warning: corrupt installed manifest at %s, resetting: %v", path, err)
+		logger.Printf("warning: corrupt installed manifest at %s, resetting: %v", path, err)
 		manifest = nil
 	}
 	if manifest == nil {

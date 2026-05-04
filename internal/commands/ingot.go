@@ -159,7 +159,7 @@ func runIngotAdd(_ *cobra.Command, args []string) error {
 	fmt.Println(styles.SuccessStyle.Render("Ingot added: ") + styles.AccentStyle.Render(ingot.Name+" "+ingot.Version))
 	fmt.Println(styles.InfoStyle.Render("Installed to: ") + styles.CodeStyle.Render(destDir))
 
-	if err := recordInstalled(result, false); err != nil {
+	if err := recordInstalled(result, false, nil); err != nil {
 		log.Printf("warning: failed to update installed manifest: %v", err)
 	}
 
