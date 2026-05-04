@@ -9,6 +9,67 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
+// TestCastMold_CleansEmptyMultiDestDirs reproduces issue #195: when a
+// multi-destination output mapping has per-dest `set` context and the
+// template renders to empty for one destination, the foundry-TUI install
+// path (CastMold) eagerly created the destination dir but never cleaned
+// it up after the empty render was skipped. The CLI cast path already
+// cleans up via cleanupEmptyDirs (#145); CastMold needs the same.
+func TestCastMold_CleansEmptyMultiDestDirs(t *testing.T) {
+	projectDir := t.TempDir()
+	t.Chdir(projectDir)
+	t.Setenv("HOME", t.TempDir())
+
+	moldDir := filepath.Join(projectDir, "mold")
+	if err := os.MkdirAll(filepath.Join(moldDir, "agents"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(moldDir, "mold.yaml"),
+		[]byte("apiVersion: v1\nkind: Mold\nname: launch\nversion: 0.1.0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(moldDir, "flux.yaml"), []byte(`agent:
+  targets:
+    - opencode
+
+output:
+  agents:
+    - dest: .claude/agents
+      set:
+        agent.current_target: claude
+    - dest: .opencode/agents
+      set:
+        agent.current_target: opencode
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	template := `{{- if and (eq .agent.current_target "claude") (has "claude" .agent.targets) -}}
+---
+name: coding-agent
+---
+claude body
+{{- else if and (eq .agent.current_target "opencode") (has "opencode" .agent.targets) -}}
+---
+description: opencode
+---
+opencode body
+{{- end -}}`
+	if err := os.WriteFile(filepath.Join(moldDir, "agents", "coding-agent.md"), []byte(template), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := CastMold(t.Context(), moldDir, CastOptions{}); err != nil {
+		t.Fatalf("CastMold: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(projectDir, ".opencode", "agents", "coding-agent.md")); err != nil {
+		t.Fatalf("expected .opencode/agents/coding-agent.md to exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(projectDir, ".claude", "agents")); err == nil {
+		t.Errorf("regression #195: .claude/agents/ leftover after CastMold (template rendered empty for inactive target)")
+	}
+}
+
 // TestLayerFluxForCore_AutoLoadsPersistedFluxFiles asserts that
 // ./.ailloy/flux/<slug>.yaml and ~/.ailloy/flux/<slug>.yaml are layered into
 // the cast pipeline between mold defaults and explicit -f files. This is the
