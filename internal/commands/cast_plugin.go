@@ -23,6 +23,10 @@ type pluginPackageOpts struct {
 	WithWorkflows   bool
 	NameOverride    string
 	VersionOverride string
+	// Logger receives non-fatal warnings (flux validation, unresolved template
+	// vars). Nil falls back to log.Default(); the TUI path passes a discarding
+	// logger so concurrent casts can't corrupt the alt-screen.
+	Logger *log.Logger
 }
 
 // pluginPackageResult summarizes a packaging run for callers that want to
@@ -38,12 +42,12 @@ type pluginPackageResult struct {
 // packageMoldAsClaudePlugin so foundry install / CastMold can share it.
 //
 // `source` is the resolved mold ref used to pick up persisted flux files; it
-// is "" for local mold dirs and embedded molds.
+// is "" for local mold dirs and embedded molds. CastMold bypasses this
+// function and calls packageMoldAsClaudePlugin directly with a discarding
+// logger, so this CLI path always prints.
 func castClaudePlugin(reader *blanks.MoldReader, source string) error {
-	if !castSilent.Load() {
-		fmt.Println(styles.WorkingBanner("Casting Ailloy mold as Claude Code plugin..."))
-		fmt.Println()
-	}
+	fmt.Println(styles.WorkingBanner("Casting Ailloy mold as Claude Code plugin..."))
+	fmt.Println()
 
 	flux, err := loadCastFlux(reader, source)
 	if err != nil {
@@ -60,14 +64,12 @@ func castClaudePlugin(reader *blanks.MoldReader, source string) error {
 		return err
 	}
 
-	if !castSilent.Load() {
-		if withWorkflows && res.HadWorkflows {
-			fmt.Println(styles.WarningStyle.Render("⚠️  --with-workflows has no effect with --claude-plugin: workflow blanks are not bundled into Claude Code plugins."))
-		}
-		fmt.Println()
-		fmt.Println(styles.SuccessStyle.Render("✅ Plugin written to ") + styles.CodeStyle.Render(res.TargetDir))
-		fmt.Println(styles.InfoStyle.Render("💡 Claude Code will discover the plugin at this path on its next start."))
+	if withWorkflows && res.HadWorkflows {
+		fmt.Println(styles.WarningStyle.Render("⚠️  --with-workflows has no effect with --claude-plugin: workflow blanks are not bundled into Claude Code plugins."))
 	}
+	fmt.Println()
+	fmt.Println(styles.SuccessStyle.Render("✅ Plugin written to ") + styles.CodeStyle.Render(res.TargetDir))
+	fmt.Println(styles.InfoStyle.Render("💡 Claude Code will discover the plugin at this path on its next start."))
 
 	return nil
 }
@@ -78,12 +80,17 @@ func castClaudePlugin(reader *blanks.MoldReader, source string) error {
 func packageMoldAsClaudePlugin(reader *blanks.MoldReader, flux map[string]any, opts pluginPackageOpts) (pluginPackageResult, error) {
 	var res pluginPackageResult
 
+	logger := opts.Logger
+	if logger == nil {
+		logger = log.Default()
+	}
+
 	manifest, err := reader.LoadManifest()
 	if err != nil {
 		return res, fmt.Errorf("loading mold manifest: %w", err)
 	}
 
-	rendered, err := renderMoldFiles(reader, manifest, flux)
+	rendered, err := renderMoldFiles(reader, manifest, flux, logger)
 	if err != nil {
 		return res, err
 	}
@@ -123,8 +130,11 @@ func packageMoldAsClaudePlugin(reader *blanks.MoldReader, flux map[string]any, o
 // renderMoldFiles runs the cast rendering pipeline (flux validation, ingot
 // resolver, template processing) and returns the resulting files in memory.
 // Files that render to empty content are skipped, matching cast's on-disk
-// behavior (#130).
-func renderMoldFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[string]any) ([]plugin.RenderedFile, error) {
+// behavior (#130). logger receives non-fatal warnings.
+func renderMoldFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[string]any, logger *log.Logger) ([]plugin.RenderedFile, error) {
+	if logger == nil {
+		logger = log.Default()
+	}
 	ignorePatterns := mold.LoadIgnorePatterns(reader.FS(), manifest)
 	var resolveOpts []mold.ResolveOption
 	if len(ignorePatterns) > 0 {
@@ -143,11 +153,14 @@ func renderMoldFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[st
 		schema = manifest.Flux
 	}
 	if verr := mold.ValidateFlux(schema, flux); verr != nil {
-		log.Printf("warning: %v", verr)
+		logger.Printf("warning: %v", verr)
 	}
 
 	resolver := buildIngotResolver(flux, reader.Root())
-	tplOpts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
+	tplOpts := []mold.TemplateOption{
+		mold.WithIngotResolver(resolver),
+		mold.WithLogger(logger),
+	}
 
 	out := make([]plugin.RenderedFile, 0, len(resolved))
 	for _, rf := range resolved {

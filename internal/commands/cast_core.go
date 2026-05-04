@@ -49,21 +49,18 @@ type CastResult struct {
 // no terminal output. Returns structured results suitable for the TUI to
 // render. The cobra `runCast` keeps its richer CLI presentation.
 //
+// All silencing is plumbed through per-call options (silent flags, discarding
+// loggers). No process-global state — concurrent CastMold calls (as happens
+// when the foundries TUI dispatches multi-mold casts via tea.Batch) cannot
+// race each other into leaking output to the alt-screen.
+//
 // ctx is currently unused but reserved for future cancellation.
 func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, error) {
 	var res CastResult
 
-	// Silence per-file "✅ Created" lines from copyResolvedFiles so the
-	// Bubble Tea alt-screen doesn't get clobbered. Also redirect stderr
-	// so log.Printf warnings (e.g. install-state, lock-file write) don't
-	// bleed through.
-	castSilent.Store(true)
-	defer castSilent.Store(false)
-	prevLog := log.Writer()
-	log.SetOutput(io.Discard)
-	defer log.SetOutput(prevLog)
+	silentLogger := log.New(io.Discard, "", 0)
 
-	reader, remoteResult, err := openMoldReaderForCore(ref, opts.Global)
+	reader, remoteResult, err := openMoldReaderForCore(ref, opts.Global, silentLogger)
 	if err != nil {
 		return res, err
 	}
@@ -92,6 +89,7 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 			WithWorkflows:   opts.WithWorkflows,
 			NameOverride:    opts.PluginName,
 			VersionOverride: opts.PluginVersion,
+			Logger:          silentLogger,
 		})
 		if perr != nil {
 			return res, perr
@@ -155,7 +153,11 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 		}
 	}
 
-	if err := copyResolvedFiles(reader, manifest, flux, filesToCast, opts.ForceReplaceOnParseError); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, filesToCast, copyOpts{
+		ForceReplaceOnParseError: opts.ForceReplaceOnParseError,
+		Silent:                   true,
+		Logger:                   silentLogger,
+	}); err != nil {
 		return res, fmt.Errorf("copying files: %w", err)
 	}
 
@@ -167,7 +169,7 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 	// `mold list` can find blanks installed via the foundries TUI.
 	if destPrefix == "" {
 		if err := writeInstallState(dirs); err != nil {
-			log.Printf("warning: failed to write install state: %v", err)
+			silentLogger.Printf("warning: failed to write install state: %v", err)
 		}
 	}
 
@@ -177,8 +179,8 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 			// Upsert the manifest entry with provenance, then backfill Files
 			// + FileHashes. Mirrors what cast.go does via recordInstalled +
 			// RecordInstalledFiles.
-			if err := recordInstalled(remoteResult, opts.Global); err != nil {
-				log.Printf("warning: failed to update installed manifest: %v", err)
+			if err := recordInstalled(remoteResult, opts.Global, silentLogger); err != nil {
+				silentLogger.Printf("warning: failed to update installed manifest: %v", err)
 			} else {
 				installed := make([]foundry.InstalledFile, 0, len(filesToCast))
 				for _, f := range filesToCast {
@@ -205,12 +207,15 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 // The returned *foundry.ResolveResult is populated for remote refs (so the
 // caller can record provenance in the installed manifest) and nil for local
 // refs.
-func openMoldReaderForCore(ref string, global bool) (*blanks.MoldReader, *foundry.ResolveResult, error) {
+func openMoldReaderForCore(ref string, global bool, logger *log.Logger) (*blanks.MoldReader, *foundry.ResolveResult, error) {
 	if ref == "" {
 		return nil, nil, fmt.Errorf("ref required")
 	}
 	if foundry.IsRemoteReference(ref) {
-		var resolveOpts []foundry.ResolveOption
+		resolveOpts := []foundry.ResolveOption{}
+		if logger != nil {
+			resolveOpts = append(resolveOpts, foundry.WithLogger(logger))
+		}
 		if global {
 			resolveOpts = append(resolveOpts, foundry.WithLockPath(globalLockPath()))
 		}

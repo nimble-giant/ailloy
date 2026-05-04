@@ -140,7 +140,7 @@ func castFoundryMold(t *testing.T, fs fstest.MapFS) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{}); err != nil {
 		t.Fatalf("copy: %v", err)
 	}
 }
