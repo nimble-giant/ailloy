@@ -153,24 +153,179 @@ Patterns to follow:
 
 See the [Anneal guide](anneal.md) for the full discovery field reference.
 
-## Sharing Ore Across Molds
+## Ore Package Structure
 
-Ore is currently a **flux-namespace convention**, not a packaged artifact. Sharing happens by:
+An ore package is a directory containing three files:
 
-- **Copying schema entries** between molds that want the same ore (the `# --- Ore Models ---` section is designed to be portable)
-- **Anneal-produced values files** (`ore.yaml`) that round-trip across any mold sharing the schema — `ailloy anneal mold-a -o ore.yaml` then `ailloy cast mold-b -f ore.yaml`
+```
+my-status-ore/
+├── ore.yaml
+├── flux.schema.yaml
+└── flux.yaml
+```
 
-This is intentional simplicity, not a long-term answer. A future packaging story (an `ores/` directory, an `ore.yaml` manifest, `ailloy ore add`, mold dependencies, lockfile pinning) is tracked in [issue #178](https://github.com/nimble-giant/ailloy/issues/178). Until that ships, treat ore schemas as conventions you copy, not packages you install.
+`ore.yaml` (manifest):
 
-## Validation
+```yaml
+apiVersion: v1
+kind: ore
+name: status                      # claimed namespace: ore.status.*
+version: 1.0.0
+description: "GitHub Project status field tracking"
+author:
+  name: Nimble Giant
+  url: https://github.com/nimble-giant
+requires:
+  ailloy: ">=0.7.0"
+```
 
-Ore today is validated as part of the surrounding flux schema:
+`flux.schema.yaml` — entries are **unprefixed**; the ailloy loader prepends `ore.<name>.` (or `ore.<alias>.` if installed `--as`):
 
-- `ailloy temper` checks `flux.schema.yaml` and `flux.yaml` shape, including ore entries
-- `ailloy anneal` enforces type rules at wizard time
-- `ailloy forge --debug` shows resolved ore values and surfaces missing dependencies in discovery commands
+```yaml
+- name: enabled
+  type: bool
+  description: "Enable Status ore"
+  default: "false"
 
-See the [Validation guide](temper.md) and [Anneal guide](anneal.md) for details.
+- name: field_id
+  type: string
+  description: "GitHub Project field ID for Status"
+  discover:
+    command: |
+      gh api graphql -f query='...'
+    parse: |
+      ...
+    prompt: select
+```
+
+`flux.yaml` — defaults, also unprefixed; the loader wraps them under `ore.<name>:` at merge time:
+
+```yaml
+enabled: false
+field_id: ""
+options:
+  ready: { id: "", label: Ready }
+```
+
+## Creating an Ore
+
+Use the scaffolder:
+
+```bash
+ailloy ore new my-status-ore
+```
+
+This creates the directory layout above with placeholder content. Edit the files, then commit + tag.
+
+### Manifest Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `apiVersion` | Yes | Always `v1` |
+| `kind` | Yes | Always `ore` |
+| `name` | Yes | Snake_case identifier (the package name) |
+| `namespace` | No | Snake_case flux namespace (`ore.<namespace>.*`); falls back to `name` when omitted |
+| `version` | Yes | Semver |
+| `description` | No | Human-readable description |
+| `author` | No | `{name, url}` |
+| `requires.ailloy` | No | Minimum ailloy version |
+
+### Namespace Precedence
+
+The flux namespace an ore lands at — the `<X>` in `ore.<X>.*` — is resolved with this precedence chain (highest wins):
+
+1. **`as:` in the consuming mold's `dependencies[]` entry** — per-cast override.
+2. **`--as <alias>` at install time** — recorded in `installed.yaml` and pins the on-disk install dir name.
+3. **`namespace:` in `ore.yaml`** — publisher-declared canonical namespace.
+4. **`name:` in `ore.yaml`** — fallback when none of the above is set.
+
+Layers 1–2 also control the on-disk install dir name; layers 3–4 are layered on top by the resolver. Set `namespace:` when the package's external name differs from the canonical flux key (e.g. publish a package called `status_ore` that lands at `ore.status.*`). Omit it when the two are the same — temper warns about redundant `namespace:` fields.
+
+## Resolution Order
+
+When merging ore deps into a mold's flux schema and defaults, ailloy walks search paths in priority order:
+
+1. **Mold-local** — `./ores/<name>/` (if the mold ships its own ore overlay)
+2. **Project** — `.ailloy/ores/<name>/` (cast-time install destination)
+3. **Global** — `~/.ailloy/ores/<name>/` (user-scope, `ore add --global`)
+
+First match wins. The mold's own `flux.schema.yaml` always wins over an installed ore on collision.
+
+## Installing Remote Ores
+
+```bash
+ailloy ore add github.com/nimble-giant/status-ore
+ailloy ore add github.com/nimble-giant/status-ore --as github_status
+ailloy ore add github.com/nimble-giant/status-ore --global
+ailloy ore get github.com/nimble-giant/status-ore  # download to cache without installing
+```
+
+The bidirectional verb forms also work: `ailloy add ore <ref>`, `ailloy get ore <ref>`.
+
+## Declaring Dependencies
+
+Molds can declare ore dependencies in `mold.yaml`:
+
+```yaml
+apiVersion: v1
+kind: mold
+name: my-mold
+version: 1.0.0
+dependencies:
+  - ore: github.com/nimble-giant/status-ore
+    version: "^1.0.0"
+  - ore: github.com/other-org/status-ore
+    version: "^2.0.0"
+    as: github_status            # alias to avoid namespace collision
+```
+
+`ailloy cast` and `ailloy recast` auto-install declared deps. `ailloy forge` and `ailloy temper` resolve declared deps ephemerally (no on-disk side effects).
+
+For CI, pass `--frozen` to `cast` (or `recast`) to fail loudly on any declared dep that isn't already installed:
+
+```bash
+ailloy cast my-mold --frozen
+```
+
+With `--frozen` set, a typo or unpinned bump in `mold.yaml` becomes an error referencing the missing dep instead of a silent network fetch + `installed.yaml` / `ailloy.lock` mutation. When every declared dep is already installed, `--frozen` is a no-op and cast proceeds normally.
+
+## Validating Ores
+
+```bash
+ailloy temper ./my-status-ore
+```
+
+Validates manifest fields, semver, snake_case name, that schema entries are unprefixed, that `flux.yaml` doesn't have a top-level `ore` key, that an `enabled: bool` schema entry exists, and reports orphan defaults as warnings. See the [Validation guide](temper.md) for the full rule list.
+
+`ailloy anneal` continues to enforce type rules at wizard time, and `ailloy forge --debug` shows resolved ore values plus any missing dependencies in discovery commands.
+
+## Distributing Ores
+
+Publish via plain git tag:
+
+```bash
+cd my-status-ore/
+git init && git add -A && git commit -m "initial ore"
+git remote add origin git@github.com:nimble-giant/status-ore.git
+git push -u origin main
+git tag v1.0.0 && git push --tags
+```
+
+Consumers install with `ailloy ore add github.com/nimble-giant/status-ore@v1.0.0`.
+
+## Removing Ores
+
+```bash
+ailloy ore remove status              # project scope
+ailloy ore remove status --global     # ~/.ailloy/ores
+ailloy ore remove status --force      # bypass dependents check
+```
+
+`ailloy uninstall <mold>` cascade-removes any ores whose only remaining dependent was the uninstalled mold. User-direct installs (via `ailloy ore add ...`) are never auto-removed — see the [Cascade Uninstall](ingots.md#cascade-uninstall) section in the ingots doc for the shared semantics.
+
+## Migrating an In-Tree Ore to a Package
+
+If you have an ore section embedded in a mold's `flux.schema.yaml` and you want to lift it out into a standalone, versioned package, follow the [Ore Migration Guide](ore-migration.md).
 
 ## See Also
 

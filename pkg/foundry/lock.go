@@ -22,6 +22,7 @@ type LockEntry struct {
 	Version   string    `yaml:"version"`
 	Commit    string    `yaml:"commit"`
 	Subpath   string    `yaml:"subpath,omitempty"`
+	Alias     string    `yaml:"alias,omitempty"` // populated when ore was installed --as <alias>
 	Timestamp time.Time `yaml:"timestamp"`
 }
 
@@ -29,6 +30,8 @@ type LockEntry struct {
 type LockFile struct {
 	APIVersion string      `yaml:"apiVersion"`
 	Molds      []LockEntry `yaml:"molds"`
+	Ingots     []LockEntry `yaml:"ingots,omitempty"`
+	Ores       []LockEntry `yaml:"ores,omitempty"`
 }
 
 // ReadLockFile reads and parses the lock file at the given path.
@@ -116,4 +119,58 @@ func (lf *LockFile) UpsertEntry(entry LockEntry) {
 		}
 	}
 	lf.Molds = append(lf.Molds, entry)
+}
+
+// UpsertArtifactLock adds or updates a lock entry by (kind, source, subpath, alias).
+// Use kind="ingot" or kind="ore".
+//
+// Subpath is part of the identity because a single foundry can host multiple
+// artifacts at different subpaths. Alias is part of the identity because two
+// installs of the same source with different aliases must coexist; this keeps
+// lock-side keying symmetric with InstalledManifest.UpsertArtifact so manifest
+// ↔ lock round-trips do not corrupt entries.
+func (lf *LockFile) UpsertArtifactLock(kind string, entry LockEntry) {
+	list := lf.artifactLockList(kind)
+	for i := range *list {
+		if (*list)[i].Source == entry.Source && (*list)[i].Subpath == entry.Subpath && (*list)[i].Alias == entry.Alias {
+			(*list)[i] = entry
+			return
+		}
+	}
+	*list = append(*list, entry)
+}
+
+// AllLockEntry is one entry from LockFile.All(), tagged with its kind.
+type AllLockEntry struct {
+	Kind  string // "mold", "ingot", or "ore"
+	Entry *LockEntry
+}
+
+// All yields every lock entry across molds, ingots, and ores, tagged with kind.
+func (lf *LockFile) All() []AllLockEntry {
+	if lf == nil {
+		return nil
+	}
+	out := make([]AllLockEntry, 0, len(lf.Molds)+len(lf.Ingots)+len(lf.Ores))
+	for i := range lf.Molds {
+		out = append(out, AllLockEntry{Kind: "mold", Entry: &lf.Molds[i]})
+	}
+	for i := range lf.Ingots {
+		out = append(out, AllLockEntry{Kind: "ingot", Entry: &lf.Ingots[i]})
+	}
+	for i := range lf.Ores {
+		out = append(out, AllLockEntry{Kind: "ore", Entry: &lf.Ores[i]})
+	}
+	return out
+}
+
+func (lf *LockFile) artifactLockList(kind string) *[]LockEntry {
+	switch kind {
+	case "ingot":
+		return &lf.Ingots
+	case "ore":
+		return &lf.Ores
+	default:
+		panic("foundry: unknown artifact kind: " + kind)
+	}
 }

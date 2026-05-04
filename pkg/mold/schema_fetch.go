@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+
+	"dario.cat/mergo"
 )
 
 // FetchSchemaFromSource resolves a mold by source string (local path or remote
@@ -60,4 +62,79 @@ func loadSchemaFromFS(fsys fs.FS) ([]FluxVar, map[string]any, error) {
 		defaults = map[string]any{}
 	}
 	return schema, defaults, nil
+}
+
+// OreSearchPath describes one ore search location, in priority order.
+// FS is the filesystem to read from; Root is the directory inside FS that
+// contains <name>/ subdirectories (e.g. "ores" if FS is rooted at .ailloy/).
+type OreSearchPath struct {
+	Name string // "mold-local" / "project" / "global", for diagnostics
+	FS   fs.FS
+	Root string // typically "ores"
+}
+
+// LoadMoldFluxWithOres is the ore-aware schema/defaults loader. It loads the
+// mold's own flux.schema.yaml + flux.yaml, then walks each search path in
+// order, treating later paths as lower-priority (only loading ores not yet
+// seen). It returns the merged schema, merged defaults, and an OreLoadReport
+// covering shadowing and source attribution.
+func LoadMoldFluxWithOres(moldFS fs.FS, paths []OreSearchPath) ([]FluxVar, map[string]any, OreLoadReport, error) {
+	base, baseDefaults, err := loadSchemaFromFS(moldFS)
+	if err != nil {
+		return nil, nil, OreLoadReport{}, err
+	}
+
+	seen := map[string]struct{}{}
+	var allOverlays []OverlaySchema
+	allOreDefaults := map[string]any{}
+	for _, p := range paths {
+		overlays, defs, lerr := LoadOreOverlaysFromFS(p.FS, p.Root, seen)
+		if lerr != nil {
+			return nil, nil, OreLoadReport{}, fmt.Errorf("search path %s: %w", p.Name, lerr)
+		}
+		allOverlays = append(allOverlays, overlays...)
+		MergeOreDefaults(allOreDefaults, defs)
+	}
+
+	mergedSchema, report, err := MergeFluxSchema(base, allOverlays)
+	if err != nil {
+		return nil, nil, report, err
+	}
+
+	// Layer ore defaults under mold defaults: ores first, then mold wins.
+	merged := map[string]any{}
+	if err := mergo.Merge(&merged, allOreDefaults); err != nil {
+		return nil, nil, report, fmt.Errorf("merging ore defaults: %w", err)
+	}
+	if err := mergo.Merge(&merged, baseDefaults, mergo.WithOverride); err != nil {
+		return nil, nil, report, fmt.Errorf("merging mold defaults over ore defaults: %w", err)
+	}
+
+	return mergedSchema, merged, report, nil
+}
+
+// MergeOreDefaults shallowly merges the "ore" namespace from src into dst.
+// Each top-level key in src whose value is a map[string]any is merged into
+// dst's same key (one level deep). Other top-level keys are added only if
+// not already present in dst — this preserves higher-priority entries when
+// later (lower-priority) search paths contribute the same key.
+//
+// Exported because EphemeralOreResolver in internal/commands needs to call
+// it; see Phase 9.
+func MergeOreDefaults(dst, src map[string]any) {
+	for k, v := range src {
+		if _, exists := dst[k]; !exists {
+			dst[k] = v
+			continue
+		}
+		dstMap, ok1 := dst[k].(map[string]any)
+		srcMap, ok2 := v.(map[string]any)
+		if ok1 && ok2 {
+			for sk, sv := range srcMap {
+				if _, present := dstMap[sk]; !present {
+					dstMap[sk] = sv
+				}
+			}
+		}
+	}
 }

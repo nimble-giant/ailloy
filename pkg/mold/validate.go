@@ -17,6 +17,10 @@ var semverRegex = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)`
 // versionConstraintRegex matches version constraints like ">=0.2.0", "^1.0.0", "~1.2.0".
 var versionConstraintRegex = regexp.MustCompile(`^[>=<^~!]*\d+\.\d+\.\d+`)
 
+// snakeCaseRegex matches snake_case names: lowercase letter start, then
+// lowercase, digits, or underscores.
+var snakeCaseRegex = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
 // validFluxTypes is the set of allowed types for flux variable declarations.
 var validFluxTypes = map[string]bool{
 	"string": true,
@@ -72,8 +76,8 @@ func ValidateMold(m *Mold) error {
 	}
 
 	for i, d := range m.Dependencies {
-		if d.Ingot == "" {
-			errs = append(errs, fmt.Sprintf("dependencies[%d].ingot is required", i))
+		if _, err := d.Kind(); err != nil {
+			errs = append(errs, fmt.Sprintf("dependencies[%d]: %v", i, err))
 		}
 		if d.Version == "" {
 			errs = append(errs, fmt.Sprintf("dependencies[%d].version is required", i))
@@ -134,6 +138,178 @@ func ValidateIngot(i *Ingot) error {
 		return fmt.Errorf("ingot validation failed:\n  - %s", strings.Join(errs, "\n  - "))
 	}
 	return nil
+}
+
+// ValidateOre validates an Ore manifest for required fields and correct
+// formats. Naming follows snake_case (lowercase + underscore) so the
+// `ore.<name>.<key>` namespace is unambiguous in templates.
+func ValidateOre(o *Ore) error {
+	var errs []string
+
+	if o.APIVersion == "" {
+		errs = append(errs, "apiVersion is required")
+	}
+	if o.Kind == "" {
+		errs = append(errs, "kind is required")
+	} else if o.Kind != "ore" {
+		errs = append(errs, fmt.Sprintf("kind must be \"ore\", got %q", o.Kind))
+	}
+	if o.Name == "" {
+		errs = append(errs, "name is required")
+	} else if !snakeCaseRegex.MatchString(o.Name) {
+		errs = append(errs, fmt.Sprintf("name %q must be snake_case (lowercase + underscore)", o.Name))
+	}
+	if o.Namespace != "" && !snakeCaseRegex.MatchString(o.Namespace) {
+		errs = append(errs, fmt.Sprintf("namespace %q must be snake_case (lowercase + underscore)", o.Namespace))
+	}
+	if o.Version == "" {
+		errs = append(errs, "version is required")
+	} else if !semverRegex.MatchString(o.Version) {
+		errs = append(errs, fmt.Sprintf("version %q is not valid semver", o.Version))
+	}
+	if o.Requires.Ailloy != "" && !versionConstraintRegex.MatchString(o.Requires.Ailloy) {
+		errs = append(errs, fmt.Sprintf("requires.ailloy %q is not a valid version constraint", o.Requires.Ailloy))
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("ore validation failed:\n  - %s", strings.Join(errs, "\n  - "))
+	}
+	return nil
+}
+
+// temperOre validates an ore-directory package. Rules:
+//   - manifest fields valid (apiVersion, kind=ore, snake_case name, semver version)
+//   - flux.schema.yaml present and parseable
+//   - schema entries are unprefixed: no `ore.` prefix, no `<name>.` prefix
+//   - schema includes an `enabled: bool` entry
+//   - flux.yaml has no top-level `ore` key (the wrap-prefix is added at merge time)
+//   - orphan defaults (flux.yaml leaves with no schema entry) reported as warnings
+func temperOre(fsys fs.FS, result *TemperResult) {
+	o, err := LoadOreFromFS(fsys, "ore.yaml")
+	if err != nil {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("failed to parse ore.yaml: %v", err),
+			File:     "ore.yaml",
+		})
+		return
+	}
+
+	result.Name = o.Name
+	result.Version = o.Version
+
+	if verr := ValidateOre(o); verr != nil {
+		for _, line := range extractValidationErrors(verr) {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  line,
+				File:     "ore.yaml",
+			})
+		}
+	}
+
+	if o.Namespace != "" && o.Namespace == o.Name {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityWarning,
+			Message:  "namespace matches name; field is redundant and can be omitted",
+			File:     "ore.yaml",
+		})
+	}
+
+	schema, err := LoadFluxSchema(fsys, "flux.schema.yaml")
+	if err != nil {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("failed to parse flux.schema.yaml: %v", err),
+			File:     "flux.schema.yaml",
+		})
+		return
+	}
+
+	if schema == nil {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityError,
+			Message:  "flux.schema.yaml is required for ores",
+			File:     "flux.schema.yaml",
+		})
+		return
+	}
+
+	// Prefix-presence and per-entry validation.
+	hasEnabled := false
+	namePrefix := o.Name + "."
+	for i, f := range schema {
+		if f.Name == "" {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("flux[%d].name is required", i),
+				File:     "flux.schema.yaml",
+			})
+			continue
+		}
+		if strings.HasPrefix(f.Name, "ore.") {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("flux[%d].name %q must not start with \"ore.\"; ore entries are unprefixed and the loader prepends ore.<name>. at install time", i, f.Name),
+				File:     "flux.schema.yaml",
+			})
+		} else if strings.HasPrefix(f.Name, namePrefix) {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("flux[%d].name %q must not start with %q; ore entries are unprefixed", i, f.Name, namePrefix),
+				File:     "flux.schema.yaml",
+			})
+		}
+		if f.Type == "" {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("flux[%d].type is required", i),
+				File:     "flux.schema.yaml",
+			})
+		} else if !validFluxTypes[f.Type] {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("flux[%d].type %q is not valid (allowed: string, bool, int, list, select)", i, f.Type),
+				File:     "flux.schema.yaml",
+			})
+		}
+		if f.Name == "enabled" && f.Type == "bool" {
+			hasEnabled = true
+		}
+	}
+
+	if !hasEnabled {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityError,
+			Message:  "ore schema must declare an `enabled: bool` entry",
+			File:     "flux.schema.yaml",
+		})
+	}
+
+	// Defaults: top-level `ore` key is forbidden; orphan defaults warn.
+	defaults, derr := LoadFluxFile(fsys, "flux.yaml")
+	if derr != nil {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("failed to parse flux.yaml: %v", derr),
+			File:     "flux.yaml",
+		})
+		return
+	}
+	if _, hasOreKey := defaults["ore"]; hasOreKey {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityError,
+			Message:  "flux.yaml must not contain a top-level \"ore\" key; values are wrapped under ore.<name>. at merge time",
+			File:     "flux.yaml",
+		})
+	}
+	for _, orphan := range ValidateOrphanDefaults(schema, defaults) {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityWarning,
+			Message:  fmt.Sprintf("flux.yaml has %q with no matching schema entry", orphan),
+			File:     "flux.yaml",
+		})
+	}
 }
 
 // ValidateIngotFiles checks that all files referenced in the ingot manifest exist within the given filesystem.
@@ -240,7 +416,7 @@ func (r *TemperResult) Suggestions() []Diagnostic {
 	return suggestions
 }
 
-// Temper validates a mold or ingot at the given filesystem root.
+// Temper validates a mold, ingot, or ore at the given filesystem root.
 // It checks manifest presence, manifest fields, file references,
 // template syntax, and flux schema consistency.
 func Temper(fsys fs.FS) *TemperResult {
@@ -249,21 +425,26 @@ func Temper(fsys fs.FS) *TemperResult {
 	// Detect manifest type
 	hasMold := fileExists(fsys, "mold.yaml")
 	hasIngot := fileExists(fsys, "ingot.yaml")
+	hasOre := fileExists(fsys, "ore.yaml")
 
-	if !hasMold && !hasIngot {
+	if !hasMold && !hasIngot && !hasOre {
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: SeverityError,
-			Message:  "no mold.yaml or ingot.yaml found",
+			Message:  "no mold.yaml, ingot.yaml, or ore.yaml found",
 		})
 		return result
 	}
 
-	if hasMold {
+	switch {
+	case hasMold:
 		result.ManifestKind = "mold"
 		temperMold(fsys, result)
-	} else {
+	case hasIngot:
 		result.ManifestKind = "ingot"
 		temperIngot(fsys, result)
+	case hasOre:
+		result.ManifestKind = "ore"
+		temperOre(fsys, result)
 	}
 
 	return result

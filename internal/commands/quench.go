@@ -132,10 +132,29 @@ func runQuench(_ *cobra.Command, args []string) error {
 		)
 	}
 
+	// Pin every installed ingot and ore alongside the molds. Artifacts already
+	// carry resolved version + commit in the manifest (recorded at install
+	// time) so we don't re-resolve here. Scoped quench (single mold ref) still
+	// pins all artifacts because they're shared infrastructure: skipping them
+	// would leave the lock partial and mid-cycle the next `cast` would have to
+	// re-pin them anyway.
+	for _, ig := range manifest.Ingots {
+		newLock.UpsertArtifactLock("ingot", artifactToLock(ig))
+	}
+	for _, or := range manifest.Ores {
+		newLock.UpsertArtifactLock("ore", artifactToLock(or))
+	}
+
 	// If quench was scoped to a single ref AND a lock already exists, merge into it.
 	if len(args) == 1 && existingLock != nil {
 		for _, e := range newLock.Molds {
 			existingLock.UpsertEntry(e)
+		}
+		for _, e := range newLock.Ingots {
+			existingLock.UpsertArtifactLock("ingot", e)
+		}
+		for _, e := range newLock.Ores {
+			existingLock.UpsertArtifactLock("ore", e)
 		}
 		newLock = existingLock
 	}

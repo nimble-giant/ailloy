@@ -50,6 +50,10 @@ var (
 	castPluginName               string
 	castPluginVer                string
 	castForceReplaceOnParseError bool
+	// castFrozen, when true, blocks auto-install of declared ingot/ore deps
+	// at cast time. Missing deps surface as errors instead of being fetched
+	// silently. Intended for CI; see --frozen flag.
+	castFrozen bool
 	// castSilent suppresses interactive output from copyResolvedFiles and
 	// related helpers. Set by CastMold (the programmatic core used by the
 	// foundries TUI) so per-file "✅ Created" lines don't corrupt the
@@ -71,6 +75,10 @@ func init() {
 		"force-replace-on-parse-error",
 		false,
 		"if a destination uses strategy: merge but is unparseable, replace it instead of erroring")
+	castCmd.Flags().BoolVar(&castFrozen,
+		"frozen",
+		false,
+		"fail (do not auto-install) when a declared ingot/ore dep is missing from .ailloy/; intended for CI")
 }
 
 func runCast(_ *cobra.Command, args []string) error {
@@ -140,19 +148,35 @@ func resolveMoldReader(args []string) (*blanks.MoldReader, string, error) {
 // mold flux.yaml < mold.yaml schema defaults < persisted ~/.ailloy/flux/<slug>.yaml
 // < persisted ./.ailloy/flux/<slug>.yaml < -f files (left to right) < --set flags.
 //
+// Schema and defaults are loaded via LoadMoldFluxWithOres so installed ore
+// overlays (mold-local → project → global) participate in the merge before
+// any persisted/-f/--set layers run.
+//
 // `source` is the mold ref used to derive the persisted-file slug (typically the
 // foundry cache key for remote refs). Empty source skips persisted-file lookup.
-func loadCastFlux(reader *blanks.MoldReader, source string) (map[string]any, error) {
-	// Layer 1: Load mold flux.yaml as base
-	fluxDefaults, err := reader.LoadFluxDefaults()
+//
+// Returns the resolved flux map plus the merged schema (used downstream by
+// copyResolvedFiles for ValidateFlux).
+func loadCastFlux(reader *blanks.MoldReader, source string) (map[string]any, []mold.FluxVar, error) {
+	// Layers 1+2: ore-aware merge of mold.yaml flux schema, mold flux.yaml,
+	// and any installed ore overlays (mold-local → project → global).
+	mergedSchema, fluxDefaults, _, err := mold.LoadMoldFluxWithOres(reader.FS(), readerSearchPaths(reader, castGlobal))
 	if err != nil {
-		fluxDefaults = make(map[string]any)
+		// Fall back to the legacy single-mold path so an ore-loading hiccup
+		// doesn't break ore-less casts.
+		fluxDefaults, err = reader.LoadFluxDefaults()
+		if err != nil {
+			fluxDefaults = make(map[string]any)
+		}
 	}
-
-	// Layer 2: Apply mold.yaml schema defaults (for in-mold compatibility)
-	manifest, _ := reader.LoadManifest()
-	if manifest != nil && len(manifest.Flux) > 0 {
+	// Merge mold.yaml's in-line flux: schema in. LoadMoldFluxWithOres only
+	// reads the standalone flux.schema.yaml file; molds that declare their
+	// schema inline (no flux.schema.yaml on disk) still need their defaults.
+	if manifest, _ := reader.LoadManifest(); manifest != nil && len(manifest.Flux) > 0 {
 		fluxDefaults = mold.ApplyFluxDefaults(manifest.Flux, fluxDefaults)
+		if len(mergedSchema) == 0 {
+			mergedSchema = manifest.Flux
+		}
 	}
 
 	flux := make(map[string]any)
@@ -167,7 +191,7 @@ func loadCastFlux(reader *blanks.MoldReader, source string) (map[string]any, err
 	if len(persisted) > 0 {
 		overlay, err := mold.LayerFluxFiles(persisted)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for k, v := range overlay {
 			flux[k] = v
@@ -178,7 +202,7 @@ func loadCastFlux(reader *blanks.MoldReader, source string) (map[string]any, err
 	if len(castValFiles) > 0 {
 		overlay, err := mold.LayerFluxFiles(castValFiles)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for k, v := range overlay {
 			flux[k] = v
@@ -187,10 +211,10 @@ func loadCastFlux(reader *blanks.MoldReader, source string) (map[string]any, err
 
 	// Layer 5: Apply --set overrides (highest precedence)
 	if err := mold.ApplySetOverrides(flux, castSetFlags); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return flux, nil
+	return flux, mergedSchema, nil
 }
 
 // resolveDestPrefix returns the destination directory prefix.
@@ -236,10 +260,28 @@ func castProject(reader *blanks.MoldReader, source string) error {
 		return fmt.Errorf("failed to load mold manifest: %w", err)
 	}
 
-	// Load flux values and extract output mapping.
-	flux, err := loadCastFlux(reader, source)
+	// Auto-install declared ingot/ore deps before flux merge so the next
+	// LoadMoldFluxWithOres call sees the just-installed overlays.
+	moldKey := ""
+	if resolvedRemote != nil {
+		moldKey = resolvedRemote.Ref.CacheKey()
+		if resolvedRemote.Ref.Subpath != "" {
+			moldKey += "@" + resolvedRemote.Ref.Subpath
+		}
+	}
+	// Local-path deps are only safe when the parent mold is itself local —
+	// otherwise a malicious foundry could declare e.g. `- ore: /etc` and
+	// have it copied into the project tree.
+	allowLocalDeps := resolvedRemote == nil
+	if err := installDeclaredDeps(manifest, moldKey, castGlobal, allowLocalDeps, castFrozen); err != nil {
+		return fmt.Errorf("installing declared dependencies: %w", err)
+	}
+
+	// Load flux values and merged schema (mold + ore overlays).
+	flux, mergedSchema, err := loadCastFlux(reader, source)
 	if err != nil {
 		flux = make(map[string]any)
+		mergedSchema = manifest.Flux
 	}
 
 	// Load ignore patterns from .ailloyignore and mold.yaml.
@@ -291,8 +333,8 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	}
 	fmt.Println()
 
-	// Copy resolved files from mold
-	if err := copyResolvedFiles(reader, manifest, flux, filesToCast, castForceReplaceOnParseError); err != nil {
+	// Copy resolved files from mold (using the ore-merged schema for validation).
+	if err := copyResolvedFilesWithSchema(reader, manifest, mergedSchema, flux, filesToCast, castForceReplaceOnParseError); err != nil {
 		return fmt.Errorf("failed to copy files: %w", err)
 	}
 
@@ -608,14 +650,32 @@ func offerAgentsImport(claudePath string) {
 }
 
 // copyResolvedFiles copies resolved mold files to the project, applying template
-// processing where indicated by the output mapping.
+// processing where indicated by the output mapping. Schema for validation is
+// inferred from the reader / mold manifest. Cast-time callers should prefer
+// copyResolvedFilesWithSchema so ore-merged schema entries participate in
+// ValidateFlux.
 func copyResolvedFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[string]any, resolved []mold.ResolvedFile, forceReplaceOnParseError bool) error {
-	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
 	var schema []mold.FluxVar
 	if s, err := reader.LoadFluxSchema(); err == nil && s != nil {
 		schema = s
 	} else if manifest != nil && len(manifest.Flux) > 0 {
 		schema = manifest.Flux
+	}
+	return copyResolvedFilesWithSchema(reader, manifest, schema, flux, resolved, forceReplaceOnParseError)
+}
+
+// copyResolvedFilesWithSchema is copyResolvedFiles with an explicit schema
+// parameter. Callers that have already merged ore overlays (cast/recast)
+// pass the merged schema so ValidateFlux sees the full ore.<name>.* surface.
+func copyResolvedFilesWithSchema(reader *blanks.MoldReader, manifest *mold.Mold, schema []mold.FluxVar, flux map[string]any, resolved []mold.ResolvedFile, forceReplaceOnParseError bool) error {
+	// Validate: ore-merged schema preferred; fall back to flux.schema.yaml /
+	// mold.yaml's flux: block when caller didn't supply one.
+	if len(schema) == 0 {
+		if s, err := reader.LoadFluxSchema(); err == nil && s != nil {
+			schema = s
+		} else if manifest != nil && len(manifest.Flux) > 0 {
+			schema = manifest.Flux
+		}
 	}
 	if err := mold.ValidateFlux(schema, flux); err != nil {
 		log.Printf("warning: %v", err)
@@ -718,6 +778,37 @@ func recordInstalled(result *foundry.ResolveResult, global bool) error {
 		Version: result.Resolved.Tag,
 		Commit:  result.Resolved.Commit,
 		CastAt:  time.Now().UTC(),
+	})
+	return foundry.WriteInstalledManifest(path, manifest)
+}
+
+// recordInstalledArtifact upserts an installed ingot or ore into the manifest.
+// kind must be "ingot" or "ore". alias is "" for ingots and the --as value
+// for ores (or "" if no alias). When invoked from `ailloy ore add` /
+// `ailloy ingot add`, dependents includes the "user" sentinel so the artifact
+// survives mold uninstalls.
+func recordInstalledArtifact(kind string, result *foundry.ResolveResult, alias string, global bool) error {
+	path := manifestPathFor(global)
+	if path == "" {
+		return nil
+	}
+	manifest, err := foundry.ReadInstalledManifest(path)
+	if err != nil {
+		log.Printf("warning: corrupt installed manifest at %s, resetting: %v", path, err)
+		manifest = nil
+	}
+	if manifest == nil {
+		manifest = &foundry.InstalledManifest{APIVersion: "v1"}
+	}
+	manifest.UpsertArtifact(kind, foundry.ArtifactEntry{
+		Name:        result.Ref.Repo,
+		Source:      result.Ref.CacheKey(),
+		Subpath:     result.Ref.Subpath,
+		Version:     result.Resolved.Tag,
+		Commit:      result.Resolved.Commit,
+		InstalledAt: time.Now().UTC(),
+		Alias:       alias,
+		Dependents:  []string{"user"},
 	})
 	return foundry.WriteInstalledManifest(path, manifest)
 }

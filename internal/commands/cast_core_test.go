@@ -106,7 +106,7 @@ flux:
 	slug := mold.FluxFileSlug(source)
 
 	// Without any persisted file: target == default.
-	flux, err := layerFluxForCore(reader, source, nil, nil)
+	flux, _, err := layerFluxForCore(reader, source, nil, nil, false)
 	if err != nil {
 		t.Fatalf("layerFluxForCore: %v", err)
 	}
@@ -123,7 +123,7 @@ flux:
 		t.Fatal(err)
 	}
 
-	flux, err = layerFluxForCore(reader, source, nil, nil)
+	flux, _, err = layerFluxForCore(reader, source, nil, nil, false)
 	if err != nil {
 		t.Fatalf("layerFluxForCore: %v", err)
 	}
@@ -132,7 +132,7 @@ flux:
 	}
 
 	// Explicit --set still wins over persisted file (Helm-style precedence).
-	flux, err = layerFluxForCore(reader, source, nil, []string{"target=zed"})
+	flux, _, err = layerFluxForCore(reader, source, nil, []string{"target=zed"}, false)
 	if err != nil {
 		t.Fatalf("layerFluxForCore: %v", err)
 	}
@@ -141,7 +141,7 @@ flux:
 	}
 
 	// Empty source skips persisted-file lookup (local mold dirs).
-	flux, err = layerFluxForCore(reader, "", nil, nil)
+	flux, _, err = layerFluxForCore(reader, "", nil, nil, false)
 	if err != nil {
 		t.Fatalf("layerFluxForCore: %v", err)
 	}
@@ -198,7 +198,7 @@ flux:
 	if err != nil {
 		t.Fatalf("ParseReference: %v", err)
 	}
-	flux, err := layerFluxForCore(reader, ref.OverrideKey(), nil, nil)
+	flux, _, err := layerFluxForCore(reader, ref.OverrideKey(), nil, nil, false)
 	if err != nil {
 		t.Fatalf("layerFluxForCore: %v", err)
 	}
@@ -209,7 +209,7 @@ flux:
 
 	// CacheKey() — the old, buggy lookup — must NOT find the override.
 	// Pinning this prevents a future refactor from silently regressing.
-	flux, err = layerFluxForCore(reader, ref.CacheKey(), nil, nil)
+	flux, _, err = layerFluxForCore(reader, ref.CacheKey(), nil, nil, false)
 	if err != nil {
 		t.Fatalf("layerFluxForCore (cache key): %v", err)
 	}

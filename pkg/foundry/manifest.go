@@ -28,10 +28,27 @@ type InstalledEntry struct {
 	FileHashes map[string]string `yaml:"fileHashes,omitempty"`
 }
 
-// InstalledManifest is the on-disk manifest of cast molds.
+// ArtifactEntry records an installed ingot or ore. Mirrors InstalledEntry
+// minus the file-provenance fields (which are mold-specific) and adds
+// Dependents for reference-counted cascade uninstall.
+type ArtifactEntry struct {
+	Name        string    `yaml:"name"`
+	Source      string    `yaml:"source"`
+	Subpath     string    `yaml:"subpath,omitempty"`
+	Version     string    `yaml:"version"`
+	Commit      string    `yaml:"commit"`
+	InstalledAt time.Time `yaml:"installedAt"`
+	Alias       string    `yaml:"alias,omitempty"`      // populated when ore installed --as <alias>
+	Dependents  []string  `yaml:"dependents,omitempty"` // mold source@subpath strings; "user" sentinel for direct installs
+}
+
+// InstalledManifest is the on-disk manifest of cast molds and installed
+// artifacts (ingots, ores).
 type InstalledManifest struct {
 	APIVersion string           `yaml:"apiVersion"`
 	Molds      []InstalledEntry `yaml:"molds"`
+	Ingots     []ArtifactEntry  `yaml:"ingots,omitempty"`
+	Ores       []ArtifactEntry  `yaml:"ores,omitempty"`
 }
 
 // ReadInstalledManifest reads and parses the manifest at the given path.
@@ -107,6 +124,130 @@ func (m *InstalledManifest) FindByName(name string) *InstalledEntry {
 		}
 	}
 	return nil
+}
+
+// UpsertArtifact adds or updates an entry by (kind, source, subpath, alias).
+// Use kind="ingot" or kind="ore". Existing dependents are merged with the
+// incoming entry's dependents (set union), preserving order.
+//
+// Subpath is part of the identity because a single foundry can host multiple
+// artifacts at different subpaths. Alias is part of the identity because two
+// installs of the same source with different aliases must coexist.
+func (m *InstalledManifest) UpsertArtifact(kind string, entry ArtifactEntry) {
+	list := m.artifactList(kind)
+	for i := range *list {
+		if (*list)[i].Source == entry.Source && (*list)[i].Subpath == entry.Subpath && (*list)[i].Alias == entry.Alias {
+			merged := mergeDependents((*list)[i].Dependents, entry.Dependents)
+			entry.Dependents = merged
+			(*list)[i] = entry
+			return
+		}
+	}
+	*list = append(*list, entry)
+}
+
+// RemoveDependent strips moldKey from every artifact's Dependents list.
+// Returns the entries whose Dependents became empty (caller GCs).
+// Removes those orphan entries from the manifest as a side effect.
+func (m *InstalledManifest) RemoveDependent(moldKey string) []ArtifactEntry {
+	var orphans []ArtifactEntry
+	for _, kind := range []string{"ingot", "ore"} {
+		list := m.artifactList(kind)
+		kept := (*list)[:0]
+		for _, e := range *list {
+			e.Dependents = stripString(e.Dependents, moldKey)
+			if len(e.Dependents) == 0 {
+				orphans = append(orphans, e)
+				continue
+			}
+			kept = append(kept, e)
+		}
+		*list = kept
+	}
+	return orphans
+}
+
+// FindArtifact looks up an artifact entry by (kind, name). Name is the
+// install-dir name (post-aliasing) — i.e. the one used in
+// .ailloy/<kind>s/<name>/.
+func (m *InstalledManifest) FindArtifact(kind, name string) *ArtifactEntry {
+	if m == nil {
+		return nil
+	}
+	list := m.artifactList(kind)
+	for i := range *list {
+		effective := (*list)[i].Name
+		if (*list)[i].Alias != "" {
+			effective = (*list)[i].Alias
+		}
+		if effective == name {
+			return &(*list)[i]
+		}
+	}
+	return nil
+}
+
+// AllEntry is one entry from InstalledManifest.All(), tagged with its kind.
+type AllEntry struct {
+	Kind     string // "mold", "ingot", or "ore"
+	Mold     *InstalledEntry
+	Artifact *ArtifactEntry
+}
+
+// All yields every InstalledEntry plus every ArtifactEntry, tagged with kind.
+// Used by quench, uninstall, and TUI walks. Returns kind ∈ {"mold","ingot","ore"}.
+func (m *InstalledManifest) All() []AllEntry {
+	if m == nil {
+		return nil
+	}
+	out := make([]AllEntry, 0, len(m.Molds)+len(m.Ingots)+len(m.Ores))
+	for i := range m.Molds {
+		out = append(out, AllEntry{Kind: "mold", Mold: &m.Molds[i]})
+	}
+	for i := range m.Ingots {
+		out = append(out, AllEntry{Kind: "ingot", Artifact: &m.Ingots[i]})
+	}
+	for i := range m.Ores {
+		out = append(out, AllEntry{Kind: "ore", Artifact: &m.Ores[i]})
+	}
+	return out
+}
+
+func (m *InstalledManifest) artifactList(kind string) *[]ArtifactEntry {
+	switch kind {
+	case "ingot":
+		return &m.Ingots
+	case "ore":
+		return &m.Ores
+	default:
+		panic("foundry: unknown artifact kind: " + kind)
+	}
+}
+
+func mergeDependents(a, b []string) []string {
+	seen := make(map[string]struct{}, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, s := range append(append([]string{}, a...), b...) {
+		if _, dup := seen[s]; dup {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+func stripString(s []string, target string) []string {
+	if len(s) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(s))
+	for _, v := range s {
+		if v != target {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // WriteInstalledManifest marshals and writes the manifest, creating parent dirs.
