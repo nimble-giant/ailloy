@@ -160,6 +160,20 @@ func (r *Reference) CacheKey() string {
 	return fmt.Sprintf("%s/%s/%s", r.Host, r.Owner, r.Repo)
 }
 
+// OverrideKey returns the per-mold key used to look up persisted flux
+// overrides written by the foundries TUI. It is CacheKey with the subpath
+// appended so monorepo molds (where one repo hosts several molds at distinct
+// subpaths) get their own override file rather than colliding on the repo
+// key. Version is intentionally excluded — saves are keyed on the raw mold
+// source (which carries no version), so loads must match.
+func (r *Reference) OverrideKey() string {
+	key := r.CacheKey()
+	if sp := strings.Trim(r.Subpath, "/"); sp != "" {
+		key = key + "/" + sp
+	}
+	return key
+}
+
 // ReleasePrefix returns the last segment of Subpath, used to match monorepo-
 // style per-mold tags like `<prefix>-v1.2.3` (e.g. `wiki-v0.4.0`). Returns ""
 // when there is no subpath.

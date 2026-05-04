@@ -74,7 +74,7 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 	}
 	source := ""
 	if remoteResult != nil {
-		source = remoteResult.Ref.CacheKey()
+		source = remoteResult.Ref.OverrideKey()
 	}
 	res.Source = source
 
@@ -180,6 +180,10 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 	if err := copyResolvedFilesWithSchema(reader, manifest, mergedSchema, flux, filesToCast, opts.ForceReplaceOnParseError); err != nil {
 		return res, fmt.Errorf("copying files: %w", err)
 	}
+
+	// Drop directories that ended up empty after skipped renders (#145, #195).
+	dirs = cleanupEmptyDirs(dirs, destPrefix)
+	res.Dirs = dirs
 
 	// Mirror what cast.go does: record install dirs in .ailloy/state.yaml so
 	// `mold list` can find blanks installed via the foundries TUI.
