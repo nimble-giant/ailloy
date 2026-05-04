@@ -236,6 +236,43 @@ func TestReference_CacheKey(t *testing.T) {
 	}
 }
 
+func TestReference_OverrideKey(t *testing.T) {
+	tests := []struct {
+		name string
+		ref  Reference
+		want string
+	}{
+		{
+			name: "no subpath matches CacheKey",
+			ref:  Reference{Host: "github.com", Owner: "owner", Repo: "repo"},
+			want: "github.com/owner/repo",
+		},
+		{
+			name: "subpath appended",
+			ref:  Reference{Host: "github.com", Owner: "owner", Repo: "repo", Subpath: "molds/launch"},
+			want: "github.com/owner/repo/molds/launch",
+		},
+		{
+			name: "subpath with leading and trailing slashes is trimmed",
+			ref:  Reference{Host: "github.com", Owner: "owner", Repo: "repo", Subpath: "/molds/launch/"},
+			want: "github.com/owner/repo/molds/launch",
+		},
+		{
+			name: "version is intentionally omitted",
+			ref:  Reference{Host: "github.com", Owner: "owner", Repo: "repo", Version: "v1.2.3", Subpath: "molds/launch"},
+			want: "github.com/owner/repo/molds/launch",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.ref.OverrideKey(); got != tt.want {
+				t.Errorf("OverrideKey() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestReference_String(t *testing.T) {
 	tests := []struct {
 		name string
