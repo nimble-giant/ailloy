@@ -44,12 +44,23 @@ type TemplateOption func(*templateConfig)
 
 type templateConfig struct {
 	ingotResolver *IngotResolver
+	logger        *log.Logger
 }
 
 // WithIngotResolver enables the {{ingot "name"}} template function.
 func WithIngotResolver(r *IngotResolver) TemplateOption {
 	return func(c *templateConfig) {
 		c.ingotResolver = r
+	}
+}
+
+// WithLogger overrides the logger used for template warnings (e.g. unresolved
+// variables). Pass a logger writing to io.Discard to silence warnings — useful
+// when ProcessTemplate runs inside a Bubble Tea TUI where stray writes corrupt
+// the alt-screen.
+func WithLogger(logger *log.Logger) TemplateOption {
+	return func(c *templateConfig) {
+		c.logger = logger
 	}
 }
 
@@ -128,7 +139,11 @@ func ProcessTemplate(content string, flux map[string]any, opts ...TemplateOption
 		return "", fmt.Errorf("template parse error: %w", err)
 	}
 
-	warnUnresolvedVars(content, data)
+	logger := cfg.logger
+	if logger == nil {
+		logger = log.Default()
+	}
+	warnUnresolvedVars(content, data, logger)
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
@@ -152,7 +167,7 @@ func BuildTemplateData(flux map[string]any) map[string]any {
 
 // warnUnresolvedVars scans a template for variable references
 // and logs warnings for any that cannot be resolved from the data map.
-func warnUnresolvedVars(content string, data map[string]any) {
+func warnUnresolvedVars(content string, data map[string]any, logger *log.Logger) {
 	seen := make(map[string]bool)
 
 	for _, re := range []*regexp.Regexp{directVarRefPattern, actionVarRefPattern} {
@@ -167,7 +182,7 @@ func warnUnresolvedVars(content string, data map[string]any) {
 			seen[path] = true
 
 			if !resolveDataPath(data, path) {
-				log.Printf("warning: unresolved template variable: {{.%s}}", path)
+				logger.Printf("warning: unresolved template variable: {{.%s}}", path)
 			}
 		}
 	}

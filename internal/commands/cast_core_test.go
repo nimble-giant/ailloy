@@ -1,8 +1,10 @@
 package commands
 
 import (
+	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/nimble-giant/ailloy/pkg/blanks"
@@ -68,6 +70,93 @@ opencode body
 	}
 	if _, err := os.Stat(filepath.Join(projectDir, ".claude", "agents")); err == nil {
 		t.Errorf("regression #195: .claude/agents/ leftover after CastMold (template rendered empty for inactive target)")
+	}
+}
+
+// TestCastMold_ConcurrentRunsStaySilent guards against the regression where
+// CastMold used a process-global `castSilent` toggle plus a global
+// log.SetOutput() to suppress per-file "✅ Created" lines. When the foundries
+// TUI dispatched multiple casts via tea.Batch, the first goroutine to finish
+// flipped the toggle back on while the others were still inside
+// copyResolvedFiles — leaking `fmt.Println` output into the Bubble Tea
+// alt-screen and producing the "jumbled output" symptom.
+//
+// The fix plumbs silencing through per-call opts (no globals). This test
+// captures stdout while running many CastMolds concurrently and asserts no
+// bytes are written.
+func TestCastMold_ConcurrentRunsStaySilent(t *testing.T) {
+	projectDir := t.TempDir()
+	t.Chdir(projectDir)
+	t.Setenv("HOME", t.TempDir())
+
+	// Build several local mold dirs, each with several files, so
+	// copyResolvedFiles iterates many times per cast — maximising the
+	// chance of catching any concurrent stdout write.
+	const moldCount = 4
+	const filesPerMold = 6
+	moldDirs := make([]string, 0, moldCount)
+	for i := 0; i < moldCount; i++ {
+		dir := filepath.Join(projectDir, "molds", "m"+string(rune('a'+i)))
+		if err := os.MkdirAll(filepath.Join(dir, "blanks"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		manifest := []byte("apiVersion: v1\nkind: Mold\nname: m" + string(rune('a'+i)) + "\nversion: 0.1.0\n")
+		if err := os.WriteFile(filepath.Join(dir, "mold.yaml"), manifest, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		flux := []byte("output:\n  blanks:\n    - dest: out/m" + string(rune('a'+i)) + "\n")
+		if err := os.WriteFile(filepath.Join(dir, "flux.yaml"), flux, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for j := 0; j < filesPerMold; j++ {
+			fname := filepath.Join(dir, "blanks", "f"+string(rune('0'+j))+".md")
+			if err := os.WriteFile(fname, []byte("hello\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		moldDirs = append(moldDirs, dir)
+	}
+
+	// Redirect stdout into a pipe so we can observe anything the cast path
+	// leaks. The race-prone scenario this guards against is multiple
+	// CastMolds racing on global silencing state.
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	origStdout := os.Stdout
+	os.Stdout = w
+
+	var captured []byte
+	captureDone := make(chan struct{})
+	go func() {
+		captured, _ = io.ReadAll(r)
+		close(captureDone)
+	}()
+
+	var wg sync.WaitGroup
+	errs := make(chan error, moldCount)
+	for _, dir := range moldDirs {
+		wg.Add(1)
+		go func(d string) {
+			defer wg.Done()
+			if _, err := CastMold(t.Context(), d, CastOptions{}); err != nil {
+				errs <- err
+			}
+		}(dir)
+	}
+	wg.Wait()
+	close(errs)
+
+	os.Stdout = origStdout
+	_ = w.Close()
+	<-captureDone
+
+	for err := range errs {
+		t.Errorf("CastMold: %v", err)
+	}
+	if len(captured) > 0 {
+		t.Fatalf("CastMold leaked %d bytes to stdout: %q", len(captured), string(captured))
 	}
 }
 

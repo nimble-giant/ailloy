@@ -58,7 +58,7 @@ func TestInstallDeclaredDeps_InstallsMissingOre(t *testing.T) {
 		},
 	}
 
-	if err := installDeclaredDeps(manifest, "g/test-mold", false, true, false); err != nil {
+	if err := installDeclaredDeps(manifest, "g/test-mold", false, true, false, false, nil); err != nil {
 		t.Fatalf("installDeclaredDeps: %v", err)
 	}
 
@@ -108,10 +108,10 @@ func TestInstallDeclaredDeps_AppendsDependent(t *testing.T) {
 			{Ore: remoteOre, Version: "1.0.0"},
 		},
 	}
-	if err := installDeclaredDeps(manifest, "g/first", false, true, false); err != nil {
+	if err := installDeclaredDeps(manifest, "g/first", false, true, false, false, nil); err != nil {
 		t.Fatalf("first install: %v", err)
 	}
-	if err := installDeclaredDeps(manifest, "g/second", false, true, false); err != nil {
+	if err := installDeclaredDeps(manifest, "g/second", false, true, false, false, nil); err != nil {
 		t.Fatalf("second install: %v", err)
 	}
 
@@ -157,7 +157,7 @@ func TestInstallDeclaredDeps_AliasCollisionPreCheck(t *testing.T) {
 			{Ore: oreB, Version: "1.0.0", As: "shared"},
 		},
 	}
-	err := installDeclaredDeps(manifest, "g/m", false, true, false)
+	err := installDeclaredDeps(manifest, "g/m", false, true, false, false, nil)
 	if err == nil {
 		t.Fatal("expected alias collision error, got nil")
 	}
@@ -197,7 +197,7 @@ func TestCast_AutoInstallsOreFromMoldYAML(t *testing.T) {
 		},
 	}
 
-	if err := installDeclaredDeps(manifest, "g/m", false, true, false); err != nil {
+	if err := installDeclaredDeps(manifest, "g/m", false, true, false, false, nil); err != nil {
 		t.Fatalf("installDeclaredDeps: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(".ailloy", "ores", "status", "ore.yaml")); err != nil {
@@ -271,7 +271,7 @@ func TestInstallDeclaredDeps_DistinctSubpathsCoexist(t *testing.T) {
 		},
 	}
 
-	if err := installDeclaredDeps(manifest, "g/test-mold", false, true, false); err != nil {
+	if err := installDeclaredDeps(manifest, "g/test-mold", false, true, false, false, nil); err != nil {
 		t.Fatalf("installDeclaredDeps: %v", err)
 	}
 
@@ -313,7 +313,7 @@ func TestInstallDeclaredDeps_RejectsLocalDepFromRemoteMold(t *testing.T) {
 	}
 
 	// Simulate a remote-resolved mold by passing allowLocalDeps=false.
-	err := installDeclaredDeps(manifest, "g/remote-mold", false, false, false)
+	err := installDeclaredDeps(manifest, "g/remote-mold", false, false, false, false, nil)
 	if err == nil {
 		t.Fatal("expected error for local-path dep in remote mold")
 	}
@@ -349,7 +349,7 @@ func TestInstallDeclaredDeps_FrozenErrorsOnMissing(t *testing.T) {
 		},
 	}
 
-	err := installDeclaredDeps(manifest, "g/test-mold", false, true, true)
+	err := installDeclaredDeps(manifest, "g/test-mold", false, true, true, false, nil)
 	if err == nil {
 		t.Fatal("expected error from --frozen on missing dep, got nil")
 	}
@@ -391,12 +391,12 @@ func TestInstallDeclaredDeps_FrozenNoOpWhenAlreadyInstalled(t *testing.T) {
 	}
 
 	// First, install normally.
-	if err := installDeclaredDeps(manifest, "g/test-mold", false, true, false); err != nil {
+	if err := installDeclaredDeps(manifest, "g/test-mold", false, true, false, false, nil); err != nil {
 		t.Fatalf("seed install: %v", err)
 	}
 
 	// Now run again with --frozen — should succeed without re-fetching.
-	if err := installDeclaredDeps(manifest, "g/test-mold", false, true, true); err != nil {
+	if err := installDeclaredDeps(manifest, "g/test-mold", false, true, true, false, nil); err != nil {
 		t.Errorf("frozen with already-installed deps should be a no-op, got: %v", err)
 	}
 }
