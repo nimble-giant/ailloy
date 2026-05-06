@@ -129,11 +129,11 @@ func executeCacheClear(o cacheClearOptions) (int, error) {
 	}
 
 	if isEmptySelection(molds, idx) {
-		fmt.Fprintln(o.Stdout, "Cache is already empty.")
+		_, _ = fmt.Fprintln(o.Stdout, "Cache is already empty.")
 		return 0, nil
 	}
 
-	fmt.Fprint(o.Stdout, renderCachePreview(displayPath(o.MoldRoot), molds, idx))
+	_, _ = fmt.Fprint(o.Stdout, renderCachePreview(displayPath(o.MoldRoot), molds, idx))
 
 	if o.DryRun {
 		return 0, nil
@@ -148,7 +148,7 @@ func executeCacheClear(o cacheClearOptions) (int, error) {
 			return 1, err
 		}
 		if !ok {
-			fmt.Fprintln(o.Stdout, "Cancelled.")
+			_, _ = fmt.Fprintln(o.Stdout, "Cancelled.")
 			return 0, nil
 		}
 	}
@@ -169,7 +169,7 @@ func executeCacheClear(o cacheClearOptions) (int, error) {
 	}
 
 	for _, e := range errs {
-		fmt.Fprintf(o.Stdout, "warning: %s\n", e.Error())
+		_, _ = fmt.Fprintf(o.Stdout, "warning: %s\n", e.Error())
 	}
 
 	freed := int64(0)
@@ -188,7 +188,7 @@ func executeCacheClear(o cacheClearOptions) (int, error) {
 			refs = molds.Refs
 			versions = molds.Versions
 		}
-		fmt.Fprintf(o.Stdout, "Cleared %d molds (%d versions), %d indexes — freed %s.\n",
+		_, _ = fmt.Fprintf(o.Stdout, "Cleared %d molds (%d versions), %d indexes — freed %s.\n",
 			refs, versions, removedIndexes, humanizeBytes(freed))
 	case wantMolds:
 		refs := 0
@@ -197,15 +197,15 @@ func executeCacheClear(o cacheClearOptions) (int, error) {
 			refs = molds.Refs
 			versions = molds.Versions
 		}
-		fmt.Fprintf(o.Stdout, "Cleared %d molds (%d versions) — freed %s.\n",
+		_, _ = fmt.Fprintf(o.Stdout, "Cleared %d molds (%d versions) — freed %s.\n",
 			refs, versions, humanizeBytes(freed))
 	case wantIndexes:
-		fmt.Fprintf(o.Stdout, "Cleared %d indexes — freed %s.\n",
+		_, _ = fmt.Fprintf(o.Stdout, "Cleared %d indexes — freed %s.\n",
 			removedIndexes, humanizeBytes(freed))
 	}
 
 	if len(errs) > 0 {
-		fmt.Fprintf(o.Stdout, "Cleared with %d errors.\n", len(errs))
+		_, _ = fmt.Fprintf(o.Stdout, "Cleared with %d errors.\n", len(errs))
 		return 1, nil
 	}
 	return 0, nil
