@@ -67,10 +67,18 @@ type InstallFoundryOptions struct {
 	WithWorkflows bool
 	DryRun        bool
 	Force         bool
+	ValueFiles    []string
+	SetOverrides  []string
 }
 
 // InstallFoundryFunc casts every mold listed by a foundry.
-type InstallFoundryFunc func(ctx context.Context, cfg *index.Config, nameOrURL string, opts InstallFoundryOptions) ([]InstallFoundryReport, error)
+type InstallFoundryFunc func(
+	ctx context.Context,
+	cfg *index.Config,
+	nameOrURL string,
+	opts InstallFoundryOptions,
+	perMoldOverrides map[string][]string,
+) ([]InstallFoundryReport, error)
 
 // Deps wires platform-level operations into the TUI without forcing the
 // tui package to import internal/commands (which would create a cycle).

@@ -67,12 +67,21 @@ func runFoundries(_ *cobra.Command, _ []string) error {
 			}
 			return out, err
 		},
-		InstallFoundry: func(ctx context.Context, cfg *index.Config, nameOrURL string, opts foundries.InstallFoundryOptions) ([]foundries.InstallFoundryReport, error) {
+		InstallFoundry: func(
+			ctx context.Context,
+			cfg *index.Config,
+			nameOrURL string,
+			opts foundries.InstallFoundryOptions,
+			perMoldOverrides map[string][]string,
+		) ([]foundries.InstallFoundryReport, error) {
 			rs, _, err := InstallFoundryCore(ctx, cfg, nameOrURL, InstallFoundryOptions{
-				Global:        opts.Global,
-				WithWorkflows: opts.WithWorkflows,
-				DryRun:        opts.DryRun,
-				Force:         opts.Force,
+				Global:           opts.Global,
+				WithWorkflows:    opts.WithWorkflows,
+				DryRun:           opts.DryRun,
+				Force:            opts.Force,
+				ValueFiles:       opts.ValueFiles,
+				SetOverrides:     opts.SetOverrides,
+				PerMoldOverrides: perMoldOverrides,
 			})
 			out := make([]foundries.InstallFoundryReport, 0, len(rs))
 			for _, r := range rs {

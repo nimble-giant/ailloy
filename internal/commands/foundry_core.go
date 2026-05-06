@@ -236,6 +236,10 @@ type InstallFoundryOptions struct {
 	// SetOverrides applies the same --set layering used by `cast` to every
 	// mold. Same precedence as on `cast`: highest layer.
 	SetOverrides []string
+	// PerMoldOverrides is keyed by mold name → already-encoded --set strings.
+	// These are appended after SetOverrides for that specific mold so
+	// per-mold values take precedence over foundry-wide values.
+	PerMoldOverrides map[string][]string
 }
 
 // InstallFoundryReport is the per-mold result of an InstallFoundryCore run.
@@ -348,12 +352,16 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 			continue
 		}
 
+		moldSet := opts.SetOverrides
+		if extra := opts.PerMoldOverrides[m.Entry.Name]; len(extra) > 0 {
+			moldSet = append(append([]string(nil), opts.SetOverrides...), extra...)
+		}
 		castRes, cerr := CastMold(ctx, m.Entry.Source, CastOptions{
 			Global:        opts.Global,
 			WithWorkflows: opts.WithWorkflows,
 			ClaudePlugin:  opts.ClaudePlugin,
 			ValueFiles:    opts.ValueFiles,
-			SetOverrides:  opts.SetOverrides,
+			SetOverrides:  moldSet,
 		})
 		if cerr != nil {
 			report.Err = cerr
