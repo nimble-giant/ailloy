@@ -5,7 +5,6 @@ import (
 	"log"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
@@ -132,17 +131,18 @@ func init() {
 }
 
 type recastChange struct {
-	Name       string
-	Source     string
-	OldVersion string
-	OldCommit  string
-	NewVersion string
-	NewCommit  string
+	Name           string
+	Source         string
+	OldVersion     string
+	OldCommit      string
+	NewVersion     string
+	NewCommit      string
+	Effective      foundry.CastOptionsRecord // applied options for this run
+	OptionsChanged bool                      // true when CLI overrode recorded options
 }
 
-func runRecast(_ *cobra.Command, args []string) error {
+func runRecast(cmd *cobra.Command, args []string) error {
 	manifestPath := manifestPathFor(recastGlobal)
-	lockPath := lockPathFor(recastGlobal)
 
 	manifest, err := foundry.ReadInstalledManifest(manifestPath)
 	if err != nil {
@@ -154,7 +154,6 @@ func runRecast(_ *cobra.Command, args []string) error {
 			styles.CodeStyle.Render("ailloy cast"))
 	}
 
-	// Optional name filter.
 	entries := manifest.Molds
 	if len(args) == 1 {
 		match := manifest.FindByName(args[0])
@@ -164,9 +163,14 @@ func runRecast(_ *cobra.Command, args []string) error {
 		entries = []foundry.InstalledEntry{*match}
 	}
 
+	cli := recastCLIOptions{
+		WithWorkflows:            recastWithWorkflows,
+		ValueFiles:               recastValFiles,
+		SetOverrides:             recastSetFlags,
+		ForceReplaceOnParseError: recastForceReplace,
+	}
+
 	if recastDryRun {
-		// Dry-run keeps the lighter informational banner — no full ceremony
-		// because nothing actually changes on disk.
 		fmt.Println(styles.WorkingBanner("Previewing dependency updates (dry run)..."))
 		fmt.Println()
 	} else {
@@ -175,139 +179,185 @@ func runRecast(_ *cobra.Command, args []string) error {
 
 	git := foundry.DefaultGitRunner()
 	var changes []recastChange
-
-	// Read existing lock (if any) so we can update it in lockstep.
-	existingLock, _ := foundry.ReadLockFile(lockPath)
+	failures := 0
 
 	for _, entry := range entries {
-		ref, err := referenceFromInstalledEntry(&entry)
-		if err != nil {
-			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, err)
+		ref, refErr := referenceFromInstalledEntry(&entry)
+		if refErr != nil {
+			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, refErr)
+			failures++
 			continue
 		}
-		resolved, err := foundry.ResolveVersion(ref, git)
-		if err != nil {
-			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, err)
+		resolved, resolveErr := foundry.ResolveVersion(ref, git)
+		if resolveErr != nil {
+			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, resolveErr)
+			failures++
 			continue
 		}
-		if resolved.Tag == entry.Version && resolved.Commit == entry.Commit {
-			fmt.Println(styles.InfoStyle.Render("  ") + entry.Name + " is already up to date (" + styles.CodeStyle.Render(entry.Version) + ")")
+
+		versionUnchanged := resolved.Tag == entry.Version && resolved.Commit == entry.Commit
+		if versionUnchanged && !cli.hasOverrides() {
+			fmt.Println(styles.InfoStyle.Render("  ") + entry.Name + " is already up to date (" +
+				styles.CodeStyle.Render(entry.Version) + ")")
 			continue
 		}
-		changes = append(changes, recastChange{
-			Name:       entry.Name,
-			Source:     entry.Source,
-			OldVersion: entry.Version,
-			OldCommit:  entry.Commit,
-			NewVersion: resolved.Tag,
-			NewCommit:  resolved.Commit,
-		})
 
-		if !recastDryRun {
-			fetcher, ferr := foundry.NewFetcher(git)
-			if ferr != nil {
-				fmt.Printf("%s skipping %s: fetcher: %v\n", styles.WarningStyle.Render("!"), entry.Name, ferr)
-				changes = changes[:len(changes)-1]
-				continue
-			}
-			fetchedFS, _, fetchErr := fetcher.Fetch(ref, resolved)
-			if fetchErr != nil {
-				fmt.Printf("%s skipping %s: fetch: %v\n", styles.WarningStyle.Render("!"), entry.Name, fetchErr)
-				changes = changes[:len(changes)-1]
-				continue
-			}
+		effective := mergeRecastOptions(entry.CastOptions, cli)
+		change := recastChange{
+			Name:           entry.Name,
+			Source:         entry.Source,
+			OldVersion:     entry.Version,
+			OldCommit:      entry.Commit,
+			NewVersion:     resolved.Tag,
+			NewCommit:      resolved.Commit,
+			Effective:      effective,
+			OptionsChanged: cli.hasOverrides(),
+		}
 
-			manifest.UpsertEntry(foundry.InstalledEntry{
-				Name:    entry.Name,
-				Source:  entry.Source,
-				Subpath: entry.Subpath,
-				Version: resolved.Tag,
-				Commit:  resolved.Commit,
-				CastAt:  time.Now().UTC(),
-			})
+		if recastDryRun {
+			changes = append(changes, change)
+			continue
+		}
 
-			// Reconcile the freshly resolved mold's dependency graph: install
-			// any newly declared deps and prune any that the mold no longer
-			// declares. moldKey mirrors the cast-time key (source@subpath when
-			// subpath is set) so dependent strings stay consistent.
-			moldKey := entry.Source
-			if entry.Subpath != "" {
-				moldKey += "@" + entry.Subpath
-			}
-			reader := blanks.NewMoldReader(fetchedFS)
-			freshMold, mErr := reader.LoadManifest()
-			if mErr != nil {
-				log.Printf("warning: loading fresh mold manifest for %s: %v", entry.Name, mErr)
-			} else if freshMold != nil {
-				// Auto-install newly declared deps. Recast operates on the
-				// project's installed.yaml (or global per --global). Local-path
-				// deps are refused because recast walks remote references.
-				if err := installDeclaredDeps(freshMold, moldKey, recastGlobal, false, recastFrozen, false, nil); err != nil {
-					log.Printf("warning: installing deps for %s: %v", entry.Name, err)
+		// Build a versioned ref string and re-cast. CastMold owns the
+		// installed-manifest update, lock update (when present), state.yaml
+		// write, and FileHashes recording — recast does not duplicate any
+		// of that work.
+		versionedRef := buildVersionedRefString(ref, resolved.Tag)
+		castOpts := CastOptions{
+			Global:                   recastGlobal,
+			WithWorkflows:            effective.WithWorkflows,
+			ValueFiles:               effective.ValueFiles,
+			SetOverrides:             effective.SetOverrides,
+			ForceReplaceOnParseError: cli.ForceReplaceOnParseError,
+		}
+		if _, castErr := CastMold(cmd.Context(), versionedRef, castOpts); castErr != nil {
+			fmt.Printf("%s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, castErr)
+			failures++
+			continue
+		}
+
+		// Reconcile the freshly resolved mold's dependency graph: install
+		// any newly declared deps and prune any that the mold no longer
+		// declares. moldKey mirrors the cast-time key (source@subpath when
+		// subpath is set) so dependent strings stay consistent. The fetch
+		// here hits the foundry cache CastMold just populated, so it's
+		// near-free.
+		moldKey := entry.Source
+		if entry.Subpath != "" {
+			moldKey += "@" + entry.Subpath
+		}
+		if fetcher, ferr := foundry.NewFetcher(git); ferr == nil {
+			if fetchedFS, _, fetchErr := fetcher.Fetch(ref, resolved); fetchErr == nil {
+				reader := blanks.NewMoldReader(fetchedFS)
+				if freshMold, mErr := reader.LoadManifest(); mErr != nil {
+					log.Printf("warning: loading fresh mold manifest for %s: %v", entry.Name, mErr)
+				} else if freshMold != nil {
+					// Auto-install newly declared deps. Recast operates on the
+					// project's installed.yaml (or global per --global). Local-path
+					// deps are refused because recast walks remote references.
+					if err := installDeclaredDeps(freshMold, moldKey, recastGlobal, false, recastFrozen, false, nil); err != nil {
+						log.Printf("warning: installing deps for %s: %v", entry.Name, err)
+					}
+					// Cascade-prune deps the mold no longer declares.
+					if err := pruneRemovedDeps(manifestPathFor(recastGlobal), moldKey, freshMold.Dependencies, recastGlobal); err != nil {
+						log.Printf("warning: pruning removed deps for %s: %v", entry.Name, err)
+					}
 				}
-				// Cascade-prune deps the mold no longer declares.
-				if err := pruneRemovedDeps(manifestPathFor(recastGlobal), moldKey, freshMold.Dependencies, recastGlobal); err != nil {
-					log.Printf("warning: pruning removed deps for %s: %v", entry.Name, err)
-				}
-				// Re-read manifest so subsequent mold iterations see the
-				// changes from installDeclaredDeps + pruneRemovedDeps.
-				if reread, _ := foundry.ReadInstalledManifest(manifestPathFor(recastGlobal)); reread != nil {
-					manifest = reread
-				}
-			}
-
-			if existingLock != nil {
-				existingLock.UpsertEntry(foundry.LockEntry{
-					Name:      entry.Name,
-					Source:    entry.Source,
-					Version:   resolved.Tag,
-					Commit:    resolved.Commit,
-					Subpath:   entry.Subpath,
-					Timestamp: time.Now().UTC(),
-				})
 			}
 		}
+
+		// CastMold has already upserted the manifest entry; now overlay the
+		// merged effective options so subsequent recasts replay them.
+		if persistErr := persistEffectiveOptions(manifestPath, entry.Source, entry.Subpath, effective); persistErr != nil {
+			fmt.Printf("%s warning: %s: failed to persist options: %v\n",
+				styles.WarningStyle.Render("!"), entry.Name, persistErr)
+			// Non-fatal — files are already updated.
+		}
+
+		changes = append(changes, change)
 	}
 
-	if len(changes) == 0 {
+	if len(changes) == 0 && failures == 0 {
 		fmt.Println()
 		fmt.Println(styles.SuccessStyle.Render("All dependencies are up to date."))
 		return nil
 	}
 
-	if !recastDryRun {
-		if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
-			return fmt.Errorf("writing installed manifest: %w", err)
-		}
-		if existingLock != nil {
-			if err := foundry.WriteLockFile(lockPath, existingLock); err != nil {
-				return fmt.Errorf("writing lock file: %w", err)
-			}
-		}
-	}
-
 	fmt.Println()
 	if recastDryRun {
 		fmt.Println(styles.InfoStyle.Render("Changes that would be applied:"))
-	} else {
+	} else if len(changes) > 0 {
 		fmt.Println(styles.SuccessStyle.Render("Updated dependencies:"))
 	}
 	fmt.Println()
 	for _, c := range changes {
-		fmt.Printf("  %s  %s %s %s\n",
+		line := fmt.Sprintf("  %s  %s %s %s",
 			styles.FoxBullet(c.Name),
 			styles.CodeStyle.Render(c.OldVersion),
 			styles.InfoStyle.Render("->"),
 			styles.CodeStyle.Render(c.NewVersion),
 		)
+		if c.OptionsChanged {
+			line += "  " + styles.InfoStyle.Render("(options overridden)")
+		}
+		fmt.Println(line)
 	}
 
-	fmt.Println()
-	if recastDryRun {
-		fmt.Println(styles.InfoStyle.Render("Run without --dry-run to apply these changes."))
-	} else {
+	if !recastDryRun && len(changes) > 0 {
+		fmt.Println()
 		fmt.Println(styles.SuccessBanner("Recast complete!"))
 		ceremony.Stamp(ceremony.Recast, fmt.Sprintf("%d mold(s) updated", len(changes)))
 	}
+	if recastDryRun {
+		fmt.Println()
+		fmt.Println(styles.InfoStyle.Render("Run without --dry-run to apply these changes."))
+	}
+
+	if failures > 0 {
+		return fmt.Errorf("%d mold(s) failed to recast", failures)
+	}
 	return nil
+}
+
+// buildVersionedRefString turns a Reference plus a resolved tag into the
+// canonical ref-string format accepted by CastMold and foundry.ParseReference:
+//
+//	<host>/<owner>/<repo>@<tag>[//<subpath>]
+func buildVersionedRefString(ref *foundry.Reference, tag string) string {
+	s := ref.CacheKey()
+	if tag != "" {
+		s += "@" + tag
+	}
+	if ref.Subpath != "" {
+		s += "//" + ref.Subpath
+	}
+	return s
+}
+
+// persistEffectiveOptions writes the merged CastOptions back onto the manifest
+// entry identified by (source, subpath). It re-reads the manifest because
+// CastMold has just rewritten it; we layer the options on top of CastMold's
+// upsert without otherwise modifying the entry.
+func persistEffectiveOptions(manifestPath, source, subpath string, eff foundry.CastOptionsRecord) error {
+	manifest, err := foundry.ReadInstalledManifest(manifestPath)
+	if err != nil {
+		return err
+	}
+	if manifest == nil {
+		return fmt.Errorf("manifest disappeared at %s", manifestPath)
+	}
+	target := manifest.FindBySource(source, subpath)
+	if target == nil {
+		return fmt.Errorf("entry %s/%s not found after recast", source, subpath)
+	}
+	if eff.WithWorkflows || len(eff.ValueFiles) > 0 || len(eff.SetOverrides) > 0 {
+		copied := eff
+		copied.ValueFiles = append([]string(nil), eff.ValueFiles...)
+		copied.SetOverrides = append([]string(nil), eff.SetOverrides...)
+		target.CastOptions = &copied
+	} else {
+		target.CastOptions = nil
+	}
+	return foundry.WriteInstalledManifest(manifestPath, manifest)
 }
