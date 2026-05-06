@@ -203,8 +203,8 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 			// RecordInstalledFiles.
 			record := &foundry.CastOptionsRecord{
 				WithWorkflows: opts.WithWorkflows,
-				ValueFiles:    append([]string(nil), opts.ValueFiles...),
-				SetOverrides:  append([]string(nil), opts.SetOverrides...),
+				ValueFiles:    opts.ValueFiles,
+				SetOverrides:  opts.SetOverrides,
 			}
 			if err := recordInstalled(remoteResult, opts.Global, record, silentLogger); err != nil {
 				silentLogger.Printf("warning: failed to update installed manifest: %v", err)

@@ -365,8 +365,8 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	if resolvedRemote != nil {
 		opts := &foundry.CastOptionsRecord{
 			WithWorkflows: withWorkflows,
-			ValueFiles:    append([]string(nil), castValFiles...),
-			SetOverrides:  append([]string(nil), castSetFlags...),
+			ValueFiles:    castValFiles,
+			SetOverrides:  castSetFlags,
 		}
 		if err := recordInstalled(resolvedRemote, castGlobal, opts, nil); err != nil {
 			log.Printf("warning: failed to update installed manifest: %v", err)
@@ -819,12 +819,8 @@ func recordInstalled(result *foundry.ResolveResult, global bool, opts *foundry.C
 	if opts != nil && (opts.WithWorkflows || len(opts.ValueFiles) > 0 || len(opts.SetOverrides) > 0) {
 		// Copy to detach from caller's slice ownership.
 		copied := *opts
-		if len(opts.ValueFiles) > 0 {
-			copied.ValueFiles = append([]string(nil), opts.ValueFiles...)
-		}
-		if len(opts.SetOverrides) > 0 {
-			copied.SetOverrides = append([]string(nil), opts.SetOverrides...)
-		}
+		copied.ValueFiles = append([]string(nil), opts.ValueFiles...)
+		copied.SetOverrides = append([]string(nil), opts.SetOverrides...)
 		entry.CastOptions = &copied
 	}
 	manifest.UpsertEntry(entry)
