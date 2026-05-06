@@ -129,17 +129,18 @@ func TestInstallFoundryCoreFluxApplyResults(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("AILLOY_INDEX_CACHE_DIR", tmp)
 
-	// Build a real local mold for "alpha" with an agents.targets schema, and a
-	// second mold "beta" without it. Source paths in the foundry index point
-	// at on-disk paths so FetchSchemaFromSource can find them — DryRun skips
-	// the actual cast.
-	moldDir := func(name string, schemaYAML string) string {
+	// Build local molds whose source paths the foundry index points at, so
+	// FetchSchemaFromSource (and the inline mold.yaml read) can find them —
+	// DryRun skips the actual cast.
+	//   - alpha:  declares agents.targets via flux.schema.yaml
+	//   - beta:   declares no flux
+	//   - gamma:  declares agents.targets inline in mold.yaml (no schema file)
+	moldDir := func(name string, manifestYAML string, schemaYAML string) string {
 		d := filepath.Join(tmp, name)
 		if err := os.MkdirAll(d, 0o750); err != nil {
 			t.Fatal(err)
 		}
-		manifest := []byte("apiVersion: v1\nkind: mold\nname: " + name + "\nversion: 0.0.1\n")
-		if err := os.WriteFile(filepath.Join(d, "mold.yaml"), manifest, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(d, "mold.yaml"), []byte(manifestYAML), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if schemaYAML != "" {
@@ -149,11 +150,23 @@ func TestInstallFoundryCoreFluxApplyResults(t *testing.T) {
 		}
 		return d
 	}
-	alphaPath := moldDir("alpha", `- name: agents.targets
+	plainManifest := func(name string) string {
+		return "apiVersion: v1\nkind: mold\nname: " + name + "\nversion: 0.0.1\n"
+	}
+	alphaPath := moldDir("alpha", plainManifest("alpha"), `- name: agents.targets
   type: list
   default: "[claude]"
 `)
-	betaPath := moldDir("beta", "")
+	betaPath := moldDir("beta", plainManifest("beta"), "")
+	gammaPath := moldDir("gamma", `apiVersion: v1
+kind: mold
+name: gamma
+version: 0.0.1
+flux:
+  - name: agents.targets
+    type: list
+    default: "[claude]"
+`, "")
 
 	parentURL := "https://github.com/example/parent"
 	entry := &index.FoundryEntry{URL: parentURL, Type: "git"}
@@ -169,6 +182,8 @@ molds:
     source: ` + alphaPath + `
   - name: beta
     source: ` + betaPath + `
+  - name: gamma
+    source: ` + gammaPath + `
 `)
 	if err := os.WriteFile(filepath.Join(dir, "foundry.yaml"), yaml, 0o644); err != nil {
 		t.Fatal(err)
@@ -185,8 +200,8 @@ molds:
 	if err != nil {
 		t.Fatalf("InstallFoundryCore: %v", err)
 	}
-	if len(reports) != 2 {
-		t.Fatalf("got %d reports, want 2", len(reports))
+	if len(reports) != 3 {
+		t.Fatalf("got %d reports, want 3", len(reports))
 	}
 
 	byName := map[string]InstallFoundryReport{}
@@ -205,6 +220,14 @@ molds:
 	}
 	if got := byName["beta"].FluxSkipped; !reflect.DeepEqual(got, []string{"agents.targets"}) {
 		t.Errorf("beta.FluxSkipped = %v, want [agents.targets]", got)
+	}
+	// gamma proves we honor inline mold.yaml flux declarations, not just
+	// flux.schema.yaml — without this the summary lies for inline-schema molds.
+	if got := byName["gamma"].FluxApplied; !reflect.DeepEqual(got, []string{"agents.targets"}) {
+		t.Errorf("gamma.FluxApplied = %v, want [agents.targets]", got)
+	}
+	if got := byName["gamma"].FluxSkipped; len(got) != 0 {
+		t.Errorf("gamma.FluxSkipped = %v, want empty", got)
 	}
 }
 
