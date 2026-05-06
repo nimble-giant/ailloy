@@ -18,19 +18,28 @@ var recastCmd = &cobra.Command{
 	Use:     "recast [name]",
 	Aliases: []string{"upgrade"},
 	Short:   "Re-resolve installed molds to newer versions",
-	Long: `Re-resolve installed molds to newer versions (alias: upgrade).
+	Long: `Re-resolve installed molds to newer versions and re-render their content (alias: upgrade).
 
-Reads .ailloy/installed.yaml and refreshes each mold to its latest matching
-version. If ailloy.lock exists, also updates lock entries in lockstep.
+Reads .ailloy/installed.yaml, refreshes each mold to its latest matching
+version, and re-runs the cast pipeline so files on disk reflect the new
+version. If ailloy.lock exists, it is updated in lockstep.
 
-Use --dry-run to preview changes without applying them.`,
+Flags supplied here layer on top of the options the original cast recorded
+in installed.yaml. --set and --values overrides are persisted back; the
+recovery flag --force-replace-on-parse-error is not.
+
+Use --dry-run to preview which molds will move, without re-rendering.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runRecast,
 }
 
 var (
-	recastDryRun bool
-	recastGlobal bool
+	recastDryRun        bool
+	recastGlobal        bool
+	recastSetFlags      []string
+	recastValFiles      []string
+	recastWithWorkflows bool
+	recastForceReplace  bool
 	// recastFrozen mirrors --frozen on cast: fail (do not auto-install) on
 	// any declared ingot/ore dep that's missing from .ailloy/.
 	recastFrozen bool
@@ -115,6 +124,10 @@ func init() {
 	rootCmd.AddCommand(recastCmd)
 	recastCmd.Flags().BoolVar(&recastDryRun, "dry-run", false, "preview changes without applying")
 	recastCmd.Flags().BoolVarP(&recastGlobal, "global", "g", false, "operate on the global manifest/lock under ~/")
+	recastCmd.Flags().BoolVar(&recastWithWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks (OR'd with the recorded value)")
+	recastCmd.Flags().StringArrayVar(&recastSetFlags, "set", nil, "override flux variable (key=value, repeatable; supports dotted keys)")
+	recastCmd.Flags().StringArrayVarP(&recastValFiles, "values", "f", nil, "flux value file (repeatable; later files override earlier)")
+	recastCmd.Flags().BoolVar(&recastForceReplace, "force-replace-on-parse-error", false, "replace unparseable merge-strategy destinations instead of erroring")
 	recastCmd.Flags().BoolVar(&recastFrozen, "frozen", false, "fail (do not auto-install) when a declared ingot/ore dep is missing from .ailloy/; intended for CI")
 }
 
