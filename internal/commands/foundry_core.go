@@ -11,7 +11,42 @@ import (
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 )
+
+// splitFluxKeysForMold partitions user-supplied --set keys into those declared
+// by the mold's flux schema and those that aren't. Returns nil/nil when there
+// are no overrides. The mold's schema is loaded from flux.schema.yaml at source.
+func splitFluxKeysForMold(source string, setOverrides []string) (applied, skipped []string) {
+	if len(setOverrides) == 0 {
+		return nil, nil
+	}
+	keys := make([]string, 0, len(setOverrides))
+	for _, kv := range setOverrides {
+		if eq := strings.IndexByte(kv, '='); eq != -1 {
+			keys = append(keys, kv[:eq])
+		}
+	}
+	// Schema fetch tolerates local dirs and remote refs.
+	schema, _, err := mold.FetchSchemaFromSource(context.Background(), source)
+	if err != nil || len(schema) == 0 {
+		// If we can't read the schema, treat every key as skipped — better
+		// to report visibility than to assert things we can't verify.
+		return nil, append([]string(nil), keys...)
+	}
+	declared := map[string]struct{}{}
+	for _, v := range schema {
+		declared[v.Name] = struct{}{}
+	}
+	for _, k := range keys {
+		if _, ok := declared[k]; ok {
+			applied = append(applied, k)
+		} else {
+			skipped = append(skipped, k)
+		}
+	}
+	return applied, skipped
+}
 
 // AddFoundryResult reports the outcome of an add operation.
 type AddFoundryResult struct {
@@ -167,6 +202,10 @@ type InstallFoundryReport struct {
 	Skipped bool     // true when already installed and !Force
 	Err     error    // non-nil if cast failed for this mold
 	Version string   // populated on success or skip (from CastResult / lockfile)
+	// FluxApplied lists user-supplied --set keys that are declared in this
+	// mold's flux schema. FluxSkipped lists keys that are not.
+	FluxApplied []string
+	FluxSkipped []string
 }
 
 // ErrFoundryNotFound is returned when nameOrURL doesn't match any effective
@@ -251,6 +290,7 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 			Foundry: m.Foundry.Index.Name,
 			Chain:   chain,
 		}
+		report.FluxApplied, report.FluxSkipped = splitFluxKeysForMold(m.Entry.Source, opts.SetOverrides)
 
 		if v, already := installed[strings.ToLower(m.Entry.Source)]; already && !opts.Force {
 			report.Skipped = true

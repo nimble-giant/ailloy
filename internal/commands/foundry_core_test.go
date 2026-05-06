@@ -121,6 +121,93 @@ molds:
 	}
 }
 
+// TestInstallFoundryCoreFluxApplyResults verifies that for each mold we
+// record which user-supplied flux keys are present in that mold's schema
+// (Applied) vs. absent (Skipped). DryRun keeps us out of CastMold but the
+// schema lookup still runs.
+func TestInstallFoundryCoreFluxApplyResults(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("AILLOY_INDEX_CACHE_DIR", tmp)
+
+	// Build a real local mold for "alpha" with an agents.targets schema, and a
+	// second mold "beta" without it. Source paths in the foundry index point
+	// at on-disk paths so FetchSchemaFromSource can find them — DryRun skips
+	// the actual cast.
+	moldDir := func(name string, schemaYAML string) string {
+		d := filepath.Join(tmp, name)
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		manifest := []byte("apiVersion: v1\nkind: mold\nname: " + name + "\nversion: 0.0.1\n")
+		if err := os.WriteFile(filepath.Join(d, "mold.yaml"), manifest, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if schemaYAML != "" {
+			if err := os.WriteFile(filepath.Join(d, "flux.schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return d
+	}
+	alphaPath := moldDir("alpha", `- name: agents.targets
+  type: list
+  default: "[claude]"
+`)
+	betaPath := moldDir("beta", "")
+
+	parentURL := "https://github.com/example/parent"
+	entry := &index.FoundryEntry{URL: parentURL, Type: "git"}
+	dir := index.CachedIndexDir(tmp, entry)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	yaml := []byte(`apiVersion: v1
+kind: foundry-index
+name: parent
+molds:
+  - name: alpha
+    source: ` + alphaPath + `
+  - name: beta
+    source: ` + betaPath + `
+`)
+	if err := os.WriteFile(filepath.Join(dir, "foundry.yaml"), yaml, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &index.Config{
+		Foundries: []index.FoundryEntry{{Name: "parent", URL: parentURL, Type: "git", Status: "ok"}},
+	}
+
+	reports, _, err := InstallFoundryCore(context.Background(), cfg, "parent", InstallFoundryOptions{
+		DryRun:       true,
+		Shallow:      true,
+		SetOverrides: []string{"agents.targets=[claude,opencode]"},
+	})
+	if err != nil {
+		t.Fatalf("InstallFoundryCore: %v", err)
+	}
+	if len(reports) != 2 {
+		t.Fatalf("got %d reports, want 2", len(reports))
+	}
+
+	byName := map[string]InstallFoundryReport{}
+	for _, r := range reports {
+		byName[r.Name] = r
+	}
+
+	if got := byName["alpha"].FluxApplied; !reflect.DeepEqual(got, []string{"agents.targets"}) {
+		t.Errorf("alpha.FluxApplied = %v, want [agents.targets]", got)
+	}
+	if got := byName["alpha"].FluxSkipped; len(got) != 0 {
+		t.Errorf("alpha.FluxSkipped = %v, want empty", got)
+	}
+	if got := byName["beta"].FluxApplied; len(got) != 0 {
+		t.Errorf("beta.FluxApplied = %v, want empty", got)
+	}
+	if got := byName["beta"].FluxSkipped; !reflect.DeepEqual(got, []string{"agents.targets"}) {
+		t.Errorf("beta.FluxSkipped = %v, want [agents.targets]", got)
+	}
+}
+
 func TestFoundryCastCommandShape(t *testing.T) {
 	if foundryCastCmd.Use == "" || !strings.HasPrefix(foundryCastCmd.Use, "cast") {
 		t.Fatalf("foundryCastCmd.Use = %q, want it to start with %q", foundryCastCmd.Use, "cast")
