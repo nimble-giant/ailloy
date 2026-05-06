@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,8 +17,12 @@ import (
 
 // splitFluxKeysForMold partitions user-supplied --set keys into those declared
 // by the mold's flux schema and those that aren't. Returns nil/nil when there
-// are no overrides. The mold's schema is loaded from flux.schema.yaml at source.
-func splitFluxKeysForMold(source string, setOverrides []string) (applied, skipped []string) {
+// are no overrides. The mold's schema is loaded from flux.schema.yaml at
+// source, and (for local-path sources) merged with any inline `flux:` block
+// declared in mold.yaml. Remote refs only see the flux.schema.yaml entries —
+// merging both for remote sources would require pkg/mold changes and is filed
+// as a follow-up.
+func splitFluxKeysForMold(ctx context.Context, source string, setOverrides []string) (applied, skipped []string) {
 	if len(setOverrides) == 0 {
 		return nil, nil
 	}
@@ -27,16 +32,28 @@ func splitFluxKeysForMold(source string, setOverrides []string) (applied, skippe
 			keys = append(keys, kv[:eq])
 		}
 	}
-	// Schema fetch tolerates local dirs and remote refs.
-	schema, _, err := mold.FetchSchemaFromSource(context.Background(), source)
-	if err != nil || len(schema) == 0 {
-		// If we can't read the schema, treat every key as skipped — better
-		// to report visibility than to assert things we can't verify.
-		return nil, append([]string(nil), keys...)
+	// Schema fetch tolerates local dirs and remote refs. A real fetch error
+	// is distinct from "no schema declared" — log the former so operators
+	// can diagnose, but fall through with an empty schema so any inline
+	// mold.yaml flux still gets a chance to declare keys.
+	schema, _, err := mold.FetchSchemaFromSource(ctx, source)
+	if err != nil {
+		log.Printf("warning: fetch flux schema for %s: %v", source, err)
+		schema = nil
 	}
 	declared := map[string]struct{}{}
 	for _, v := range schema {
 		declared[v.Name] = struct{}{}
+	}
+	// Inline flux declarations in mold.yaml — only readable for local-path
+	// sources. Remote refs go through FetchSchemaFromSource which would need
+	// pkg/mold changes to merge inline schema at fetch time.
+	if info, serr := os.Stat(source); serr == nil && info.IsDir() {
+		if m, lerr := mold.LoadMold(filepath.Join(source, "mold.yaml")); lerr == nil && m != nil {
+			for _, v := range m.Flux {
+				declared[v.Name] = struct{}{}
+			}
+		}
 	}
 	for _, k := range keys {
 		if _, ok := declared[k]; ok {
@@ -290,7 +307,7 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 			Foundry: m.Foundry.Index.Name,
 			Chain:   chain,
 		}
-		report.FluxApplied, report.FluxSkipped = splitFluxKeysForMold(m.Entry.Source, opts.SetOverrides)
+		report.FluxApplied, report.FluxSkipped = splitFluxKeysForMold(ctx, m.Entry.Source, opts.SetOverrides)
 
 		if v, already := installed[strings.ToLower(m.Entry.Source)]; already && !opts.Force {
 			report.Skipped = true
