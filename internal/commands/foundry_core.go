@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -77,7 +78,7 @@ func formatFoundryFluxSummary(reports []InstallFoundryReport, keys []string) str
 		var skipped []string
 		applied := 0
 		for _, r := range reports {
-			if containsString(r.FluxSkipped, k) {
+			if slices.Contains(r.FluxSkipped, k) {
 				skipped = append(skipped, r.Name)
 				continue
 			}
@@ -90,15 +91,6 @@ func formatFoundryFluxSummary(reports []InstallFoundryReport, keys []string) str
 		b.WriteString("\n")
 	}
 	return b.String()
-}
-
-func containsString(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // AddFoundryResult reports the outcome of an add operation.
