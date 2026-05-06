@@ -48,3 +48,53 @@ func TestOpenForFoundryDetectsConflicts(t *testing.T) {
 		t.Errorf("conflicts[theme] = %v, want both molds", got)
 	}
 }
+
+func TestSetMoldOverrideRecordsPerMoldValue(t *testing.T) {
+	per := map[string][]mold.FluxVar{
+		"alpha": {{Name: "theme", Type: "string", Default: "dark"}},
+		"beta":  {{Name: "theme", Type: "string", Default: "light"}},
+	}
+	m := New().OpenForFoundry("brand", data.ScopeProject, per, nil)
+	m = m.SetMoldOverride("alpha", "theme", "midnight")
+	m = m.SetMoldOverride("beta", "theme", "noon")
+	if got := m.MoldOverride("alpha", "theme"); got != "midnight" {
+		t.Errorf("alpha:theme = %v, want midnight", got)
+	}
+	if got := m.MoldOverride("beta", "theme"); got != "noon" {
+		t.Errorf("beta:theme = %v, want noon", got)
+	}
+	if got := m.MoldOverride("gamma", "theme"); got != nil {
+		t.Errorf("gamma:theme = %v, want nil (unset)", got)
+	}
+}
+
+func TestSetMoldOverrideClearedByClose(t *testing.T) {
+	per := map[string][]mold.FluxVar{
+		"alpha": {{Name: "theme", Type: "string", Default: "dark"}},
+		"beta":  {{Name: "theme", Type: "string", Default: "light"}},
+	}
+	m := New().OpenForFoundry("brand", data.ScopeProject, per, nil).
+		SetMoldOverride("alpha", "theme", "midnight").
+		Close()
+	if got := m.MoldOverride("alpha", "theme"); got != nil {
+		t.Errorf("after Close, alpha:theme = %v, want nil", got)
+	}
+}
+
+func TestMoldOverridesGroupedByMold(t *testing.T) {
+	per := map[string][]mold.FluxVar{
+		"alpha": {{Name: "theme", Type: "string", Default: "dark"}},
+		"beta":  {{Name: "theme", Type: "string", Default: "light"}},
+	}
+	m := New().OpenForFoundry("brand", data.ScopeProject, per, nil).
+		SetMoldOverride("alpha", "theme", "midnight").
+		SetMoldOverride("beta", "agents.targets", []string{"claude"})
+	out := m.MoldOverrides()
+	if got := out["alpha"]["theme"]; got != "midnight" {
+		t.Errorf("MoldOverrides()[alpha][theme] = %v, want midnight", got)
+	}
+	beta := out["beta"]
+	if got, ok := beta["agents.targets"].([]string); !ok || len(got) != 1 || got[0] != "claude" {
+		t.Errorf("MoldOverrides()[beta][agents.targets] = %v (type %T), want [claude]", beta["agents.targets"], beta["agents.targets"])
+	}
+}
