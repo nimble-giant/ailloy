@@ -154,13 +154,11 @@ func executeCacheClear(o cacheClearOptions) (int, error) {
 	}
 
 	var (
-		removedMolds   int
 		removedIndexes int
 		errs           []error
 	)
 	if wantMolds {
-		n, e := removeMolds(o.MoldRoot)
-		removedMolds = n
+		_, e := removeMolds(o.MoldRoot)
 		errs = append(errs, e...)
 	}
 	if wantIndexes && idx != nil {
@@ -184,19 +182,23 @@ func executeCacheClear(o cacheClearOptions) (int, error) {
 
 	switch {
 	case wantMolds && wantIndexes:
-		var versions int
+		refs := 0
+		versions := 0
 		if molds != nil {
+			refs = molds.Refs
 			versions = molds.Versions
 		}
 		fmt.Fprintf(o.Stdout, "Cleared %d molds (%d versions), %d indexes — freed %s.\n",
-			removedMolds, versions, removedIndexes, humanizeBytes(freed))
+			refs, versions, removedIndexes, humanizeBytes(freed))
 	case wantMolds:
-		var versions int
+		refs := 0
+		versions := 0
 		if molds != nil {
+			refs = molds.Refs
 			versions = molds.Versions
 		}
 		fmt.Fprintf(o.Stdout, "Cleared %d molds (%d versions) — freed %s.\n",
-			removedMolds, versions, humanizeBytes(freed))
+			refs, versions, humanizeBytes(freed))
 	case wantIndexes:
 		fmt.Fprintf(o.Stdout, "Cleared %d indexes — freed %s.\n",
 			removedIndexes, humanizeBytes(freed))
@@ -247,8 +249,11 @@ func gatherMoldStats(moldRoot, indexRoot string) (moldStats, error) {
 	if err != nil {
 		return stats, err
 	}
-	stats.Refs = len(entries)
 	for _, e := range entries {
+		if e.Host == "indexes" {
+			continue
+		}
+		stats.Refs++
 		stats.Versions += len(e.Versions)
 	}
 

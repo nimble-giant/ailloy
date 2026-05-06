@@ -305,6 +305,9 @@ func TestExecuteCacheClearDefaultWipesBoth(t *testing.T) {
 	if !strings.Contains(out.String(), "Cleared") {
 		t.Errorf("output missing 'Cleared', got:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "Cleared 1 molds") {
+		t.Errorf("summary should report 1 mold (matching fixture refs), got:\n%s", out.String())
+	}
 }
 
 func TestExecuteCacheClearMoldsOnly(t *testing.T) {
@@ -423,6 +426,30 @@ func TestExecuteCacheClearTTYPromptAccept(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(moldRoot, "github.com")); !os.IsNotExist(statErr) {
 		t.Errorf("accept should delete files")
+	}
+}
+
+func TestGatherMoldStatsSkipsIndexesAsHost(t *testing.T) {
+	// The indexes subtree has the same structural shape as host/owner/repo/version,
+	// so foundry.ListCachedMolds will enumerate it as a phantom host. Verify
+	// gatherMoldStats filters it out.
+	root := t.TempDir()
+	// Real mold: github.com/foo/bar @ v1
+	mustMkdirAll(t, filepath.Join(root, "github.com", "foo", "bar", "v1"))
+	mustWriteFile(t, filepath.Join(root, "github.com", "foo", "bar", "v1", "x"), []byte("x"))
+	// Indexes laid out the same way (indexes/<host>/<owner>/<repo>/foundry.yaml)
+	mustMkdirAll(t, filepath.Join(root, "indexes", "github.com", "alice", "molds"))
+	mustWriteFile(t, filepath.Join(root, "indexes", "github.com", "alice", "molds", "foundry.yaml"), []byte("yaml"))
+
+	stats, err := gatherMoldStats(root, filepath.Join(root, "indexes"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Refs != 1 {
+		t.Errorf("Refs = %d, want 1 (indexes/ should be excluded)", stats.Refs)
+	}
+	if stats.Versions != 1 {
+		t.Errorf("Versions = %d, want 1", stats.Versions)
 	}
 }
 
