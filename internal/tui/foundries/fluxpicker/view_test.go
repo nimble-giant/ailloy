@@ -71,3 +71,22 @@ type _e struct{}
 func (_e) Error() string { return "boom" }
 
 var errSentinel = _e{}
+
+func TestViewFoundryModeShowsConflictMarker(t *testing.T) {
+	per := map[string][]mold.FluxVar{
+		"alpha": {{Name: "theme", Type: "string", Default: "dark"}},
+		"beta":  {{Name: "theme", Type: "string", Default: "light"}},
+	}
+	m := New().OpenForFoundry("brand", data.ScopeProject, per, nil)
+	out := m.View()
+
+	if !strings.Contains(out, "Foundry: brand") {
+		t.Errorf("expected foundry header, got:\n%s", out)
+	}
+	if !strings.Contains(out, "theme") {
+		t.Errorf("expected theme row, got:\n%s", out)
+	}
+	if !strings.Contains(out, "conflicts") {
+		t.Errorf("expected conflict marker for theme, got:\n%s", out)
+	}
+}

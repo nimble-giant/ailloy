@@ -28,8 +28,12 @@ func (m Model) View() string {
 		return ""
 	}
 	var b strings.Builder
+	headerLabel := "Flux: " + m.moldRef
+	if m.IsFoundryMode() {
+		headerLabel = "Foundry: " + m.foundryName
+	}
 	fmt.Fprintf(&b, "%s — %s\n\n",
-		headerStyle.Render("Flux: "+m.moldRef),
+		headerStyle.Render(headerLabel),
 		strings.ToLower(string(m.scope)))
 
 	b.WriteString(m.filter.View())
@@ -61,6 +65,11 @@ func (m Model) View() string {
 			line = highlight.Render("▸ " + line)
 		} else {
 			line = "  " + row.Render(line)
+		}
+		if m.IsFoundryMode() {
+			if _, conflict := m.schemaConflicts[fv.Name]; conflict {
+				line += "  ⚠ conflicts — expand to set per mold"
+			}
 		}
 		b.WriteString(line)
 		b.WriteString("\n")
