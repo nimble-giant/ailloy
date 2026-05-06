@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
@@ -68,5 +70,16 @@ foundries:
 	}
 	if warnings[0].Source != "github.com/example/missing" {
 		t.Errorf("warnings[0].Source = %q, want github.com/example/missing", warnings[0].Source)
+	}
+}
+
+func TestFoundryCastCommandShape(t *testing.T) {
+	if foundryCastCmd.Use == "" || !strings.HasPrefix(foundryCastCmd.Use, "cast") {
+		t.Fatalf("foundryCastCmd.Use = %q, want it to start with %q", foundryCastCmd.Use, "cast")
+	}
+	gotAliases := foundryCastCmd.Aliases
+	wantAliases := []string{"install"}
+	if !reflect.DeepEqual(gotAliases, wantAliases) {
+		t.Fatalf("foundryCastCmd.Aliases = %v, want %v", gotAliases, wantAliases)
 	}
 }
