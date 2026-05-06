@@ -107,11 +107,15 @@ func New(deps Deps) App {
 		_, err := deps.UpdateFoundries(cfg)
 		return err
 	}
-	regInstall := func(cfg *index.Config, nameOrURL string) ([]registered.InstallReport, error) {
+	regInstall := func(
+		cfg *index.Config,
+		nameOrURL string,
+		perMoldOverrides map[string][]string,
+	) ([]registered.InstallReport, error) {
 		if deps.InstallFoundry == nil {
 			return nil, errMissingDep
 		}
-		reports, err := deps.InstallFoundry(context.Background(), cfg, nameOrURL, InstallFoundryOptions{})
+		reports, err := deps.InstallFoundry(context.Background(), cfg, nameOrURL, InstallFoundryOptions{}, perMoldOverrides)
 		out := make([]registered.InstallReport, 0, len(reports))
 		for _, r := range reports {
 			out = append(out, registered.InstallReport{

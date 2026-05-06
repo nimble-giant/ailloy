@@ -3,6 +3,7 @@ package registered
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -56,7 +57,11 @@ type InstallReport struct {
 type AddFn func(cfg *index.Config, url string) (AddFoundryResult, error)
 type RemoveFn func(cfg *index.Config, nameOrURL string) (index.FoundryEntry, error)
 type UpdateFn func(cfg *index.Config) ([]UpdateFoundryReport, error)
-type InstallFn func(cfg *index.Config, nameOrURL string) ([]InstallReport, error)
+
+// InstallFn casts every mold listed by a foundry, optionally with per-mold
+// --set overrides. perMoldOverrides is keyed by mold name → encoded --set
+// strings (k=v form, with YAML flow sequences for slices).
+type InstallFn func(cfg *index.Config, nameOrURL string, perMoldOverrides map[string][]string) ([]InstallReport, error)
 
 // ErrCannotRemoveDefault must be returned by RemoveFn when the user tries
 // to remove the virtual official foundry.
@@ -64,15 +69,16 @@ var ErrCannotRemoveDefault = errors.New("cannot remove the default verified foun
 
 // Model is the Foundries tab.
 type Model struct {
-	cfg     *index.Config
-	add     AddFn
-	remove  RemoveFn
-	update  UpdateFn
-	install InstallFn
-	cursor  int
-	addMode bool
-	addInp  textinput.Model
-	flash   string
+	cfg            *index.Config
+	add            AddFn
+	remove         RemoveFn
+	update         UpdateFn
+	install        InstallFn
+	cursor         int
+	addMode        bool
+	addInp         textinput.Model
+	flash          string
+	pendingFoundry map[string]map[string][]string // foundryName → moldName → encoded --set strings
 }
 
 type updateDoneMsg struct {
@@ -216,11 +222,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 func (m Model) installCmd(name string) tea.Cmd {
 	install := m.install
 	cfg := m.cfg
+	pending := m.pendingFoundry[name] // captured at Cmd build time
 	return func() tea.Msg {
 		if install == nil {
 			return installDoneMsg{name: name, err: fmt.Errorf("no install function configured")}
 		}
-		reports, err := install(cfg, name)
+		reports, err := install(cfg, name, pending)
 		return installDoneMsg{name: name, reports: reports, err: err}
 	}
 }
@@ -264,6 +271,58 @@ func (m Model) removeCmd(urlOrName string) tea.Cmd {
 // CurrentMold returns ok=false; the foundries tab has no per-mold context.
 func (m Model) CurrentMold() (ref string, scope data.Scope, ok bool) {
 	return "", "", false
+}
+
+// CurrentFoundry returns the name and scope of the highlighted foundry.
+// Scope is always project for foundry-scope ops; the picker's project/global
+// save target is independent.
+func (m Model) CurrentFoundry() (name string, scope data.Scope, ok bool) {
+	eff := m.cfg.EffectiveFoundries()
+	if m.cursor < 0 || m.cursor >= len(eff) {
+		return "", "", false
+	}
+	return eff[m.cursor].Name, data.ScopeProject, true
+}
+
+// ApplyFoundrySessionOverrides records pending --set overrides for each mold
+// in the named foundry. The next bulk install consumes them.
+func (m Model) ApplyFoundrySessionOverrides(foundryName string, perMold map[string]map[string]any) Model {
+	if m.pendingFoundry == nil {
+		m.pendingFoundry = map[string]map[string][]string{}
+	}
+	encoded := map[string][]string{}
+	for moldName, kv := range perMold {
+		encoded[moldName] = encodeSetOverrides(kv)
+	}
+	m.pendingFoundry[foundryName] = encoded
+	return m
+}
+
+// encodeSetOverrides mirrors the discover-tab encoder. Slices emit as YAML
+// flow sequences ([a,b,c]) so the cast core's --set parser produces real
+// lists. Result is sorted for deterministic ordering.
+func encodeSetOverrides(overrides map[string]any) []string {
+	out := make([]string, 0, len(overrides))
+	for k, v := range overrides {
+		out = append(out, fmt.Sprintf("%s=%s", k, formatSetValue(v)))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func formatSetValue(v any) string {
+	switch x := v.(type) {
+	case []string:
+		return "[" + strings.Join(x, ",") + "]"
+	case []any:
+		parts := make([]string, 0, len(x))
+		for _, e := range x {
+			parts = append(parts, fmt.Sprint(e))
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 func (m Model) View() string {
