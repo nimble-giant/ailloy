@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
@@ -94,6 +95,44 @@ func gatherMoldStats(moldRoot, indexRoot string) (moldStats, error) {
 			}
 			if abs == indexAbs {
 				return fs.SkipDir
+			}
+			return nil
+		}
+		info, ierr := d.Info()
+		if ierr != nil {
+			return ierr
+		}
+		stats.Bytes += info.Size()
+		return nil
+	})
+	if walkErr != nil && !errors.Is(walkErr, fs.ErrNotExist) {
+		return stats, walkErr
+	}
+	return stats, nil
+}
+
+type indexStats struct {
+	Indexes int
+	Bytes   int64
+}
+
+func gatherIndexStats(indexRoot string) (indexStats, error) {
+	var stats indexStats
+
+	if _, err := os.Stat(indexRoot); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return stats, nil
+		}
+		return stats, err
+	}
+
+	walkErr := filepath.WalkDir(indexRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if _, statErr := os.Stat(filepath.Join(path, "foundry.yaml")); statErr == nil {
+				stats.Indexes++
 			}
 			return nil
 		}
