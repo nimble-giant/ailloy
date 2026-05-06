@@ -363,7 +363,12 @@ func castProject(reader *blanks.MoldReader, source string) error {
 
 	// Record the cast in the installed manifest (provenance for `recast` / `quench`).
 	if resolvedRemote != nil {
-		if err := recordInstalled(resolvedRemote, castGlobal, nil); err != nil {
+		opts := &foundry.CastOptionsRecord{
+			WithWorkflows: withWorkflows,
+			ValueFiles:    append([]string(nil), castValFiles...),
+			SetOverrides:  append([]string(nil), castSetFlags...),
+		}
+		if err := recordInstalled(resolvedRemote, castGlobal, opts, nil); err != nil {
 			log.Printf("warning: failed to update installed manifest: %v", err)
 		}
 	}
@@ -782,10 +787,12 @@ func copyResolvedFilesWithSchema(reader *blanks.MoldReader, manifest *mold.Mold,
 	return nil
 }
 
-// recordInstalled upserts the just-cast mold into the installed manifest.
-// logger receives the "corrupt manifest, resetting" warning; pass a discarding
-// logger from TUI callers to keep the alt-screen clean.
-func recordInstalled(result *foundry.ResolveResult, global bool, logger *log.Logger) error {
+// recordInstalled upserts the just-cast mold into the installed manifest,
+// preserving the option-shaped flags that drove this cast so a future
+// `recast` can replay them. logger receives the "corrupt manifest, resetting"
+// warning; pass a discarding logger from TUI callers to keep the alt-screen
+// clean.
+func recordInstalled(result *foundry.ResolveResult, global bool, opts *foundry.CastOptionsRecord, logger *log.Logger) error {
 	if logger == nil {
 		logger = log.Default()
 	}
@@ -801,14 +808,26 @@ func recordInstalled(result *foundry.ResolveResult, global bool, logger *log.Log
 	if manifest == nil {
 		manifest = &foundry.InstalledManifest{APIVersion: "v1"}
 	}
-	manifest.UpsertEntry(foundry.InstalledEntry{
+	entry := foundry.InstalledEntry{
 		Name:    result.Ref.Repo,
 		Source:  result.Ref.CacheKey(),
 		Subpath: result.Ref.Subpath,
 		Version: result.Resolved.Tag,
 		Commit:  result.Resolved.Commit,
 		CastAt:  time.Now().UTC(),
-	})
+	}
+	if opts != nil && (opts.WithWorkflows || len(opts.ValueFiles) > 0 || len(opts.SetOverrides) > 0) {
+		// Copy to detach from caller's slice ownership.
+		copied := *opts
+		if len(opts.ValueFiles) > 0 {
+			copied.ValueFiles = append([]string(nil), opts.ValueFiles...)
+		}
+		if len(opts.SetOverrides) > 0 {
+			copied.SetOverrides = append([]string(nil), opts.SetOverrides...)
+		}
+		entry.CastOptions = &copied
+	}
+	manifest.UpsertEntry(entry)
 	return foundry.WriteInstalledManifest(path, manifest)
 }
 
