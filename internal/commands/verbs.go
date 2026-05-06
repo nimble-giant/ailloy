@@ -156,6 +156,22 @@ Available subcommands:
   extension    Install an ailloy extension`,
 }
 
+var clearCmd = &cobra.Command{
+	Use:   "clear",
+	Short: "Clear resources",
+	Long: `Clear resources.
+
+Available subcommands:
+  cache      Clear ailloy's on-disk cache`,
+}
+
+var clearCacheSubCmd = &cobra.Command{
+	Use:   "cache",
+	Short: "Clear ailloy's on-disk cache",
+	Args:  cobra.NoArgs,
+	RunE:  runCacheClear,
+}
+
 func init() {
 	// Flags for bidirectional "new mold" must mirror "mold new" flags.
 	newMoldSubCmd.Flags().StringVarP(&newMoldOutput, "output", "o", ".", "parent directory to create the mold in")
@@ -201,6 +217,15 @@ func init() {
 	// install <noun>  (added with extensions)
 	rootCmd.AddCommand(installCmd)
 	installCmd.AddCommand(installExtensionSubCmd)
+
+	// clear <noun>  (mirrors "cache clear")
+	rootCmd.AddCommand(clearCmd)
+	clearCmd.AddCommand(clearCacheSubCmd)
+
+	// Mirror Long help and flags so "clear cache" matches "cache clear".
+	// Set in init() — package-level var initializer order across files is unspecified.
+	clearCacheSubCmd.Long = cacheClearCmd.Long
+	registerCacheClearFlags(clearCacheSubCmd)
 
 	// show <noun>  (showCmd is declared in mold.go; we just hang another sub on it)
 	showCmd.AddCommand(showExtensionSubCmd)
