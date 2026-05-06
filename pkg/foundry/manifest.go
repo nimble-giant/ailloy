@@ -12,20 +12,35 @@ import (
 // InstalledManifestPath is the default project manifest path.
 const InstalledManifestPath = ".ailloy/installed.yaml"
 
+// CastOptionsRecord captures the option-shaped flags that drove a `cast`
+// invocation. Persisted on the installed entry so `recast` can replay them
+// against newer versions without the user having to remember which flags
+// they originally used.
+//
+// Run-time-only flags (e.g. --force-replace-on-parse-error, --global) are
+// intentionally NOT recorded — they are recovery / context-selection flags,
+// not stable preferences.
+type CastOptionsRecord struct {
+	WithWorkflows bool     `yaml:"withWorkflows,omitempty"`
+	ValueFiles    []string `yaml:"valueFiles,omitempty"`
+	SetOverrides  []string `yaml:"setOverrides,omitempty"`
+}
+
 // InstalledEntry records a mold that was cast into the project.
 // Files / FileHashes are populated by RecordInstalledFiles and consumed by
 // UninstallMold so the uninstall flow knows what to remove and can detect
 // post-cast modifications. They are intentionally on the manifest (not the
 // lock) so uninstall keeps working when ailloy.lock has not been opted into.
 type InstalledEntry struct {
-	Name       string            `yaml:"name"`
-	Source     string            `yaml:"source"`
-	Subpath    string            `yaml:"subpath,omitempty"`
-	Version    string            `yaml:"version"`
-	Commit     string            `yaml:"commit"`
-	CastAt     time.Time         `yaml:"castAt"`
-	Files      []string          `yaml:"files,omitempty"`
-	FileHashes map[string]string `yaml:"fileHashes,omitempty"`
+	Name        string             `yaml:"name"`
+	Source      string             `yaml:"source"`
+	Subpath     string             `yaml:"subpath,omitempty"`
+	Version     string             `yaml:"version"`
+	Commit      string             `yaml:"commit"`
+	CastAt      time.Time          `yaml:"castAt"`
+	Files       []string           `yaml:"files,omitempty"`
+	FileHashes  map[string]string  `yaml:"fileHashes,omitempty"`
+	CastOptions *CastOptionsRecord `yaml:"castOptions,omitempty"`
 }
 
 // ArtifactEntry records an installed ingot or ore. Mirrors InstalledEntry
