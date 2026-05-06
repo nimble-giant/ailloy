@@ -71,6 +71,61 @@ opencode body
 	}
 }
 
+// TestRecordCastedFiles_SubpathMold reproduces the bug where monorepo-foundry
+// molds (those with a non-empty Subpath) installed via the foundries TUI's
+// batch install end up with `Files == nil` in the installed manifest, which
+// makes the TUI label them "legacy" and `UninstallMold` refuse to remove
+// them.
+//
+// Cause: cast.go and cast_core.go each open-coded the manifest write
+// (recordInstalled, keyed by Ref.CacheKey()) and the Files backfill
+// (RecordInstalledFiles, called with Ref.OverrideKey() as the lookup source).
+// For subpath molds CacheKey != OverrideKey, FindBySource returned nil, and
+// the error was silently swallowed (cast_core.go) or only logged into a
+// discard sink (CastMold runs with log output redirected). Net effect:
+// entry.Files stays nil.
+//
+// recordCastedFiles centralizes both writes so the source key cannot drift
+// between them. This test pins the contract.
+func TestRecordCastedFiles_SubpathMold(t *testing.T) {
+	projectDir := t.TempDir()
+	t.Chdir(projectDir)
+	t.Setenv("HOME", t.TempDir())
+
+	result := &foundry.ResolveResult{
+		Ref: &foundry.Reference{
+			Host:    "github.com",
+			Owner:   "replicated-collab",
+			Repo:    "foundry",
+			Subpath: "molds/shortcut",
+			Version: "v0.1.0",
+		},
+		Resolved: foundry.ResolvedVersion{Tag: "v0.1.0", Commit: "abc1234"},
+	}
+	files := []foundry.InstalledFile{
+		{RelPath: ".claude/agents/shortcut.md", SHA256: "deadbeef"},
+	}
+
+	if err := recordCastedFiles(result, files, false); err != nil {
+		t.Fatalf("recordCastedFiles: %v", err)
+	}
+
+	m, err := foundry.ReadInstalledManifest(manifestPathFor(false))
+	if err != nil {
+		t.Fatalf("ReadInstalledManifest: %v", err)
+	}
+	entry := m.FindBySource(result.Ref.CacheKey(), result.Ref.Subpath)
+	if entry == nil {
+		t.Fatalf("entry not found in manifest at (CacheKey=%q, Subpath=%q)", result.Ref.CacheKey(), result.Ref.Subpath)
+	}
+	if entry.Files == nil {
+		t.Fatalf("entry.Files is nil — Files backfill silently dropped (legacy bug); manifest=%+v", entry)
+	}
+	if len(entry.Files) != 1 || entry.Files[0] != ".claude/agents/shortcut.md" {
+		t.Fatalf("unexpected Files: %+v", entry.Files)
+	}
+}
+
 // TestLayerFluxForCore_AutoLoadsPersistedFluxFiles asserts that
 // ./.ailloy/flux/<slug>.yaml and ~/.ailloy/flux/<slug>.yaml are layered into
 // the cast pipeline between mold defaults and explicit -f files. This is the
