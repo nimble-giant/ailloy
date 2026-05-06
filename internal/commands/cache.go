@@ -1,8 +1,12 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"path/filepath"
 
+	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/spf13/cobra"
 )
 
@@ -51,6 +55,53 @@ func registerCacheClearFlags(cmd *cobra.Command) {
 func runCacheClear(cmd *cobra.Command, _ []string) error {
 	// Implemented in Task 9.
 	return nil
+}
+
+type moldStats struct {
+	Refs     int
+	Versions int
+	Bytes    int64
+}
+
+func gatherMoldStats(moldRoot, indexRoot string) (moldStats, error) {
+	var stats moldStats
+
+	entries, err := foundry.ListCachedMolds(moldRoot)
+	if err != nil {
+		return stats, err
+	}
+	stats.Refs = len(entries)
+	for _, e := range entries {
+		stats.Versions += len(e.Versions)
+	}
+
+	indexAbs, _ := filepath.Abs(indexRoot)
+
+	walkErr := filepath.WalkDir(moldRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() {
+			abs, _ := filepath.Abs(path)
+			if abs == indexAbs {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		info, ierr := d.Info()
+		if ierr != nil {
+			return ierr
+		}
+		stats.Bytes += info.Size()
+		return nil
+	})
+	if walkErr != nil && !errors.Is(walkErr, fs.ErrNotExist) {
+		return stats, walkErr
+	}
+	return stats, nil
 }
 
 func humanizeBytes(n int64) string {

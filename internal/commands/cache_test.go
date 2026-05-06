@@ -1,6 +1,10 @@
 package commands
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestHumanizeBytes(t *testing.T) {
 	cases := []struct {
@@ -20,5 +24,57 @@ func TestHumanizeBytes(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("humanizeBytes(%d) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestGatherMoldStatsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	stats, err := gatherMoldStats(dir, filepath.Join(dir, "indexes"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Refs != 0 || stats.Versions != 0 || stats.Bytes != 0 {
+		t.Errorf("expected zero stats, got %+v", stats)
+	}
+}
+
+func TestGatherMoldStatsCountsAndSkipsIndexes(t *testing.T) {
+	root := t.TempDir()
+	mustMkdirAll(t, filepath.Join(root, "github.com", "foo", "bar", "v1"))
+	mustWriteFile(t, filepath.Join(root, "github.com", "foo", "bar", "v1", "README.md"), make([]byte, 100))
+	mustMkdirAll(t, filepath.Join(root, "github.com", "foo", "bar", "v2"))
+	mustWriteFile(t, filepath.Join(root, "github.com", "foo", "bar", "v2", "README.md"), make([]byte, 200))
+	mustMkdirAll(t, filepath.Join(root, "gitlab.com", "baz", "qux", "v1"))
+	mustWriteFile(t, filepath.Join(root, "gitlab.com", "baz", "qux", "v1", "README.md"), make([]byte, 50))
+	indexRoot := filepath.Join(root, "indexes")
+	mustMkdirAll(t, indexRoot)
+	mustWriteFile(t, filepath.Join(indexRoot, "foundry.yaml"), make([]byte, 9999))
+
+	stats, err := gatherMoldStats(root, indexRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Refs != 2 {
+		t.Errorf("Refs = %d, want 2", stats.Refs)
+	}
+	if stats.Versions != 3 {
+		t.Errorf("Versions = %d, want 3", stats.Versions)
+	}
+	if stats.Bytes != 350 {
+		t.Errorf("Bytes = %d, want 350 (indexes/ should be skipped)", stats.Bytes)
+	}
+}
+
+func mustMkdirAll(t *testing.T, p string) {
+	t.Helper()
+	if err := os.MkdirAll(p, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s): %v", p, err)
+	}
+}
+
+func mustWriteFile(t *testing.T, p string, data []byte) {
+	t.Helper()
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		t.Fatalf("WriteFile(%s): %v", p, err)
 	}
 }
