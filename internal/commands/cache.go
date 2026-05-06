@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/spf13/cobra"
@@ -180,6 +181,28 @@ func removeIndexes(indexRoot string) error {
 		return fmt.Errorf("remove %s: %w", indexRoot, err)
 	}
 	return nil
+}
+
+func renderCachePreview(cacheRootDisplay string, molds *moldStats, idx *indexStats) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Ailloy cache:  %s\n\n", cacheRootDisplay)
+
+	var totalBytes int64
+	if molds != nil {
+		fmt.Fprintf(&b, "  Molds      %d refs, %d versions  (%s)\n",
+			molds.Refs, molds.Versions, humanizeBytes(molds.Bytes))
+		totalBytes += molds.Bytes
+	}
+	if idx != nil {
+		fmt.Fprintf(&b, "  Indexes    %d indexes              (%s)\n",
+			idx.Indexes, humanizeBytes(idx.Bytes))
+		totalBytes += idx.Bytes
+	}
+
+	if molds != nil && idx != nil {
+		fmt.Fprintf(&b, "\n  Total:                            (%s)\n", humanizeBytes(totalBytes))
+	}
+	return b.String()
 }
 
 func humanizeBytes(n int64) string {

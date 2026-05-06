@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -153,6 +154,57 @@ func TestRemoveIndexesMissingDirIsOK(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "nope")
 	if err := removeIndexes(missing); err != nil {
 		t.Errorf("expected nil, got %v", err)
+	}
+}
+
+func TestRenderCachePreviewBoth(t *testing.T) {
+	out := renderCachePreview(
+		"~/.ailloy/cache",
+		&moldStats{Refs: 12, Versions: 47, Bytes: 327600000}, // ~312.4 MB
+		&indexStats{Indexes: 3, Bytes: 1258291},              // ~1.2 MB
+	)
+	for _, want := range []string{
+		"Ailloy cache:",
+		"~/.ailloy/cache",
+		"Molds",
+		"12 refs, 47 versions",
+		"312.4 MB",
+		"Indexes",
+		"3 indexes",
+		"1.2 MB",
+		"Total:",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("preview missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestRenderCachePreviewMoldsOnly(t *testing.T) {
+	out := renderCachePreview(
+		"~/.ailloy/cache",
+		&moldStats{Refs: 1, Versions: 1, Bytes: 100},
+		nil,
+	)
+	if strings.Contains(out, "Indexes") {
+		t.Errorf("expected no Indexes row, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Molds") {
+		t.Errorf("expected Molds row, got:\n%s", out)
+	}
+}
+
+func TestRenderCachePreviewIndexesOnly(t *testing.T) {
+	out := renderCachePreview(
+		"~/.ailloy/cache",
+		nil,
+		&indexStats{Indexes: 1, Bytes: 100},
+	)
+	if strings.Contains(out, "Molds") {
+		t.Errorf("expected no Molds row, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Indexes") {
+		t.Errorf("expected Indexes row, got:\n%s", out)
 	}
 }
 
