@@ -268,6 +268,11 @@ func (m Model) removeCmd(urlOrName string) tea.Cmd {
 	}
 }
 
+// SetCursorForTest sets the cursor index. Exported only because cross-package
+// tests in the foundries app package need to position the cursor without
+// simulating key events.
+func (m *Model) SetCursorForTest(i int) { m.cursor = i }
+
 // CurrentMold returns ok=false; the foundries tab has no per-mold context.
 func (m Model) CurrentMold() (ref string, scope data.Scope, ok bool) {
 	return "", "", false
