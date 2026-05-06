@@ -166,10 +166,12 @@ Available subcommands:
 }
 
 var clearCacheSubCmd = &cobra.Command{
-	Use:   "cache",
-	Short: "Clear ailloy's on-disk cache",
-	Args:  cobra.NoArgs,
-	RunE:  runCacheClear,
+	Use:           "cache",
+	Short:         "Clear ailloy's on-disk cache",
+	Args:          cobra.NoArgs,
+	RunE:          runCacheClear,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func init() {
