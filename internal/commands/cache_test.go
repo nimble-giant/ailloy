@@ -250,6 +250,179 @@ func TestConfirmInteractiveEOF(t *testing.T) {
 	}
 }
 
+func newTempCacheDirs(t *testing.T) (moldRoot, indexRoot string) {
+	t.Helper()
+	moldRoot = t.TempDir()
+	indexRoot = filepath.Join(moldRoot, "indexes")
+	mustMkdirAll(t, filepath.Join(moldRoot, "github.com", "foo", "bar", "v1"))
+	mustWriteFile(t, filepath.Join(moldRoot, "github.com", "foo", "bar", "v1", "x"), []byte("xx"))
+	mustMkdirAll(t, filepath.Join(indexRoot, "github.com", "alice", "molds"))
+	mustWriteFile(t, filepath.Join(indexRoot, "github.com", "alice", "molds", "foundry.yaml"), []byte("yy"))
+	return moldRoot, indexRoot
+}
+
+func TestExecuteCacheClearEmpty(t *testing.T) {
+	moldRoot := t.TempDir()
+	indexRoot := filepath.Join(moldRoot, "indexes")
+	var out bytes.Buffer
+	exit, err := executeCacheClear(cacheClearOptions{
+		MoldRoot: moldRoot, IndexRoot: indexRoot,
+		Molds: false, Indexes: false,
+		Yes:    true,
+		Stdout: &out, Stdin: strings.NewReader(""), IsTTY: func() bool { return false },
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exit != 0 {
+		t.Errorf("exit = %d, want 0", exit)
+	}
+	if !strings.Contains(out.String(), "Cache is already empty") {
+		t.Errorf("output missing 'Cache is already empty', got:\n%s", out.String())
+	}
+}
+
+func TestExecuteCacheClearDefaultWipesBoth(t *testing.T) {
+	moldRoot, indexRoot := newTempCacheDirs(t)
+	var out bytes.Buffer
+	exit, err := executeCacheClear(cacheClearOptions{
+		MoldRoot: moldRoot, IndexRoot: indexRoot,
+		Yes:    true,
+		Stdout: &out, Stdin: strings.NewReader(""), IsTTY: func() bool { return false },
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exit != 0 {
+		t.Errorf("exit = %d, want 0", exit)
+	}
+	if _, err := os.Stat(filepath.Join(moldRoot, "github.com")); !os.IsNotExist(err) {
+		t.Errorf("github.com should be gone, err = %v", err)
+	}
+	if _, err := os.Stat(indexRoot); !os.IsNotExist(err) {
+		t.Errorf("indexRoot should be gone, err = %v", err)
+	}
+	if !strings.Contains(out.String(), "Cleared") {
+		t.Errorf("output missing 'Cleared', got:\n%s", out.String())
+	}
+}
+
+func TestExecuteCacheClearMoldsOnly(t *testing.T) {
+	moldRoot, indexRoot := newTempCacheDirs(t)
+	var out bytes.Buffer
+	exit, err := executeCacheClear(cacheClearOptions{
+		MoldRoot: moldRoot, IndexRoot: indexRoot,
+		Molds:  true,
+		Yes:    true,
+		Stdout: &out, Stdin: strings.NewReader(""), IsTTY: func() bool { return false },
+	})
+	if err != nil || exit != 0 {
+		t.Fatalf("exit=%d err=%v", exit, err)
+	}
+	if _, err := os.Stat(filepath.Join(moldRoot, "github.com")); !os.IsNotExist(err) {
+		t.Errorf("molds should be gone")
+	}
+	if _, err := os.Stat(filepath.Join(indexRoot, "github.com", "alice", "molds", "foundry.yaml")); err != nil {
+		t.Errorf("indexes should be preserved, err = %v", err)
+	}
+	if strings.Contains(out.String(), "Indexes") {
+		t.Errorf("output should not mention Indexes, got:\n%s", out.String())
+	}
+}
+
+func TestExecuteCacheClearIndexesOnly(t *testing.T) {
+	moldRoot, indexRoot := newTempCacheDirs(t)
+	var out bytes.Buffer
+	exit, err := executeCacheClear(cacheClearOptions{
+		MoldRoot: moldRoot, IndexRoot: indexRoot,
+		Indexes: true,
+		Yes:     true,
+		Stdout:  &out, Stdin: strings.NewReader(""), IsTTY: func() bool { return false },
+	})
+	if err != nil || exit != 0 {
+		t.Fatalf("exit=%d err=%v", exit, err)
+	}
+	if _, err := os.Stat(filepath.Join(moldRoot, "github.com", "foo", "bar", "v1", "x")); err != nil {
+		t.Errorf("molds should be preserved, err = %v", err)
+	}
+	if _, err := os.Stat(indexRoot); !os.IsNotExist(err) {
+		t.Errorf("indexRoot should be gone, err = %v", err)
+	}
+}
+
+func TestExecuteCacheClearDryRunDoesNotDelete(t *testing.T) {
+	moldRoot, indexRoot := newTempCacheDirs(t)
+	var out bytes.Buffer
+	exit, err := executeCacheClear(cacheClearOptions{
+		MoldRoot: moldRoot, IndexRoot: indexRoot,
+		DryRun: true,
+		Stdout: &out, Stdin: strings.NewReader(""), IsTTY: func() bool { return false },
+	})
+	if err != nil || exit != 0 {
+		t.Fatalf("exit=%d err=%v", exit, err)
+	}
+	if _, err := os.Stat(filepath.Join(moldRoot, "github.com", "foo", "bar", "v1", "x")); err != nil {
+		t.Errorf("molds should be preserved on dry-run")
+	}
+	if _, err := os.Stat(indexRoot); err != nil {
+		t.Errorf("indexes should be preserved on dry-run")
+	}
+}
+
+func TestExecuteCacheClearNonTTYNoYesErrors(t *testing.T) {
+	moldRoot, indexRoot := newTempCacheDirs(t)
+	var out bytes.Buffer
+	exit, err := executeCacheClear(cacheClearOptions{
+		MoldRoot: moldRoot, IndexRoot: indexRoot,
+		Stdout: &out, Stdin: strings.NewReader(""), IsTTY: func() bool { return false },
+	})
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+	if exit != 1 {
+		t.Errorf("exit = %d, want 1", exit)
+	}
+	if _, statErr := os.Stat(filepath.Join(moldRoot, "github.com")); statErr != nil {
+		t.Errorf("nothing should have been deleted")
+	}
+}
+
+func TestExecuteCacheClearTTYPromptDecline(t *testing.T) {
+	moldRoot, indexRoot := newTempCacheDirs(t)
+	var out bytes.Buffer
+	exit, err := executeCacheClear(cacheClearOptions{
+		MoldRoot: moldRoot, IndexRoot: indexRoot,
+		Stdout: &out, Stdin: strings.NewReader("n\n"), IsTTY: func() bool { return true },
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exit != 0 {
+		t.Errorf("exit = %d, want 0", exit)
+	}
+	if _, statErr := os.Stat(filepath.Join(moldRoot, "github.com")); statErr != nil {
+		t.Errorf("decline should preserve files")
+	}
+	if !strings.Contains(out.String(), "Cancelled") {
+		t.Errorf("output should say Cancelled, got:\n%s", out.String())
+	}
+}
+
+func TestExecuteCacheClearTTYPromptAccept(t *testing.T) {
+	moldRoot, indexRoot := newTempCacheDirs(t)
+	var out bytes.Buffer
+	exit, err := executeCacheClear(cacheClearOptions{
+		MoldRoot: moldRoot, IndexRoot: indexRoot,
+		Stdout: &out, Stdin: strings.NewReader("y\n"), IsTTY: func() bool { return true },
+	})
+	if err != nil || exit != 0 {
+		t.Fatalf("exit=%d err=%v", exit, err)
+	}
+	if _, statErr := os.Stat(filepath.Join(moldRoot, "github.com")); !os.IsNotExist(statErr) {
+		t.Errorf("accept should delete files")
+	}
+}
+
 func mustMkdirAll(t *testing.T, p string) {
 	t.Helper()
 	if err := os.MkdirAll(p, 0o755); err != nil {

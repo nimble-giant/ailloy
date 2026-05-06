@@ -11,7 +11,9 @@ import (
 	"strings"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
+	"github.com/nimble-giant/ailloy/pkg/foundry/index"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -38,8 +40,10 @@ var cacheClearCmd = &cobra.Command{
 By default, clears both mold artifacts and foundry indexes under ~/.ailloy/cache.
 Use --molds or --indexes to narrow the scope. Use --dry-run to preview without
 deleting. Use --yes to skip the confirmation prompt.`,
-	Args: cobra.NoArgs,
-	RunE: runCacheClear,
+	Args:          cobra.NoArgs,
+	RunE:          runCacheClear,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func init() {
@@ -57,8 +61,170 @@ func registerCacheClearFlags(cmd *cobra.Command) {
 }
 
 func runCacheClear(cmd *cobra.Command, _ []string) error {
-	// Implemented in Task 9.
+	moldRoot, err := foundry.CacheDir()
+	if err != nil {
+		return err
+	}
+	indexRoot, err := index.IndexCacheDir()
+	if err != nil {
+		return err
+	}
+	exit, runErr := executeCacheClear(cacheClearOptions{
+		MoldRoot:  moldRoot,
+		IndexRoot: indexRoot,
+		Molds:     cacheClearMolds,
+		Indexes:   cacheClearIndexes,
+		DryRun:    cacheClearDryRun,
+		Yes:       cacheClearYes,
+		Stdout:    cmd.OutOrStdout(),
+		Stdin:     cmd.InOrStdin(),
+		IsTTY:     stdinIsTTY,
+	})
+	if runErr != nil {
+		return runErr
+	}
+	if exit != 0 {
+		return fmt.Errorf("cache clear exited with status %d", exit)
+	}
 	return nil
+}
+
+type cacheClearOptions struct {
+	MoldRoot  string
+	IndexRoot string
+
+	Molds   bool
+	Indexes bool
+	DryRun  bool
+	Yes     bool
+
+	Stdout io.Writer
+	Stdin  io.Reader
+	IsTTY  func() bool
+}
+
+func executeCacheClear(o cacheClearOptions) (int, error) {
+	wantMolds, wantIndexes := o.Molds, o.Indexes
+	if !wantMolds && !wantIndexes {
+		wantMolds, wantIndexes = true, true
+	}
+
+	var (
+		molds *moldStats
+		idx   *indexStats
+	)
+	if wantMolds {
+		s, err := gatherMoldStats(o.MoldRoot, o.IndexRoot)
+		if err != nil {
+			return 1, fmt.Errorf("gather mold stats: %w", err)
+		}
+		molds = &s
+	}
+	if wantIndexes {
+		s, err := gatherIndexStats(o.IndexRoot)
+		if err != nil {
+			return 1, fmt.Errorf("gather index stats: %w", err)
+		}
+		idx = &s
+	}
+
+	if isEmptySelection(molds, idx) {
+		fmt.Fprintln(o.Stdout, "Cache is already empty.")
+		return 0, nil
+	}
+
+	fmt.Fprint(o.Stdout, renderCachePreview(displayPath(o.MoldRoot), molds, idx))
+
+	if o.DryRun {
+		return 0, nil
+	}
+
+	if !o.Yes {
+		if !o.IsTTY() {
+			return 1, fmt.Errorf("refusing to clear cache without --yes in non-interactive shell")
+		}
+		ok, err := confirmInteractive(o.Stdin, o.Stdout, "\nProceed? [y/N] ")
+		if err != nil {
+			return 1, err
+		}
+		if !ok {
+			fmt.Fprintln(o.Stdout, "Cancelled.")
+			return 0, nil
+		}
+	}
+
+	var (
+		removedMolds   int
+		removedIndexes int
+		errs           []error
+	)
+	if wantMolds {
+		n, e := removeMolds(o.MoldRoot)
+		removedMolds = n
+		errs = append(errs, e...)
+	}
+	if wantIndexes && idx != nil {
+		removedIndexes = idx.Indexes
+		if err := removeIndexes(o.IndexRoot); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	for _, e := range errs {
+		fmt.Fprintf(o.Stdout, "warning: %s\n", e.Error())
+	}
+
+	freed := int64(0)
+	if molds != nil {
+		freed += molds.Bytes
+	}
+	if idx != nil {
+		freed += idx.Bytes
+	}
+
+	switch {
+	case wantMolds && wantIndexes:
+		var versions int
+		if molds != nil {
+			versions = molds.Versions
+		}
+		fmt.Fprintf(o.Stdout, "Cleared %d molds (%d versions), %d indexes — freed %s.\n",
+			removedMolds, versions, removedIndexes, humanizeBytes(freed))
+	case wantMolds:
+		var versions int
+		if molds != nil {
+			versions = molds.Versions
+		}
+		fmt.Fprintf(o.Stdout, "Cleared %d molds (%d versions) — freed %s.\n",
+			removedMolds, versions, humanizeBytes(freed))
+	case wantIndexes:
+		fmt.Fprintf(o.Stdout, "Cleared %d indexes — freed %s.\n",
+			removedIndexes, humanizeBytes(freed))
+	}
+
+	if len(errs) > 0 {
+		fmt.Fprintf(o.Stdout, "Cleared with %d errors.\n", len(errs))
+		return 1, nil
+	}
+	return 0, nil
+}
+
+func isEmptySelection(molds *moldStats, idx *indexStats) bool {
+	moldsEmpty := molds == nil || (molds.Refs == 0 && molds.Bytes == 0)
+	idxEmpty := idx == nil || (idx.Indexes == 0 && idx.Bytes == 0)
+	return moldsEmpty && idxEmpty
+}
+
+func displayPath(p string) string {
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" && strings.HasPrefix(p, home) {
+		return "~" + strings.TrimPrefix(p, home)
+	}
+	return p
+}
+
+func stdinIsTTY() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 type moldStats struct {
