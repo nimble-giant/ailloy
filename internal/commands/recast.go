@@ -270,9 +270,13 @@ func runRecast(cmd *cobra.Command, args []string) error {
 		// CastMold has already upserted the manifest entry; now overlay the
 		// merged effective options so subsequent recasts replay them.
 		if persistErr := persistEffectiveOptions(manifestPath, entry.Source, entry.Subpath, effective); persistErr != nil {
-			fmt.Printf("%s warning: %s: failed to persist options: %v\n",
+			// The on-disk files were updated by CastMold, but we couldn't record
+			// the effective options on the manifest entry. Surface as a failure
+			// (non-zero exit) so it doesn't get silently lost — this state means
+			// the next recast won't replay these options.
+			fmt.Printf("%s %s: re-rendered, but failed to persist options: %v\n",
 				styles.WarningStyle.Render("!"), entry.Name, persistErr)
-			// Non-fatal — files are already updated.
+			failures++
 		}
 
 		changes = append(changes, change)
@@ -299,7 +303,11 @@ func runRecast(cmd *cobra.Command, args []string) error {
 			styles.CodeStyle.Render(c.NewVersion),
 		)
 		if c.OptionsChanged {
-			line += "  " + styles.InfoStyle.Render("(options overridden)")
+			if recastDryRun {
+				line += "  " + styles.InfoStyle.Render("(would override options)")
+			} else {
+				line += "  " + styles.InfoStyle.Render("(options overridden)")
+			}
 		}
 		fmt.Println(line)
 	}
@@ -324,6 +332,11 @@ func runRecast(cmd *cobra.Command, args []string) error {
 // canonical ref-string format accepted by CastMold and foundry.ParseReference:
 //
 //	<host>/<owner>/<repo>@<tag>[//<subpath>]
+//
+// Unlike (*Reference).String(), this uses the resolved tag rather than
+// ref.Version. References built from installed entries via
+// referenceFromInstalledEntry have Type=Latest and an empty Version field,
+// so String() would emit no @tag.
 func buildVersionedRefString(ref *foundry.Reference, tag string) string {
 	s := ref.CacheKey()
 	if tag != "" {
@@ -337,8 +350,10 @@ func buildVersionedRefString(ref *foundry.Reference, tag string) string {
 
 // persistEffectiveOptions writes the merged CastOptions back onto the manifest
 // entry identified by (source, subpath). It re-reads the manifest because
-// CastMold has just rewritten it; we layer the options on top of CastMold's
-// upsert without otherwise modifying the entry.
+// CastMold has just rewritten it; do not be tempted to reuse an in-memory
+// manifest from earlier in the recast loop, since CastMold's writes would be
+// silently overwritten on save. The TOCTOU window is acceptable here because
+// no other process writes to installed.yaml during a recast.
 func persistEffectiveOptions(manifestPath, source, subpath string, eff foundry.CastOptionsRecord) error {
 	manifest, err := foundry.ReadInstalledManifest(manifestPath)
 	if err != nil {
