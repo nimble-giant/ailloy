@@ -149,6 +149,13 @@ type InstallFoundryOptions struct {
 	Force         bool // re-cast even if already installed in the target lockfile
 	ClaudePlugin  bool // package each mold as a Claude Code plugin
 	Shallow       bool // install only the root foundry's molds; skip nested foundries
+	// ValueFiles applies the same -f/--values layering used by `cast` to
+	// every mold installed by this run. Files are loaded left-to-right;
+	// later files override earlier.
+	ValueFiles []string
+	// SetOverrides applies the same --set layering used by `cast` to every
+	// mold. Same precedence as on `cast`: highest layer.
+	SetOverrides []string
 }
 
 // InstallFoundryReport is the per-mold result of an InstallFoundryCore run.
@@ -260,6 +267,8 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 			Global:        opts.Global,
 			WithWorkflows: opts.WithWorkflows,
 			ClaudePlugin:  opts.ClaudePlugin,
+			ValueFiles:    opts.ValueFiles,
+			SetOverrides:  opts.SetOverrides,
 		})
 		if cerr != nil {
 			report.Err = cerr

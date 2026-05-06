@@ -86,6 +86,8 @@ var (
 	foundryCastForce         bool
 	foundryCastClaudePlugin  bool
 	foundryCastShallow       bool
+	foundryCastValueFiles    []string
+	foundryCastSetOverrides  []string
 )
 
 var foundryCastCmd = &cobra.Command{
@@ -120,6 +122,10 @@ func init() {
 	foundryCastCmd.Flags().BoolVar(&foundryCastForce, "force", false, "re-cast molds that are already installed")
 	foundryCastCmd.Flags().BoolVar(&foundryCastClaudePlugin, "claude-plugin", false, "package each mold as a Claude Code plugin under .claude/plugins/<slug>/")
 	foundryCastCmd.Flags().BoolVar(&foundryCastShallow, "shallow", false, "install only the named foundry's direct molds (skip nested foundries)")
+	foundryCastCmd.Flags().StringArrayVar(&foundryCastSetOverrides, "set", nil,
+		"override flux variable for every mold (format: key=value, can be repeated)")
+	foundryCastCmd.Flags().StringArrayVarP(&foundryCastValueFiles, "values", "f", nil,
+		"flux value files applied to every mold (can be repeated, later files override earlier)")
 }
 
 func runFoundrySearch(_ *cobra.Command, args []string) error {
@@ -412,6 +418,8 @@ func runFoundryCast(_ *cobra.Command, args []string) error {
 		Force:         foundryCastForce,
 		ClaudePlugin:  foundryCastClaudePlugin,
 		Shallow:       foundryCastShallow,
+		ValueFiles:    foundryCastValueFiles,
+		SetOverrides:  foundryCastSetOverrides,
 	})
 	if err != nil {
 		return err
