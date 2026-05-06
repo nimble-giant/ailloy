@@ -175,6 +175,13 @@ func removeMolds(moldRoot string) (int, []error) {
 	return removed, errs
 }
 
+func removeIndexes(indexRoot string) error {
+	if err := os.RemoveAll(indexRoot); err != nil {
+		return fmt.Errorf("remove %s: %w", indexRoot, err)
+	}
+	return nil
+}
+
 func humanizeBytes(n int64) string {
 	const (
 		kb = 1024

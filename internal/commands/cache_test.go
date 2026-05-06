@@ -136,6 +136,26 @@ func TestRemoveMoldsMissingDirIsOK(t *testing.T) {
 	}
 }
 
+func TestRemoveIndexes(t *testing.T) {
+	root := t.TempDir()
+	mustMkdirAll(t, filepath.Join(root, "github.com", "alice", "molds"))
+	mustWriteFile(t, filepath.Join(root, "github.com", "alice", "molds", "foundry.yaml"), []byte("z"))
+
+	if err := removeIndexes(root); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Errorf("indexRoot should have been removed, err = %v", err)
+	}
+}
+
+func TestRemoveIndexesMissingDirIsOK(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope")
+	if err := removeIndexes(missing); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+}
+
 func mustMkdirAll(t *testing.T, p string) {
 	t.Helper()
 	if err := os.MkdirAll(p, 0o755); err != nil {
