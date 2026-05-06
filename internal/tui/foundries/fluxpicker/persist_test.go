@@ -3,9 +3,12 @@ package fluxpicker
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	yaml "github.com/goccy/go-yaml"
+
+	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
 func TestWriteFluxFile_CreatesFile(t *testing.T) {
@@ -122,4 +125,79 @@ func TestFluxFileSlug_AvoidsCrossFoundryCollision(t *testing.T) {
 	if a == b {
 		t.Fatalf("expected distinct slugs across foundries; both = %q", a)
 	}
+}
+
+func TestPersistFoundryOverridesFansOutToProject(t *testing.T) {
+	tmp := t.TempDir()
+	t.Chdir(tmp)
+
+	per := map[string][]mold.FluxVar{
+		"alpha": {{Name: "agents.targets", Type: "list"}},
+		"beta":  {{Name: "agents.targets", Type: "list"}, {Name: "theme", Type: "string"}},
+		"gamma": {{Name: "theme", Type: "string"}},
+	}
+	refs := map[string]string{
+		"alpha": "github.com/example/alpha",
+		"beta":  "github.com/example/beta",
+		"gamma": "github.com/example/gamma",
+	}
+	unified := map[string]any{
+		"agents.targets": []any{"claude", "opencode"},
+	}
+	perMold := map[string]map[string]any{
+		"beta":  {"theme": "noon"},
+		"gamma": {"theme": "midnight"},
+	}
+
+	written, err := persistFoundryOverrides(SaveTargetProject, per, refs, unified, perMold)
+	if err != nil {
+		t.Fatalf("persistFoundryOverrides: %v", err)
+	}
+
+	// alpha and beta have agents.targets, so they get the unified value.
+	// beta also gets its per-mold theme. gamma gets only per-mold theme.
+	for _, name := range []string{"alpha", "beta", "gamma"} {
+		slug := mold.FluxFileSlug(refs[name])
+		path := filepath.Join(".ailloy", "flux", slug+".yaml")
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("expected %s to exist (%s flux file): %v", path, name, err)
+		}
+		if !contains(written, path) {
+			t.Errorf("written paths missing %s: %v", path, written)
+		}
+	}
+
+	// Spot-check beta's content.
+	betaSlug := mold.FluxFileSlug(refs["beta"])
+	b, _ := os.ReadFile(filepath.Join(".ailloy", "flux", betaSlug+".yaml"))
+	if !strings.Contains(string(b), "claude") || !strings.Contains(string(b), "noon") {
+		t.Errorf("beta flux file missing expected content:\n%s", b)
+	}
+}
+
+func TestPersistFoundryOverridesSessionIsNoOp(t *testing.T) {
+	tmp := t.TempDir()
+	t.Chdir(tmp)
+	written, err := persistFoundryOverrides(
+		SaveTargetSession,
+		map[string][]mold.FluxVar{"alpha": {{Name: "k", Type: "string"}}},
+		map[string]string{"alpha": "ref"},
+		map[string]any{"k": "v"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if len(written) != 0 {
+		t.Errorf("session save wrote files: %v", written)
+	}
+}
+
+func contains(ss []string, s string) bool {
+	for _, x := range ss {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
@@ -116,6 +117,85 @@ func persistOverrides(moldName string, target SaveTarget, overrides map[string]a
 		return path, writeFluxFile(path, overrides)
 	}
 	return "", fmt.Errorf("unknown save target %v", target)
+}
+
+// persistFoundryOverrides writes foundry-scope picker output to per-mold flux
+// files. Returns the list of paths written.
+//
+// `unified` carries values from non-conflicting picker rows (apply to every
+// mold whose schema declares the key). `perMold` carries values from
+// conflict-expanded sub-rows (apply to that single mold only). Per-mold
+// values win over unified values for the same key on the same mold. The slug
+// used for each file is mold.FluxFileSlug(perMoldSourceRefs[moldName]) so the
+// cast pipeline's PersistedFluxPaths picks them up on subsequent casts.
+//
+// SaveTargetSession is a no-op (returns nil paths) because session overrides
+// live in the picker model and are forwarded by the App via FluxOverridesMsg.
+func persistFoundryOverrides(
+	target SaveTarget,
+	perMoldSchemas map[string][]mold.FluxVar,
+	perMoldSourceRefs map[string]string,
+	unified map[string]any,
+	perMold map[string]map[string]any,
+) ([]string, error) {
+	if target == SaveTargetSession {
+		return nil, nil
+	}
+
+	// Build per-mold combined override map.
+	combined := map[string]map[string]any{}
+	for moldName, schema := range perMoldSchemas {
+		for _, v := range schema {
+			if val, ok := unified[v.Name]; ok {
+				if combined[moldName] == nil {
+					combined[moldName] = map[string]any{}
+				}
+				combined[moldName][v.Name] = val
+			}
+		}
+	}
+	for moldName, kv := range perMold {
+		if combined[moldName] == nil {
+			combined[moldName] = map[string]any{}
+		}
+		for k, v := range kv {
+			combined[moldName][k] = v
+		}
+	}
+
+	var written []string
+	for moldName, overrides := range combined {
+		if len(overrides) == 0 {
+			continue
+		}
+		ref := perMoldSourceRefs[moldName]
+		if ref == "" {
+			// Fall back to mold name as a deterministic slug input. The cast
+			// pipeline won't pick this up via PersistedFluxPaths, but the
+			// file is still readable for manual inspection.
+			ref = moldName
+		}
+		slug := fluxFileSlug(ref)
+		var path string
+		switch target {
+		case SaveTargetProject:
+			path = filepath.Join(".ailloy", "flux", slug+".yaml")
+		case SaveTargetGlobal:
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return written, err
+			}
+			path = filepath.Join(home, ".ailloy", "flux", slug+".yaml")
+		default:
+			return written, fmt.Errorf("unknown save target %v", target)
+		}
+		if err := writeFluxFile(path, overrides); err != nil {
+			return written, err
+		}
+		written = append(written, path)
+	}
+	sort.Strings(written)
+	return written, nil
 }
 
 // mergeOverrides returns a new map combining defaults and overrides
