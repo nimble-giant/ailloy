@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -205,6 +207,46 @@ func TestRenderCachePreviewIndexesOnly(t *testing.T) {
 	}
 	if !strings.Contains(out, "Indexes") {
 		t.Errorf("expected Indexes row, got:\n%s", out)
+	}
+}
+
+func TestConfirmInteractiveYes(t *testing.T) {
+	for _, in := range []string{"y\n", "Y\n", "yes\n"} {
+		var out bytes.Buffer
+		ok, err := confirmInteractive(strings.NewReader(in), &out, "Proceed? [y/N] ")
+		if err != nil {
+			t.Errorf("input %q: unexpected error %v", in, err)
+		}
+		if !ok {
+			t.Errorf("input %q: expected ok=true", in)
+		}
+		if !strings.Contains(out.String(), "Proceed?") {
+			t.Errorf("input %q: prompt not written, got %q", in, out.String())
+		}
+	}
+}
+
+func TestConfirmInteractiveNo(t *testing.T) {
+	for _, in := range []string{"n\n", "no\n", "\n", "anything\n"} {
+		var out bytes.Buffer
+		ok, err := confirmInteractive(strings.NewReader(in), &out, "Proceed? ")
+		if err != nil {
+			t.Errorf("input %q: unexpected error %v", in, err)
+		}
+		if ok {
+			t.Errorf("input %q: expected ok=false", in)
+		}
+	}
+}
+
+func TestConfirmInteractiveEOF(t *testing.T) {
+	var out bytes.Buffer
+	ok, err := confirmInteractive(strings.NewReader(""), &out, "Proceed? ")
+	if err != nil && err != io.EOF {
+		t.Errorf("expected nil or EOF, got %v", err)
+	}
+	if ok {
+		t.Errorf("expected ok=false on EOF")
 	}
 }
 

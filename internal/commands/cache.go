@@ -1,8 +1,10 @@
 package commands
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -203,6 +205,19 @@ func renderCachePreview(cacheRootDisplay string, molds *moldStats, idx *indexSta
 		fmt.Fprintf(&b, "\n  Total:                            (%s)\n", humanizeBytes(totalBytes))
 	}
 	return b.String()
+}
+
+func confirmInteractive(in io.Reader, out io.Writer, prompt string) (bool, error) {
+	if _, err := fmt.Fprint(out, prompt); err != nil {
+		return false, err
+	}
+	r := bufio.NewReader(in)
+	line, err := r.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return false, err
+	}
+	resp := strings.ToLower(strings.TrimSpace(line))
+	return resp == "y" || resp == "yes", nil
 }
 
 func humanizeBytes(n int64) string {
