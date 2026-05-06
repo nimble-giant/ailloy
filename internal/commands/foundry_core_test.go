@@ -73,11 +73,11 @@ foundries:
 	}
 }
 
-// TestInstallFoundryCoreForwardsFluxOptions asserts that --set / -f values on
-// the foundry cast command flow into each per-mold CastMold call. We use
-// DryRun to avoid actually invoking CastMold; the test stops at the report
-// shape, then a second sub-test exercises the real CastMold path with a
-// fixture local mold to assert the values land in the resolved flux.
+// TestInstallFoundryCoreForwardsFluxOptions is a compile-time guard for the
+// new ValueFiles / SetOverrides fields on InstallFoundryOptions. It uses
+// DryRun to short-circuit before CastMold runs (no real cast happens).
+// Behavioral coverage of the actual forwarding lands in Task 3, which
+// asserts per-mold flux apply/skip results from the same call path.
 func TestInstallFoundryCoreForwardsFluxOptions(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("AILLOY_INDEX_CACHE_DIR", tmp)
@@ -102,8 +102,8 @@ molds:
 		Foundries: []index.FoundryEntry{{Name: "parent", URL: parentURL, Type: "git", Status: "ok"}},
 	}
 
-	// DryRun keeps us out of CastMold; we just assert the options carry
-	// through and that no mold is reported as failed for malformed --set.
+	// DryRun short-circuits before CastMold; we just verify the options
+	// struct accepts the new fields and the run completes cleanly.
 	reports, _, err := InstallFoundryCore(context.Background(), cfg, "parent", InstallFoundryOptions{
 		DryRun:       true,
 		Shallow:      true,
