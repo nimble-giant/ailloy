@@ -171,29 +171,21 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 		}
 	}
 
-	if remoteResult != nil {
-		manifestPath := manifestPathFor(opts.Global)
-		if manifestPath != "" {
-			// Upsert the manifest entry with provenance, then backfill Files
-			// + FileHashes. Mirrors what cast.go does via recordInstalled +
-			// RecordInstalledFiles.
-			if err := recordInstalled(remoteResult, opts.Global); err != nil {
-				log.Printf("warning: failed to update installed manifest: %v", err)
-			} else {
-				installed := make([]foundry.InstalledFile, 0, len(filesToCast))
-				for _, f := range filesToCast {
-					sum, _ := hashFile(f.DestPath)
-					rel := f.DestPath
-					if destPrefix != "" {
-						if r, rerr := filepath.Rel(destPrefix, f.DestPath); rerr == nil {
-							rel = r
-						}
-					}
-					installed = append(installed, foundry.InstalledFile{RelPath: rel, SHA256: sum})
+	if remoteResult != nil && manifestPathFor(opts.Global) != "" {
+		installed := make([]foundry.InstalledFile, 0, len(filesToCast))
+		for _, f := range filesToCast {
+			sum, _ := hashFile(f.DestPath)
+			rel := f.DestPath
+			if destPrefix != "" {
+				if r, rerr := filepath.Rel(destPrefix, f.DestPath); rerr == nil {
+					rel = r
 				}
-				res.FilesCast = installed
-				_ = foundry.RecordInstalledFiles(manifestPath, source, remoteResult.Ref.Subpath, installed)
 			}
+			installed = append(installed, foundry.InstalledFile{RelPath: rel, SHA256: sum})
+		}
+		res.FilesCast = installed
+		if err := recordCastedFiles(remoteResult, installed, opts.Global); err != nil {
+			log.Printf("warning: failed to record installed files: %v", err)
 		}
 	}
 

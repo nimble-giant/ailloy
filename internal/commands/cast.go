@@ -299,13 +299,6 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	// Drop directories that ended up empty after skipped renders (#145).
 	dirs = cleanupEmptyDirs(dirs, destPrefix)
 
-	// Record the cast in the installed manifest (provenance for `recast` / `quench`).
-	if resolvedRemote != nil {
-		if err := recordInstalled(resolvedRemote, castGlobal); err != nil {
-			log.Printf("warning: failed to update installed manifest: %v", err)
-		}
-	}
-
 	// Record where blanks were installed (non-fatal if this fails).
 	if destPrefix == "" {
 		if err := writeInstallState(dirs); err != nil {
@@ -313,26 +306,24 @@ func castProject(reader *blanks.MoldReader, source string) error {
 		}
 	}
 
-	// Backfill the manifest entry's Files list so uninstall knows what to remove.
-	// The manifest is always written (regardless of --global), so this works
-	// for both project and global installs.
-	if source != "" && resolvedRemote != nil {
-		manifestPath := manifestPathFor(castGlobal)
-		if manifestPath != "" {
-			installed := make([]foundry.InstalledFile, 0, len(filesToCast))
-			for _, f := range filesToCast {
-				sum, _ := hashFile(f.DestPath)
-				rel := f.DestPath
-				if destPrefix != "" {
-					if r, rerr := filepath.Rel(destPrefix, f.DestPath); rerr == nil {
-						rel = r
-					}
+	// Record the cast in the installed manifest and backfill the Files list
+	// so uninstall knows what to remove. The manifest is always written
+	// (regardless of --global), so this works for both project and global
+	// installs.
+	if resolvedRemote != nil {
+		installed := make([]foundry.InstalledFile, 0, len(filesToCast))
+		for _, f := range filesToCast {
+			sum, _ := hashFile(f.DestPath)
+			rel := f.DestPath
+			if destPrefix != "" {
+				if r, rerr := filepath.Rel(destPrefix, f.DestPath); rerr == nil {
+					rel = r
 				}
-				installed = append(installed, foundry.InstalledFile{RelPath: rel, SHA256: sum})
 			}
-			if err := foundry.RecordInstalledFiles(manifestPath, source, resolvedRemote.Ref.Subpath, installed); err != nil {
-				log.Printf("warning: recording installed files: %v", err)
-			}
+			installed = append(installed, foundry.InstalledFile{RelPath: rel, SHA256: sum})
+		}
+		if err := recordCastedFiles(resolvedRemote, installed, castGlobal); err != nil {
+			log.Printf("warning: failed to record installed files: %v", err)
 		}
 	}
 
@@ -720,4 +711,20 @@ func recordInstalled(result *foundry.ResolveResult, global bool) error {
 		CastAt:  time.Now().UTC(),
 	})
 	return foundry.WriteInstalledManifest(path, manifest)
+}
+
+// recordCastedFiles upserts the just-cast mold into the installed manifest
+// and backfills its Files list in one place so the lookup key cannot drift
+// from the write key. The lookup must use Ref.CacheKey() (host/owner/repo) —
+// not OverrideKey, which inlines the subpath and would not match the entry
+// recordInstalled just wrote for monorepo foundries.
+func recordCastedFiles(result *foundry.ResolveResult, files []foundry.InstalledFile, global bool) error {
+	if err := recordInstalled(result, global); err != nil {
+		return err
+	}
+	path := manifestPathFor(global)
+	if path == "" {
+		return nil
+	}
+	return foundry.RecordInstalledFiles(path, result.Ref.CacheKey(), result.Ref.Subpath, files)
 }
