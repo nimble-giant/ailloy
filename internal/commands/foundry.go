@@ -480,10 +480,29 @@ func runFoundryCast(_ *cobra.Command, args []string) error {
 	}
 	fmt.Println(styles.SuccessStyle.Render(summary))
 
+	// Per-key apply/skip summary for --set overrides.
+	keys := setOverrideKeys(foundryCastSetOverrides)
+	if fluxSummary := formatFoundryFluxSummary(reports, keys); fluxSummary != "" {
+		fmt.Println()
+		fmt.Print(fluxSummary)
+	}
+
 	if failed > 0 {
 		return fmt.Errorf("%d mold(s) failed to install", failed)
 	}
 	return nil
+}
+
+// setOverrideKeys returns the key portion of each "key=value" --set entry,
+// preserving order, so the foundry summary can iterate keys deterministically.
+func setOverrideKeys(setOverrides []string) []string {
+	keys := make([]string, 0, len(setOverrides))
+	for _, kv := range setOverrides {
+		if eq := strings.IndexByte(kv, '='); eq != -1 {
+			keys = append(keys, kv[:eq])
+		}
+	}
+	return keys
 }
 
 // renderResolutionWarnings prints non-fatal foundry resolution warnings —
