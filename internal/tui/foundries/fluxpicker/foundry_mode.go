@@ -61,3 +61,58 @@ func (m Model) PerMoldSourceRefs() map[string]string { return m.perMoldSourceRef
 // SchemaConflicts returns conflict info: var name → sorted list of mold names
 // that disagree on Type or Default for that var.
 func (m Model) SchemaConflicts() map[string][]string { return m.schemaConflicts }
+
+// SetMoldOverride records a per-mold value for a conflict-expanded key. Only
+// meaningful in foundry mode; no-op otherwise.
+func (m Model) SetMoldOverride(moldName, key string, value any) Model {
+	if !m.IsFoundryMode() {
+		return m
+	}
+	if m.moldOverrides == nil {
+		m.moldOverrides = map[string]any{}
+	}
+	m.moldOverrides[moldOverrideKey(moldName, key)] = value
+	return m
+}
+
+// MoldOverride returns the per-mold value for a conflict-expanded key, or
+// nil if unset.
+func (m Model) MoldOverride(moldName, key string) any {
+	if m.moldOverrides == nil {
+		return nil
+	}
+	return m.moldOverrides[moldOverrideKey(moldName, key)]
+}
+
+// MoldOverrides returns the full per-mold override map. Result keyed by
+// mold name → flat dotted-key map (e.g. "alpha" → {"theme": "midnight"}).
+func (m Model) MoldOverrides() map[string]map[string]any {
+	if m.moldOverrides == nil {
+		return nil
+	}
+	out := map[string]map[string]any{}
+	for k, v := range m.moldOverrides {
+		moldName, key, ok := splitMoldOverrideKey(k)
+		if !ok {
+			continue
+		}
+		if out[moldName] == nil {
+			out[moldName] = map[string]any{}
+		}
+		out[moldName][key] = v
+	}
+	return out
+}
+
+func moldOverrideKey(moldName, key string) string {
+	return moldName + "\x00" + key
+}
+
+func splitMoldOverrideKey(k string) (moldName, key string, ok bool) {
+	for i := 0; i < len(k); i++ {
+		if k[i] == 0 {
+			return k[:i], k[i+1:], true
+		}
+	}
+	return "", "", false
+}
