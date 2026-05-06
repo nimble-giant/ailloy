@@ -98,6 +98,44 @@ func TestGatherIndexStatsCounts(t *testing.T) {
 	}
 }
 
+func TestRemoveMoldsPreservesIndexes(t *testing.T) {
+	root := t.TempDir()
+	mustMkdirAll(t, filepath.Join(root, "github.com", "foo", "bar", "v1"))
+	mustWriteFile(t, filepath.Join(root, "github.com", "foo", "bar", "v1", "x"), []byte("x"))
+	mustMkdirAll(t, filepath.Join(root, "gitlab.com", "baz", "qux", "v1"))
+	mustWriteFile(t, filepath.Join(root, "gitlab.com", "baz", "qux", "v1", "y"), []byte("y"))
+	mustMkdirAll(t, filepath.Join(root, "indexes", "github.com", "alice", "molds"))
+	mustWriteFile(t, filepath.Join(root, "indexes", "github.com", "alice", "molds", "foundry.yaml"), []byte("z"))
+
+	removed, errs := removeMolds(root)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	if removed != 2 {
+		t.Errorf("removed = %d, want 2 (top-level non-indexes entries)", removed)
+	}
+	if _, err := os.Stat(filepath.Join(root, "github.com")); !os.IsNotExist(err) {
+		t.Errorf("github.com should have been removed, err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "gitlab.com")); !os.IsNotExist(err) {
+		t.Errorf("gitlab.com should have been removed, err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "indexes", "github.com", "alice", "molds", "foundry.yaml")); err != nil {
+		t.Errorf("indexes/ should have been preserved, err = %v", err)
+	}
+}
+
+func TestRemoveMoldsMissingDirIsOK(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope")
+	removed, errs := removeMolds(missing)
+	if len(errs) != 0 {
+		t.Errorf("expected no errors, got %v", errs)
+	}
+	if removed != 0 {
+		t.Errorf("removed = %d, want 0", removed)
+	}
+}
+
 func mustMkdirAll(t *testing.T, p string) {
 	t.Helper()
 	if err := os.MkdirAll(p, 0o755); err != nil {

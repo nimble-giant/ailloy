@@ -149,6 +149,32 @@ func gatherIndexStats(indexRoot string) (indexStats, error) {
 	return stats, nil
 }
 
+func removeMolds(moldRoot string) (int, []error) {
+	entries, err := os.ReadDir(moldRoot)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, []error{err}
+	}
+	var (
+		removed int
+		errs    []error
+	)
+	for _, e := range entries {
+		if e.Name() == "indexes" {
+			continue
+		}
+		p := filepath.Join(moldRoot, e.Name())
+		if rmErr := os.RemoveAll(p); rmErr != nil {
+			errs = append(errs, fmt.Errorf("remove %s: %w", p, rmErr))
+			continue
+		}
+		removed++
+	}
+	return removed, errs
+}
+
 func humanizeBytes(n int64) string {
 	const (
 		kb = 1024
