@@ -65,6 +65,42 @@ func splitFluxKeysForMold(ctx context.Context, source string, setOverrides []str
 	return applied, skipped
 }
 
+// formatFoundryFluxSummary renders a per-key apply/skip report based on the
+// per-mold results returned by InstallFoundryCore. Empty when keys is empty.
+func formatFoundryFluxSummary(reports []InstallFoundryReport, keys []string) string {
+	if len(keys) == 0 || len(reports) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Applied flux overrides:\n")
+	for _, k := range keys {
+		var skipped []string
+		applied := 0
+		for _, r := range reports {
+			if containsString(r.FluxSkipped, k) {
+				skipped = append(skipped, r.Name)
+				continue
+			}
+			applied++
+		}
+		fmt.Fprintf(&b, "  %s → %d/%d molds", k, applied, len(reports))
+		if len(skipped) > 0 {
+			fmt.Fprintf(&b, " (skipped: %s — key not in schema)", strings.Join(skipped, ", "))
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func containsString(ss []string, s string) bool {
+	for _, x := range ss {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
 // AddFoundryResult reports the outcome of an add operation.
 type AddFoundryResult struct {
 	Entry         index.FoundryEntry
