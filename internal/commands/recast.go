@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -75,7 +76,7 @@ func mergeRecastOptions(recorded *foundry.CastOptionsRecord, cli recastCLIOption
 	rec.WithWorkflows = rec.WithWorkflows || cli.WithWorkflows
 
 	for _, f := range cli.ValueFiles {
-		if !containsString(rec.ValueFiles, f) {
+		if !slices.Contains(rec.ValueFiles, f) {
 			rec.ValueFiles = append(rec.ValueFiles, f)
 		}
 	}
@@ -85,6 +86,8 @@ func mergeRecastOptions(recorded *foundry.CastOptionsRecord, cli recastCLIOption
 		replaced := false
 		for i, existing := range rec.SetOverrides {
 			if setOverrideKey(existing) == key {
+				// Safe: rec.SetOverrides was cloned above, so this does not
+				// alias the caller's recorded slice.
 				rec.SetOverrides[i] = kv
 				replaced = true
 				break
@@ -99,25 +102,13 @@ func mergeRecastOptions(recorded *foundry.CastOptionsRecord, cli recastCLIOption
 }
 
 // setOverrideKey returns the LHS of a `key=value` --set string, trimmed of
-// whitespace. Mirrors the parsing in mold.ApplySetOverrides so dedupe matches
-// what the renderer ultimately sees. Inputs without an "=" return the entire
-// string (treated as a single-key entry).
+// whitespace. Mirrors the trim behavior in mold.ApplySetOverrides
+// (pkg/mold/flux.go) so dedupe matches what the renderer ultimately sees.
+// Inputs without "=" return the entire string trimmed (treated as a single-
+// key entry).
 func setOverrideKey(kv string) string {
-	for i := 0; i < len(kv); i++ {
-		if kv[i] == '=' {
-			return strings.TrimSpace(kv[:i])
-		}
-	}
-	return strings.TrimSpace(kv)
-}
-
-func containsString(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
+	parts := strings.SplitN(kv, "=", 2)
+	return strings.TrimSpace(parts[0])
 }
 
 func init() {

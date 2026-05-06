@@ -84,6 +84,12 @@ func TestMergeRecastOptions(t *testing.T) {
 			cli:      recastCLIOptions{SetOverrides: []string{"agent.target=bar"}},
 			want:     foundry.CastOptionsRecord{SetOverrides: []string{"agent.target=bar"}},
 		},
+		{
+			name:     "set: combined same-key replace and distinct-key append",
+			recorded: &foundry.CastOptionsRecord{SetOverrides: []string{"a=1", "b=2"}},
+			cli:      recastCLIOptions{SetOverrides: []string{"a=99", "c=3"}},
+			want:     foundry.CastOptionsRecord{SetOverrides: []string{"a=99", "b=2", "c=3"}},
+		},
 	}
 
 	for _, tc := range cases {
