@@ -43,7 +43,7 @@ Key CLI commands for working with molds:
 - **temper** (`validate`): Validate a mold or ingot package; use `--assay` (alias: `--lint`) to also render and assay output
 - **anneal** (`configure`): Configure flux variables interactively
 - **smelt** (`package`): Package a mold for distribution
-- **recast**: Re-resolve installed molds to newer versions; refreshes `.ailloy/installed.yaml` and (if present) `ailloy.lock`
+- **recast**: Re-resolve installed molds to newer versions AND re-render their content (alias: `upgrade`); refreshes `.ailloy/installed.yaml` and (if present) `ailloy.lock`. Accepts `--set`, `--values`/`-f`, `--with-workflows`, and `--force-replace-on-parse-error` — flags layer on top of the options the original cast recorded in the manifest.
 - **quench**: Opt in to `ailloy.lock` by pinning everything in `.ailloy/installed.yaml`; supports `--verify` (CI drift check) and `--global`
 - **evolve** (`reinstall`): Self-upgrade the ailloy CLI binary in place from the latest GitHub release; supports `--check`, `--version`, `--force`, and `--no-animate`. Refuses on Homebrew installs (use `brew upgrade nimble-giant/tap/ailloy`)
 - **cache clear**: Clear ailloy's on-disk cache (mold artifacts and foundry indexes under `~/.ailloy/cache/`). Supports `--molds`, `--indexes`, `--dry-run`, `--yes`. Bidirectional: `clear cache` also works.
