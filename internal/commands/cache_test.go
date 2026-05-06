@@ -379,6 +379,9 @@ func TestExecuteCacheClearNonTTYNoYesErrors(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}
+	if err != nil && !strings.Contains(err.Error(), "--yes") {
+		t.Errorf("error message should mention --yes, got: %v", err)
+	}
 	if exit != 1 {
 		t.Errorf("exit = %d, want 1", exit)
 	}

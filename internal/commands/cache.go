@@ -84,7 +84,7 @@ func runCacheClear(cmd *cobra.Command, _ []string) error {
 		return runErr
 	}
 	if exit != 0 {
-		return fmt.Errorf("cache clear exited with status %d", exit)
+		return fmt.Errorf("cache clear completed with errors")
 	}
 	return nil
 }
@@ -217,7 +217,14 @@ func isEmptySelection(molds *moldStats, idx *indexStats) bool {
 
 func displayPath(p string) string {
 	home, err := os.UserHomeDir()
-	if err == nil && home != "" && strings.HasPrefix(p, home) {
+	if err != nil || home == "" {
+		return p
+	}
+	if p == home {
+		return "~"
+	}
+	sep := string(os.PathSeparator)
+	if strings.HasPrefix(p, home+sep) {
 		return "~" + strings.TrimPrefix(p, home)
 	}
 	return p
