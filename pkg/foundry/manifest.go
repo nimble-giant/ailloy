@@ -23,7 +23,10 @@ const InstalledManifestPath = ".ailloy/installed.yaml"
 type CastOptionsRecord struct {
 	WithWorkflows bool     `yaml:"withWorkflows,omitempty"`
 	ValueFiles    []string `yaml:"valueFiles,omitempty"`
-	SetOverrides  []string `yaml:"setOverrides,omitempty"`
+	// SetOverrides stores raw `key=value` strings so consumers can re-parse
+	// them through the same --set parser. Do not convert to a map: that
+	// would silently collapse duplicate keys.
+	SetOverrides []string `yaml:"setOverrides,omitempty"`
 }
 
 // InstalledEntry records a mold that was cast into the project.

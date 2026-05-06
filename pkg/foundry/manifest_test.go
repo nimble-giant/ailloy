@@ -129,12 +129,13 @@ func TestInstalledManifest_RoundTrip_CastOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(raw), "name: without-options") {
-		idx := strings.Index(string(raw), "name: without-options")
-		tail := string(raw)[idx:]
-		if strings.Contains(tail, "castOptions") {
-			t.Errorf("entry without options should not emit castOptions yaml; got:\n%s", tail)
-		}
+	idx := strings.Index(string(raw), "name: without-options")
+	if idx == -1 {
+		t.Fatalf("expected to find 'name: without-options' in:\n%s", raw)
+	}
+	tail := string(raw)[idx:]
+	if strings.Contains(tail, "castOptions") {
+		t.Errorf("entry without options should not emit castOptions yaml; got:\n%s", tail)
 	}
 }
 
