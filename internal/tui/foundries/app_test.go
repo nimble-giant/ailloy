@@ -8,6 +8,8 @@ import (
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/discover"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/fluxpicker"
+	"github.com/nimble-giant/ailloy/internal/tui/foundries/registered"
+	"github.com/nimble-giant/ailloy/pkg/foundry/index"
 )
 
 func TestApp_FOpensPickerWhenMoldHighlighted(t *testing.T) {
@@ -70,6 +72,34 @@ func TestApp_FluxOverridesMsg_SessionRoutesToDiscover(t *testing.T) {
 	// then re-cast and check downstream effects in the integration test (Task 14).
 	if app.picker.IsOpen() {
 		t.Fatal("expected picker to close")
+	}
+}
+
+func TestPressingFOnFoundriesTabOpensFoundryPicker(t *testing.T) {
+	cfg := &index.Config{
+		Foundries: []index.FoundryEntry{{Name: "alpha", URL: "https://github.com/x/alpha"}},
+	}
+	a := App{
+		cfg:        cfg,
+		registered: registered.New(cfg, nil, nil, nil, nil),
+		picker:     fluxpicker.New(),
+		active:     TabFoundries,
+	}
+	// Move cursor onto "alpha". For this synthetic cfg there is no project
+	// foundries entry — registered shows official + alpha. Cursor 0 is the
+	// official foundry; cursor 1 is alpha.
+	a.registered.SetCursorForTest(1)
+
+	updated, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	app := updated.(App)
+	if !app.picker.IsOpen() {
+		t.Fatalf("picker should be open after pressing f on Foundries tab")
+	}
+	if !app.picker.IsFoundryMode() {
+		t.Fatalf("picker should be in foundry mode")
+	}
+	if app.picker.FoundryName() != "alpha" {
+		t.Errorf("FoundryName = %q, want alpha", app.picker.FoundryName())
 	}
 }
 

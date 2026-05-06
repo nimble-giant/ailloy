@@ -116,3 +116,19 @@ func splitMoldOverrideKey(k string) (moldName, key string, ok bool) {
 	}
 	return "", "", false
 }
+
+// WithFoundrySchemas folds asynchronously-fetched per-mold schemas into the
+// picker, runs aggregation, and clears the fetching flag. No-op when the
+// picker is not currently scoped to the named foundry.
+func (m Model) WithFoundrySchemas(foundryName string, schemas map[string][]mold.FluxVar, refs map[string]string) Model {
+	if m.foundryName != foundryName {
+		return m
+	}
+	unified, conflicts := AggregateSchemas(schemas)
+	m.schema = unified
+	m.schemaConflicts = conflicts
+	m.perMoldSchemas = schemas
+	m.perMoldSourceRefs = refs
+	m.fetching = false
+	return m
+}
