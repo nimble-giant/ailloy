@@ -75,7 +75,10 @@ func gatherMoldStats(moldRoot, indexRoot string) (moldStats, error) {
 		stats.Versions += len(e.Versions)
 	}
 
-	indexAbs, _ := filepath.Abs(indexRoot)
+	indexAbs, err := filepath.Abs(indexRoot)
+	if err != nil {
+		return stats, fmt.Errorf("resolving index root: %w", err)
+	}
 
 	walkErr := filepath.WalkDir(moldRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -85,7 +88,10 @@ func gatherMoldStats(moldRoot, indexRoot string) (moldStats, error) {
 			return err
 		}
 		if d.IsDir() {
-			abs, _ := filepath.Abs(path)
+			abs, absErr := filepath.Abs(path)
+			if absErr != nil {
+				return absErr
+			}
 			if abs == indexAbs {
 				return fs.SkipDir
 			}
