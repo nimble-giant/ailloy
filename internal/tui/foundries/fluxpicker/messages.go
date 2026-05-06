@@ -33,3 +33,12 @@ type SchemaFetchedMsg struct {
 	Defaults map[string]any
 	Err      error
 }
+
+// FoundrySchemasFetchedMsg is dispatched by the App after the foundry-mode
+// picker is opened. The picker stitches the schemas in via WithFoundrySchemas.
+type FoundrySchemasFetchedMsg struct {
+	FoundryName string
+	Schemas     map[string][]mold.FluxVar
+	SourceRefs  map[string]string
+	Err         error
+}

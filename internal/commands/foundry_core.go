@@ -4,14 +4,94 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 )
+
+// splitFluxKeysForMold partitions user-supplied --set keys into those declared
+// by the mold's flux schema and those that aren't. Returns nil/nil when there
+// are no overrides. The mold's schema is loaded from flux.schema.yaml at
+// source, and (for local-path sources) merged with any inline `flux:` block
+// declared in mold.yaml. Remote refs only see the flux.schema.yaml entries —
+// merging both for remote sources would require pkg/mold changes and is filed
+// as a follow-up.
+func splitFluxKeysForMold(ctx context.Context, source string, setOverrides []string) (applied, skipped []string) {
+	if len(setOverrides) == 0 {
+		return nil, nil
+	}
+	keys := make([]string, 0, len(setOverrides))
+	for _, kv := range setOverrides {
+		if eq := strings.IndexByte(kv, '='); eq != -1 {
+			keys = append(keys, kv[:eq])
+		}
+	}
+	// Schema fetch tolerates local dirs and remote refs. A real fetch error
+	// is distinct from "no schema declared" — log the former so operators
+	// can diagnose, but fall through with an empty schema so any inline
+	// mold.yaml flux still gets a chance to declare keys.
+	schema, _, err := mold.FetchSchemaFromSource(ctx, source)
+	if err != nil {
+		log.Printf("warning: fetch flux schema for %s: %v", source, err)
+		schema = nil
+	}
+	declared := map[string]struct{}{}
+	for _, v := range schema {
+		declared[v.Name] = struct{}{}
+	}
+	// Inline flux declarations in mold.yaml — only readable for local-path
+	// sources. Remote refs go through FetchSchemaFromSource which would need
+	// pkg/mold changes to merge inline schema at fetch time.
+	if info, serr := os.Stat(source); serr == nil && info.IsDir() {
+		if m, lerr := mold.LoadMold(filepath.Join(source, "mold.yaml")); lerr == nil && m != nil {
+			for _, v := range m.Flux {
+				declared[v.Name] = struct{}{}
+			}
+		}
+	}
+	for _, k := range keys {
+		if _, ok := declared[k]; ok {
+			applied = append(applied, k)
+		} else {
+			skipped = append(skipped, k)
+		}
+	}
+	return applied, skipped
+}
+
+// formatFoundryFluxSummary renders a per-key apply/skip report based on the
+// per-mold results returned by InstallFoundryCore. Empty when keys is empty.
+func formatFoundryFluxSummary(reports []InstallFoundryReport, keys []string) string {
+	if len(keys) == 0 || len(reports) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Applied flux overrides:\n")
+	for _, k := range keys {
+		var skipped []string
+		applied := 0
+		for _, r := range reports {
+			if slices.Contains(r.FluxSkipped, k) {
+				skipped = append(skipped, r.Name)
+				continue
+			}
+			applied++
+		}
+		fmt.Fprintf(&b, "  %s → %d/%d molds", k, applied, len(reports))
+		if len(skipped) > 0 {
+			fmt.Fprintf(&b, " (skipped: %s — key not in schema)", strings.Join(skipped, ", "))
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
 
 // AddFoundryResult reports the outcome of an add operation.
 type AddFoundryResult struct {
@@ -149,6 +229,17 @@ type InstallFoundryOptions struct {
 	Force         bool // re-cast even if already installed in the target lockfile
 	ClaudePlugin  bool // package each mold as a Claude Code plugin
 	Shallow       bool // install only the root foundry's molds; skip nested foundries
+	// ValueFiles applies the same -f/--values layering used by `cast` to
+	// every mold installed by this run. Files are loaded left-to-right;
+	// later files override earlier.
+	ValueFiles []string
+	// SetOverrides applies the same --set layering used by `cast` to every
+	// mold. Same precedence as on `cast`: highest layer.
+	SetOverrides []string
+	// PerMoldOverrides is keyed by mold name → already-encoded --set strings.
+	// These are appended after SetOverrides for that specific mold so
+	// per-mold values take precedence over foundry-wide values.
+	PerMoldOverrides map[string][]string
 }
 
 // InstallFoundryReport is the per-mold result of an InstallFoundryCore run.
@@ -160,6 +251,10 @@ type InstallFoundryReport struct {
 	Skipped bool     // true when already installed and !Force
 	Err     error    // non-nil if cast failed for this mold
 	Version string   // populated on success or skip (from CastResult / lockfile)
+	// FluxApplied lists user-supplied --set keys that are declared in this
+	// mold's flux schema. FluxSkipped lists keys that are not.
+	FluxApplied []string
+	FluxSkipped []string
 }
 
 // ErrFoundryNotFound is returned when nameOrURL doesn't match any effective
@@ -244,6 +339,7 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 			Foundry: m.Foundry.Index.Name,
 			Chain:   chain,
 		}
+		report.FluxApplied, report.FluxSkipped = splitFluxKeysForMold(ctx, m.Entry.Source, opts.SetOverrides)
 
 		if v, already := installed[strings.ToLower(m.Entry.Source)]; already && !opts.Force {
 			report.Skipped = true
@@ -256,10 +352,16 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 			continue
 		}
 
+		moldSet := opts.SetOverrides
+		if extra := opts.PerMoldOverrides[m.Entry.Name]; len(extra) > 0 {
+			moldSet = append(append([]string(nil), opts.SetOverrides...), extra...)
+		}
 		castRes, cerr := CastMold(ctx, m.Entry.Source, CastOptions{
 			Global:        opts.Global,
 			WithWorkflows: opts.WithWorkflows,
 			ClaudePlugin:  opts.ClaudePlugin,
+			ValueFiles:    opts.ValueFiles,
+			SetOverrides:  moldSet,
 		})
 		if cerr != nil {
 			report.Err = cerr
