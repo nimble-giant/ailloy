@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
@@ -33,6 +34,91 @@ var (
 	// any declared ingot/ore dep that's missing from .ailloy/.
 	recastFrozen bool
 )
+
+// recastCLIOptions holds the option-shaped flags supplied for THIS recast run.
+// Distinct from foundry.CastOptionsRecord (which is the persisted form) so the
+// merge algorithm has explicit "recorded" and "this-run" inputs.
+type recastCLIOptions struct {
+	WithWorkflows            bool
+	ValueFiles               []string
+	SetOverrides             []string
+	ForceReplaceOnParseError bool // run-time only, never persisted
+}
+
+// hasOverrides reports whether any persistable CLI flag was supplied. Used by
+// the loop to decide whether a same-version mold should still be re-rendered.
+// ForceReplaceOnParseError is intentionally excluded — a recovery flag alone
+// should not force a re-render of an already-up-to-date mold.
+func (o recastCLIOptions) hasOverrides() bool {
+	return o.WithWorkflows || len(o.ValueFiles) > 0 || len(o.SetOverrides) > 0
+}
+
+// mergeRecastOptions composes the persisted (recorded) options with this run's
+// CLI flags. CLI flags layer on top of recorded options:
+//
+//   - WithWorkflows is OR'd (CLI cannot turn off a recorded true).
+//   - ValueFiles: recorded first, CLI appended; dedupe on exact path.
+//   - SetOverrides: recorded first, CLI appended; if a CLI override has the
+//     same dotted key as a recorded entry, the recorded entry is replaced
+//     in place rather than duplicated.
+//
+// The returned record is what we persist back to the manifest after a
+// successful recast. ForceReplaceOnParseError is not part of the result.
+func mergeRecastOptions(recorded *foundry.CastOptionsRecord, cli recastCLIOptions) foundry.CastOptionsRecord {
+	var rec foundry.CastOptionsRecord
+	if recorded != nil {
+		rec = *recorded
+		rec.ValueFiles = append([]string(nil), recorded.ValueFiles...)
+		rec.SetOverrides = append([]string(nil), recorded.SetOverrides...)
+	}
+
+	rec.WithWorkflows = rec.WithWorkflows || cli.WithWorkflows
+
+	for _, f := range cli.ValueFiles {
+		if !containsString(rec.ValueFiles, f) {
+			rec.ValueFiles = append(rec.ValueFiles, f)
+		}
+	}
+
+	for _, kv := range cli.SetOverrides {
+		key := setOverrideKey(kv)
+		replaced := false
+		for i, existing := range rec.SetOverrides {
+			if setOverrideKey(existing) == key {
+				rec.SetOverrides[i] = kv
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			rec.SetOverrides = append(rec.SetOverrides, kv)
+		}
+	}
+
+	return rec
+}
+
+// setOverrideKey returns the LHS of a `key=value` --set string, trimmed of
+// whitespace. Mirrors the parsing in mold.ApplySetOverrides so dedupe matches
+// what the renderer ultimately sees. Inputs without an "=" return the entire
+// string (treated as a single-key entry).
+func setOverrideKey(kv string) string {
+	for i := 0; i < len(kv); i++ {
+		if kv[i] == '=' {
+			return strings.TrimSpace(kv[:i])
+		}
+	}
+	return strings.TrimSpace(kv)
+}
+
+func containsString(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
+}
 
 func init() {
 	rootCmd.AddCommand(recastCmd)
