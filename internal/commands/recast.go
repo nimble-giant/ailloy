@@ -27,7 +27,8 @@ Flags supplied here layer on top of the options the original cast recorded
 in installed.yaml. --set and --values overrides are persisted back; the
 recovery flag --force-replace-on-parse-error is not.
 
-Use --dry-run to preview which molds will move, without re-rendering.`,
+Use --global/-g to operate on the manifest under ~/ instead of the current
+project. Use --dry-run to preview which molds will move, without re-rendering.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runRecast,
 }
@@ -137,8 +138,7 @@ type recastChange struct {
 	OldCommit      string
 	NewVersion     string
 	NewCommit      string
-	Effective      foundry.CastOptionsRecord // applied options for this run
-	OptionsChanged bool                      // true when CLI overrode recorded options
+	OptionsChanged bool // true when CLI overrode recorded options
 }
 
 func runRecast(cmd *cobra.Command, args []string) error {
@@ -210,7 +210,6 @@ func runRecast(cmd *cobra.Command, args []string) error {
 			OldCommit:      entry.Commit,
 			NewVersion:     resolved.Tag,
 			NewCommit:      resolved.Commit,
-			Effective:      effective,
 			OptionsChanged: cli.hasOverrides(),
 		}
 
