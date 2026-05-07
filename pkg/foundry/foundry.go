@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/Masterminds/semver/v3"
 )
 
 // InstalledFile carries the metadata recorded for one cast file.
@@ -203,8 +205,20 @@ func resolveWithMeta(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.F
 
 func lockedSatisfies(ref *Reference, entry *LockEntry) bool {
 	switch ref.Type {
-	case Latest, Constraint:
-		return true
+	case Latest:
+		// "latest" must always re-resolve so newly published tags are picked up.
+		// Otherwise the lock would pin "latest" to whatever was first resolved.
+		return false
+	case Constraint:
+		c, err := semver.NewConstraint(ref.Version)
+		if err != nil {
+			return false
+		}
+		v, err := semver.NewVersion(entry.Version)
+		if err != nil {
+			return false
+		}
+		return c.Check(v)
 	case Exact:
 		return entry.Version == ref.Version || entry.Version == "v"+ref.Version
 	default:
