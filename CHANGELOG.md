@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.28](https://github.com/nimble-giant/ailloy/compare/v0.6.27...v0.6.28) (2026-05-07)
+
+
+### Bug Fixes
+
+* patch govulncheck findings (x/net + Go 1.26.3 stdlib) ([7d75eba](https://github.com/nimble-giant/ailloy/commit/7d75eba09c9108f3107bf29cba7bd028c6e7c6eb))
+* pin GOTOOLCHAIN so govulncheck sees Go 1.26.3 stdlib ([f078928](https://github.com/nimble-giant/ailloy/commit/f078928fadf76d1e7f638cf6f82528b0d0969c24))
+* re-resolve "latest" and validate constraints against lock ([17eb2de](https://github.com/nimble-giant/ailloy/commit/17eb2de732c101f1fe1903f4a7bf6206a3714af4))
+
 ## [0.6.27](https://github.com/nimble-giant/ailloy/compare/v0.6.26...v0.6.27) (2026-05-04)
 
 
