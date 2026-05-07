@@ -60,13 +60,31 @@ func (e *recastE2EEnv) extraEnv() []string {
 	}
 }
 
+// sandboxEnv returns os.Environ() with all GIT_* variables stripped, then the
+// sandbox additions appended. This matters when the test runs inside a git
+// hook (e.g. lefthook's pre-push) because git sets GIT_DIR / GIT_INDEX_FILE /
+// GIT_WORK_TREE in the hook environment, and any subprocess that inherits
+// those would operate on the OUTER repo regardless of cmd.Dir — causing the
+// test's git operations to mutate the developer's repo instead of the
+// per-test sandbox.
+func (e *recastE2EEnv) sandboxEnv() []string {
+	out := make([]string, 0, len(os.Environ()))
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "GIT_") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return append(out, e.extraEnv()...)
+}
+
 // run invokes the ailloy binary with the sandbox env applied. dir is the
 // working directory (typically the project under test).
 func (e *recastE2EEnv) run(t *testing.T, dir string, args ...string) ([]byte, error) {
 	t.Helper()
 	cmd := exec.Command(e.bin, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), e.extraEnv()...)
+	cmd.Env = e.sandboxEnv()
 	return cmd.CombinedOutput()
 }
 
@@ -77,7 +95,7 @@ func (e *recastE2EEnv) gitInRepo(t *testing.T, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = e.repoDir
-	cmd.Env = append(os.Environ(), e.extraEnv()...)
+	cmd.Env = e.sandboxEnv()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
@@ -162,7 +180,7 @@ func setupRecastE2EEnv(t *testing.T) *recastE2EEnv {
 
 	// Initialize the bare "remote" repo (where tags will live).
 	bareInit := exec.Command("git", "init", "--bare", "--initial-branch=main", env.bareDir)
-	bareInit.Env = append(os.Environ(), env.extraEnv()...)
+	bareInit.Env = env.sandboxEnv()
 	if out, err := bareInit.CombinedOutput(); err != nil {
 		t.Fatalf("git init --bare: %v\n%s", err, out)
 	}
@@ -171,7 +189,7 @@ func setupRecastE2EEnv(t *testing.T) *recastE2EEnv {
 	// configure a committer identity scoped to this repo (so the test does
 	// not depend on the developer's global git identity).
 	wtInit := exec.Command("git", "init", "--initial-branch=main", env.repoDir)
-	wtInit.Env = append(os.Environ(), env.extraEnv()...)
+	wtInit.Env = env.sandboxEnv()
 	if out, err := wtInit.CombinedOutput(); err != nil {
 		t.Fatalf("git init worktree: %v\n%s", err, out)
 	}
