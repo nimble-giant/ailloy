@@ -16,16 +16,28 @@ func TestLockedSatisfies(t *testing.T) {
 		want  bool
 	}{
 		{
-			name:  "latest always satisfies",
+			name:  "latest never satisfies (must re-resolve to newest)",
 			ref:   &Reference{Type: Latest},
 			entry: &LockEntry{Version: "v1.0.0"},
-			want:  true,
+			want:  false,
 		},
 		{
-			name:  "constraint always satisfies",
+			name:  "constraint satisfied by locked version",
 			ref:   &Reference{Type: Constraint, Version: "^1.0.0"},
 			entry: &LockEntry{Version: "v1.2.3"},
 			want:  true,
+		},
+		{
+			name:  "constraint not satisfied by locked version",
+			ref:   &Reference{Type: Constraint, Version: "^2.0.0"},
+			entry: &LockEntry{Version: "v1.2.3"},
+			want:  false,
+		},
+		{
+			name:  "constraint with invalid locked version does not satisfy",
+			ref:   &Reference{Type: Constraint, Version: "^1.0.0"},
+			entry: &LockEntry{Version: "not-a-version"},
+			want:  false,
 		},
 		{
 			name:  "exact matches",
