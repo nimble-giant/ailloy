@@ -241,6 +241,22 @@ Requires a TTY. See the [TUI section in the foundry guide](docs/foundry.md#inter
 </details>
 
 <details>
+<summary><strong><code>cache clear</code></strong> — clear the on-disk cache</summary>
+
+`ailloy cache clear` (also: `ailloy clear cache`) wipes the global caches
+under `~/.ailloy/cache/` — both mold artifacts and foundry indexes.
+Prints a preview (counts + size) and prompts for confirmation. In a
+non-interactive shell it refuses to run without `--yes`. See
+[`docs/cache.md`](docs/cache.md) for the full guide.
+
+- `--molds` — clear only the mold artifact cache (preserve `indexes/`)
+- `--indexes` — clear only the foundry index cache
+- `--dry-run` — preview what would be cleared without deleting
+- `-y/--yes` — skip the confirmation prompt
+
+</details>
+
+<details>
 <summary><strong><code>uninstall</code></strong> — remove a casted mold</summary>
 
 `ailloy uninstall <source>` removes the files a previous `cast` wrote.
