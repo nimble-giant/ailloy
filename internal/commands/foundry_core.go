@@ -43,7 +43,7 @@ func splitFluxKeysForMold(ctx context.Context, source string, setOverrides []str
 	if info, err := os.Stat(source); err == nil && info.IsDir() {
 		// Local dir: use ore-aware loader so ore.<ns>.* keys are recognized.
 		moldFS := os.DirFS(source)
-		mergedSchema, _, _, lerr := mold.LoadMoldFluxWithOres(moldFS, buildOreSearchPaths(moldFS, false))
+		mergedSchema, _, _, lerr := mold.LoadMoldFluxWithOres(moldFS, mold.BuildDefaultOreSearchPaths(moldFS, false))
 		if lerr != nil {
 			log.Printf("warning: load merged flux schema for %s: %v", source, lerr)
 		}

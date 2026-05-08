@@ -550,42 +550,13 @@ func artifactToLock(e foundry.ArtifactEntry) foundry.LockEntry {
 	}
 }
 
-// buildOreSearchPaths returns the ore-search-path order for cast-time merge:
-// mold-local → project (./.ailloy/ores) → global (~/.ailloy/ores). Lower
-// priority paths only contribute ore namespaces not already seen, mirroring
-// how flux defaults are layered.
-func buildOreSearchPaths(moldFS fs.FS, global bool) []mold.OreSearchPath {
-	paths := []mold.OreSearchPath{
-		{Name: "mold-local", FS: moldFS, Root: "ores"},
-	}
-	// Project scope is meaningful even on a global cast — the user may have
-	// project-installed ores they want to layer in. Global cast users who
-	// want strict isolation can run from a clean cwd.
-	if cwd, err := os.Getwd(); err == nil {
-		paths = append(paths, mold.OreSearchPath{
-			Name: "project",
-			FS:   os.DirFS(cwd),
-			Root: ".ailloy/ores",
-		})
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		paths = append(paths, mold.OreSearchPath{
-			Name: "global",
-			FS:   os.DirFS(home),
-			Root: ".ailloy/ores",
-		})
-	}
-	_ = global // currently only affects install-dir, not search-path order
-	return paths
-}
-
 // readerSearchPaths is a thin convenience wrapper for callers that have a
 // MoldReader in hand (cast.go / cast_core.go). It threads the reader's FS
-// into buildOreSearchPaths so mold-local ores under <mold>/ores/ are picked
-// up first.
+// into mold.BuildDefaultOreSearchPaths so mold-local ores under <mold>/ores/
+// are picked up first.
 func readerSearchPaths(reader *blanks.MoldReader, global bool) []mold.OreSearchPath {
 	if reader == nil {
-		return buildOreSearchPaths(nil, global)
+		return mold.BuildDefaultOreSearchPaths(nil, global)
 	}
-	return buildOreSearchPaths(reader.FS(), global)
+	return mold.BuildDefaultOreSearchPaths(reader.FS(), global)
 }

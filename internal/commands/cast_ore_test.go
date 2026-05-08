@@ -205,7 +205,7 @@ func TestCast_AutoInstallsOreFromMoldYAML(t *testing.T) {
 	}
 
 	moldFS := os.DirFS(".")
-	paths := buildOreSearchPaths(moldFS, false)
+	paths := mold.BuildDefaultOreSearchPaths(moldFS, false)
 
 	schema, defaults, _, err := mold.LoadMoldFluxWithOres(moldFS, paths)
 	if err != nil {
