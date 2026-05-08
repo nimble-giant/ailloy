@@ -1,6 +1,8 @@
 package foundries
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -10,6 +12,7 @@ import (
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/fluxpicker"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/registered"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
+	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
 func TestApp_FOpensPickerWhenMoldHighlighted(t *testing.T) {
@@ -100,6 +103,90 @@ func TestPressingFOnFoundriesTabOpensFoundryPicker(t *testing.T) {
 	}
 	if app.picker.FoundryName() != "alpha" {
 		t.Errorf("FoundryName = %q, want alpha", app.picker.FoundryName())
+	}
+}
+
+// TestLoadFoundrySchemas_IncludesOreNamespacedKeys verifies the foundry-mode
+// picker's per-mold schema population picks up ore-namespaced flux keys for
+// local-path mold sources, mirroring what the cast pipeline applies. Without
+// this, the picker would silently omit ore.<ns>.* rows even though the
+// underlying cast accepts them.
+func TestLoadFoundrySchemas_IncludesOreNamespacedKeys(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("AILLOY_INDEX_CACHE_DIR", tmp)
+
+	// Build a local mold "delta" with an ore "status" under <mold>/ores/.
+	deltaPath := filepath.Join(tmp, "delta")
+	if err := os.MkdirAll(filepath.Join(deltaPath, "ores", "status"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(deltaPath, "mold.yaml"), []byte(`apiVersion: v1
+kind: mold
+name: delta
+version: 0.0.1
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(deltaPath, "ores", "status", "ore.yaml"), []byte(`apiVersion: v1
+kind: ore
+name: status
+version: 1.0.0
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(deltaPath, "ores", "status", "flux.schema.yaml"), []byte(`- name: value
+  type: string
+  default: pending
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	parentURL := "https://github.com/example/parent"
+	entry := &index.FoundryEntry{URL: parentURL, Type: "git"}
+	cacheDir := index.CachedIndexDir(tmp, entry)
+	if err := os.MkdirAll(cacheDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	yaml := []byte(`apiVersion: v1
+kind: foundry-index
+name: parent
+molds:
+  - name: delta
+    source: ` + deltaPath + `
+`)
+	if err := os.WriteFile(filepath.Join(cacheDir, "foundry.yaml"), yaml, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &index.Config{
+		Foundries: []index.FoundryEntry{{Name: "parent", URL: parentURL, Type: "git", Status: "ok"}},
+	}
+
+	schemas, refs, err := loadFoundrySchemas(cfg, "parent")
+	if err != nil {
+		t.Fatalf("loadFoundrySchemas: %v", err)
+	}
+	if refs["delta"] != deltaPath {
+		t.Errorf("refs[delta] = %q, want %q", refs["delta"], deltaPath)
+	}
+	deltaSchema, ok := schemas["delta"]
+	if !ok {
+		keys := make([]string, 0, len(schemas))
+		for k := range schemas {
+			keys = append(keys, k)
+		}
+		t.Fatalf("schemas missing delta entry; got keys=%v", keys)
+	}
+	var got []mold.FluxVar = deltaSchema // explicit type assertion as a guard
+	found := false
+	for _, fv := range got {
+		if fv.Name == "ore.status.value" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("delta schema missing ore.status.value; got %+v", got)
 	}
 }
 

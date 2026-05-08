@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -340,16 +342,67 @@ func loadFoundrySchemas(cfg *index.Config, foundryName string) (
 	schemas := map[string][]mold.FluxVar{}
 	refs := map[string]string{}
 	for _, mm := range allMolds {
-		schema, _, ferr := mold.FetchSchemaFromSource(context.Background(), mm.Entry.Source)
-		if ferr != nil {
-			// Skip molds whose schema can't be fetched; the picker still
-			// works for the rest. Better than aborting the whole flow.
+		schema := loadMoldSchemaForPicker(mm.Entry.Source)
+		if len(schema) == 0 {
 			continue
 		}
 		schemas[mm.Entry.Name] = schema
 		refs[mm.Entry.Name] = mm.Entry.Source
 	}
 	return schemas, refs, nil
+}
+
+// loadMoldSchemaForPicker returns the deduplicated flux schema for a single
+// mold source. For local-path sources it mirrors the cast pipeline by using
+// LoadMoldFluxWithOres with the canonical search paths (so ore-namespaced
+// keys appear) and merging in any inline mold.yaml flux entries. For remote
+// refs it falls back to the plain schema fetch.
+//
+// Entries are deduped by Name (mold-local definitions win over inline ones)
+// because fluxpicker.AggregateSchemas treats every per-mold entry as a
+// distinct declaration when computing conflicts; duplicates within a single
+// mold's slice would falsely double-count and could trigger spurious
+// conflict markers.
+func loadMoldSchemaForPicker(source string) []mold.FluxVar {
+	if info, err := os.Stat(source); err == nil && info.IsDir() {
+		moldFS := os.DirFS(source)
+		var collected []mold.FluxVar
+		if merged, _, _, lerr := mold.LoadMoldFluxWithOres(moldFS, mold.BuildDefaultOreSearchPaths(moldFS, false)); lerr == nil {
+			collected = merged
+		}
+		// Inline mold.yaml flux declarations are not picked up by
+		// LoadMoldFluxWithOres; merge them in so molds that declare schema
+		// inline still surface their keys in the picker.
+		if mm, mlerr := mold.LoadMold(filepath.Join(source, "mold.yaml")); mlerr == nil && mm != nil {
+			collected = append(collected, mm.Flux...)
+		}
+		return dedupeFluxVarsByName(collected)
+	}
+	schema, _, ferr := mold.FetchSchemaFromSource(context.Background(), source)
+	if ferr != nil {
+		// Skip molds whose schema can't be fetched; the picker still works
+		// for the rest. Better than aborting the whole flow.
+		return nil
+	}
+	return schema
+}
+
+// dedupeFluxVarsByName returns a slice with duplicate Names removed,
+// preserving first-seen order.
+func dedupeFluxVarsByName(in []mold.FluxVar) []mold.FluxVar {
+	if len(in) == 0 {
+		return in
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := make([]mold.FluxVar, 0, len(in))
+	for _, v := range in {
+		if _, ok := seen[v.Name]; ok {
+			continue
+		}
+		seen[v.Name] = struct{}{}
+		out = append(out, v)
+	}
+	return out
 }
 
 func defaultGitRunner() index.GitRunner {
