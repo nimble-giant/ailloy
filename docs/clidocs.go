@@ -64,6 +64,7 @@ var summaries = map[string]string{
 	"agents-md":          "Tool-agnostic agent instructions in molds",
 	"cast-claude-plugin": "Cast a mold as a Claude Code plugin",
 	"helm-users":         "Concept map for Helm users coming to Ailloy",
+	"cache":              "Clear ailloy's on-disk cache (mold artifacts and foundry indexes)",
 }
 
 // CommandTopic maps a cobra command name to the topic slug rendered when
@@ -80,6 +81,7 @@ var CommandTopic = map[string]string{
 	"assay":   "assay",
 	"plugin":  "plugin",
 	"ingot":   "ingots",
+	"cache":   "cache",
 }
 
 // FS exposes the embedded filesystem for advanced consumers (e.g. tests).

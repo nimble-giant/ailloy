@@ -30,3 +30,4 @@ These guides teach you how to create, package, and share your own AI workflow pa
 - [Configuration Wizard](anneal.md) — Interactive wizard for flux variable configuration
 - [Validation](temper.md) — Lint and validate mold and ingot packages
 - [Plugins](plugin.md) — Generate plugins from molds (currently Claude Code)
+- [Cache Management](cache.md) — Clear cached molds and foundry indexes

@@ -61,7 +61,7 @@ func TestIntegration_CopyResolvedFiles(t *testing.T) {
 		t.Fatal("expected resolved files, got none")
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestIntegration_CopyResolvedFiles_WithVariableSubstitution(t *testing.T) {
 		}
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, processable, false)
+	err = copyResolvedFiles(reader, manifest, flux, processable, copyOpts{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestIntegration_ResolvedFilesMatchMold(t *testing.T) {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestCopyResolvedFiles_SkipsEmptyRenderedFiles(t *testing.T) {
 		{SrcPath: "commands/nonempty.md", DestPath: filepath.Join(tmpDir, ".claude/commands/nonempty.md"), Process: true},
 	}
 
-	err := copyResolvedFiles(reader, nil, map[string]any{}, resolved, false)
+	err := copyResolvedFiles(reader, nil, map[string]any{}, resolved, copyOpts{})
 	if err != nil {
 		t.Fatalf("copyResolvedFiles failed: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestCopyResolvedFiles_RemovesEmptyMultiDestDirs(t *testing.T) {
 		}
 	}
 
-	if err := copyResolvedFiles(reader, nil, map[string]any{}, resolved, false); err != nil {
+	if err := copyResolvedFiles(reader, nil, map[string]any{}, resolved, copyOpts{}); err != nil {
 		t.Fatalf("copyResolvedFiles failed: %v", err)
 	}
 
@@ -423,7 +423,7 @@ func TestIntegration_FilePermissions(t *testing.T) {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -534,7 +534,7 @@ func TestIntegration_WorkflowsNotProcessed(t *testing.T) {
 		t.Fatalf("failed to resolve files: %v", err)
 	}
 
-	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -602,7 +602,7 @@ func TestIntegration_MergeStrategy_JSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{}); err != nil {
 		t.Fatalf("copy: %v", err)
 	}
 
@@ -664,7 +664,7 @@ func TestIntegration_MergeStrategy_TwoMolds(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolve: %v", err)
 		}
-		if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+		if err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{}); err != nil {
 			t.Fatalf("copy: %v", err)
 		}
 	}
@@ -719,7 +719,7 @@ func TestIntegration_MergeStrategy_ForceReplaceOnParseError(t *testing.T) {
 	}
 
 	// Without force-replace: should fail with ParseError-derived message.
-	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{})
 	if err == nil {
 		t.Fatal("expected error without force-replace, got nil")
 	}
@@ -728,7 +728,7 @@ func TestIntegration_MergeStrategy_ForceReplaceOnParseError(t *testing.T) {
 	}
 
 	// With force-replace: should clobber the unparseable file.
-	if err := copyResolvedFiles(reader, manifest, flux, resolved, true); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{ForceReplaceOnParseError: true}); err != nil {
 		t.Fatalf("force-replace should succeed; got: %v", err)
 	}
 	got, _ := os.ReadFile("opencode.json")
@@ -815,7 +815,7 @@ func TestIntegration_MergeStrategy_MultiDestList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -869,7 +869,7 @@ func TestIntegration_MergeStrategy_NonMergeableExt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{}); err != nil {
 		t.Fatalf("non-mergeable ext should silently replace, not error: %v", err)
 	}
 
@@ -912,7 +912,7 @@ func TestIntegration_MergeStrategy_CrossFormatMisconfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = copyResolvedFiles(reader, manifest, flux, resolved, false)
+	err = copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{})
 	if err == nil {
 		t.Fatal("expected error for YAML content into .json dest, got nil")
 	}
@@ -951,7 +951,7 @@ func TestIntegration_MergeStrategy_ErrorMessageActionable(t *testing.T) {
 	flux, _ := reader.LoadFluxDefaults()
 	resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
 
-	err := copyResolvedFiles(reader, manifest, flux, resolved, false)
+	err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{})
 	if err == nil {
 		t.Fatal("expected error for unparseable existing file, got nil")
 	}
@@ -987,7 +987,7 @@ func TestIntegration_MergeStrategy_NestedDestPath(t *testing.T) {
 	flux, _ := reader.LoadFluxDefaults()
 	resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
 
-	if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+	if err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat("nested/sub/dir/config.json"); err != nil {
@@ -1043,7 +1043,7 @@ func TestIntegration_AppendStrategy_TwoMoldsContributeToAGENTS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolve: %v", err)
 		}
-		if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+		if err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{}); err != nil {
 			t.Fatalf("copy: %v", err)
 		}
 	}
@@ -1093,7 +1093,7 @@ func TestIntegration_AppendStrategy_RecastIsIdempotent(t *testing.T) {
 		manifest, _ := reader.LoadManifest()
 		flux, _ := reader.LoadFluxDefaults()
 		resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
-		if err := copyResolvedFiles(reader, manifest, flux, resolved, false); err != nil {
+		if err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1131,7 +1131,7 @@ func TestIntegration_AppendStrategy_NonMarkdownErrors(t *testing.T) {
 	manifest, _ := reader.LoadManifest()
 	flux, _ := reader.LoadFluxDefaults()
 	resolved, _ := mold.ResolveFiles(flux["output"], reader.FS())
-	err := copyResolvedFiles(reader, manifest, flux, resolved, false)
+	err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{})
 	if err == nil {
 		t.Fatal("expected error for append on non-markdown file, got nil")
 	}
