@@ -201,7 +201,12 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 			// Upsert the manifest entry with provenance, then backfill Files
 			// + FileHashes. Mirrors what cast.go does via recordInstalled +
 			// RecordInstalledFiles.
-			if err := recordInstalled(remoteResult, opts.Global, silentLogger); err != nil {
+			record := &foundry.CastOptionsRecord{
+				WithWorkflows: opts.WithWorkflows,
+				ValueFiles:    opts.ValueFiles,
+				SetOverrides:  opts.SetOverrides,
+			}
+			if err := recordInstalled(remoteResult, opts.Global, record, silentLogger); err != nil {
 				silentLogger.Printf("warning: failed to update installed manifest: %v", err)
 			} else {
 				installed := make([]foundry.InstalledFile, 0, len(filesToCast))
