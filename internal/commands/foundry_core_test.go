@@ -231,6 +231,83 @@ molds:
 	}
 }
 
+// TestInstallFoundryCoreFluxApplyResultsIncludesOres verifies that --set keys
+// referring to ore-namespaced fields (e.g. ore.status.value) are correctly
+// reported as "applied" for molds that declare an ore in their <mold>/ores/
+// directory. Without this, the summary would mis-report ore keys as skipped
+// even though the cast pipeline applies them.
+func TestInstallFoundryCoreFluxApplyResultsIncludesOres(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("AILLOY_INDEX_CACHE_DIR", tmp)
+
+	// Build a mold "delta" with an ore "status" under <mold>/ores/status.
+	// The ore declares a flux entry "value" which becomes "ore.status.value"
+	// after namespace prefixing.
+	deltaPath := filepath.Join(tmp, "delta")
+	if err := os.MkdirAll(filepath.Join(deltaPath, "ores", "status"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(deltaPath, "mold.yaml"), []byte(`apiVersion: v1
+kind: mold
+name: delta
+version: 0.0.1
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(deltaPath, "ores", "status", "ore.yaml"), []byte(`apiVersion: v1
+kind: ore
+name: status
+version: 1.0.0
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// flux.schema.yaml is a top-level YAML list of FluxVar entries (no `flux:` wrapper).
+	if err := os.WriteFile(filepath.Join(deltaPath, "ores", "status", "flux.schema.yaml"), []byte(`- name: value
+  type: string
+  default: pending
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	parentURL := "https://github.com/example/parent"
+	entry := &index.FoundryEntry{URL: parentURL, Type: "git"}
+	dir := index.CachedIndexDir(tmp, entry)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	yaml := []byte(`apiVersion: v1
+kind: foundry-index
+name: parent
+molds:
+  - name: delta
+    source: ` + deltaPath + `
+`)
+	if err := os.WriteFile(filepath.Join(dir, "foundry.yaml"), yaml, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &index.Config{
+		Foundries: []index.FoundryEntry{{Name: "parent", URL: parentURL, Type: "git", Status: "ok"}},
+	}
+
+	reports, _, err := InstallFoundryCore(context.Background(), cfg, "parent", InstallFoundryOptions{
+		DryRun:       true,
+		Shallow:      true,
+		SetOverrides: []string{"ore.status.value=done"},
+	})
+	if err != nil {
+		t.Fatalf("InstallFoundryCore: %v", err)
+	}
+	if len(reports) != 1 {
+		t.Fatalf("got %d reports, want 1", len(reports))
+	}
+	if got := reports[0].FluxApplied; !reflect.DeepEqual(got, []string{"ore.status.value"}) {
+		t.Errorf("delta.FluxApplied = %v, want [ore.status.value]", got)
+	}
+	if got := reports[0].FluxSkipped; len(got) != 0 {
+		t.Errorf("delta.FluxSkipped = %v, want empty", got)
+	}
+}
+
 func TestFoundryCastCommandShape(t *testing.T) {
 	if foundryCastCmd.Use == "" || !strings.HasPrefix(foundryCastCmd.Use, "cast") {
 		t.Fatalf("foundryCastCmd.Use = %q, want it to start with %q", foundryCastCmd.Use, "cast")

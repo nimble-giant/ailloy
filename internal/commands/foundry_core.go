@@ -18,11 +18,16 @@ import (
 
 // splitFluxKeysForMold partitions user-supplied --set keys into those declared
 // by the mold's flux schema and those that aren't. Returns nil/nil when there
-// are no overrides. The mold's schema is loaded from flux.schema.yaml at
-// source, and (for local-path sources) merged with any inline `flux:` block
-// declared in mold.yaml. Remote refs only see the flux.schema.yaml entries —
-// merging both for remote sources would require pkg/mold changes and is filed
-// as a follow-up.
+// are no overrides.
+//
+// For local-path sources, declared keys come from:
+//   - flux.schema.yaml (via LoadMoldFluxWithOres),
+//   - inline `flux:` block in mold.yaml,
+//   - ore overlays under <mold>/ores/, .ailloy/ores/, ~/.ailloy/ores/
+//     (prefixed as ore.<namespace>.*).
+//
+// For remote refs, only flux.schema.yaml is read — ore-awareness for remote
+// sources would require pkg/mold changes and is filed as a follow-up.
 func splitFluxKeysForMold(ctx context.Context, source string, setOverrides []string) (applied, skipped []string) {
 	if len(setOverrides) == 0 {
 		return nil, nil
@@ -33,29 +38,37 @@ func splitFluxKeysForMold(ctx context.Context, source string, setOverrides []str
 			keys = append(keys, kv[:eq])
 		}
 	}
-	// Schema fetch tolerates local dirs and remote refs. A real fetch error
-	// is distinct from "no schema declared" — log the former so operators
-	// can diagnose, but fall through with an empty schema so any inline
-	// mold.yaml flux still gets a chance to declare keys.
-	schema, _, err := mold.FetchSchemaFromSource(ctx, source)
-	if err != nil {
-		log.Printf("warning: fetch flux schema for %s: %v", source, err)
-		schema = nil
-	}
 	declared := map[string]struct{}{}
-	for _, v := range schema {
-		declared[v.Name] = struct{}{}
-	}
-	// Inline flux declarations in mold.yaml — only readable for local-path
-	// sources. Remote refs go through FetchSchemaFromSource which would need
-	// pkg/mold changes to merge inline schema at fetch time.
-	if info, serr := os.Stat(source); serr == nil && info.IsDir() {
-		if m, lerr := mold.LoadMold(filepath.Join(source, "mold.yaml")); lerr == nil && m != nil {
+
+	if info, err := os.Stat(source); err == nil && info.IsDir() {
+		// Local dir: use ore-aware loader so ore.<ns>.* keys are recognized.
+		moldFS := os.DirFS(source)
+		mergedSchema, _, _, lerr := mold.LoadMoldFluxWithOres(moldFS, buildOreSearchPaths(moldFS, false))
+		if lerr != nil {
+			log.Printf("warning: load merged flux schema for %s: %v", source, lerr)
+		}
+		for _, v := range mergedSchema {
+			declared[v.Name] = struct{}{}
+		}
+		// LoadMoldFluxWithOres does not pick up inline mold.yaml flux; merge
+		// it explicitly so molds that declare schema inline still report
+		// their keys as applied.
+		if m, mlerr := mold.LoadMold(filepath.Join(source, "mold.yaml")); mlerr == nil && m != nil {
 			for _, v := range m.Flux {
 				declared[v.Name] = struct{}{}
 			}
 		}
+	} else {
+		// Remote ref or unreadable path: fall back to plain schema fetch.
+		schema, _, ferr := mold.FetchSchemaFromSource(ctx, source)
+		if ferr != nil {
+			log.Printf("warning: fetch flux schema for %s: %v", source, ferr)
+		}
+		for _, v := range schema {
+			declared[v.Name] = struct{}{}
+		}
 	}
+
 	for _, k := range keys {
 		if _, ok := declared[k]; ok {
 			applied = append(applied, k)
