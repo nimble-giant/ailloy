@@ -46,6 +46,7 @@ Key CLI commands for working with molds:
 - **recast**: Re-resolve installed molds to newer versions; refreshes `.ailloy/installed.yaml` and (if present) `ailloy.lock`
 - **quench**: Opt in to `ailloy.lock` by pinning everything in `.ailloy/installed.yaml`; supports `--verify` (CI drift check) and `--global`
 - **evolve** (`reinstall`): Self-upgrade the ailloy CLI binary in place from the latest GitHub release; supports `--check`, `--version`, `--force`, and `--no-animate`. Refuses on Homebrew installs (use `brew upgrade nimble-giant/tap/ailloy`)
+- **cache clear**: Clear ailloy's on-disk cache (mold artifacts and foundry indexes under `~/.ailloy/cache/`). Supports `--molds`, `--indexes`, `--dry-run`, `--yes`. Bidirectional: `clear cache` also works.
 
 ## Usage
 
