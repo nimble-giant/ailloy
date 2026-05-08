@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.29](https://github.com/nimble-giant/ailloy/compare/v0.6.28...v0.6.29) (2026-05-08)
+
+
+### Features
+
+* **cli:** ore packaging and delivery (closes [#178](https://github.com/nimble-giant/ailloy/issues/178)) ([6406865](https://github.com/nimble-giant/ailloy/commit/64068653ecbc37f402a33ac7db77388dcab11051))
+* foundry-wide flux customization (cast rename + --set/-f flags + TUI picker) ([82eddae](https://github.com/nimble-giant/ailloy/commit/82eddae1a1037952503770d228e63e722f09386c))
+* **recast:** re-render mold content and persist cast options ([c456266](https://github.com/nimble-giant/ailloy/commit/c456266063d567d40a28819391bc432e5daef191))
+
+
+### Bug Fixes
+
+* backfill Files for subpath molds so uninstall works ([f82ae33](https://github.com/nimble-giant/ailloy/commit/f82ae334cbeea725fac2fe02b3f1a6659a478a98))
+* stop concurrent CastMolds racing on global silencing state ([85d5cb9](https://github.com/nimble-giant/ailloy/commit/85d5cb9abd77b8c6afdc92226dfb1db4383c2e0b))
+
 ## [0.6.28](https://github.com/nimble-giant/ailloy/compare/v0.6.27...v0.6.28) (2026-05-07)
 
 
