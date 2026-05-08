@@ -40,6 +40,20 @@ type Model struct {
 	width     int
 	height    int
 	fetching  bool
+	// Foundry-mode fields. When foundryName != "" the picker is scoped to a
+	// whole foundry. `perMoldSchemas` carries the source-of-truth schemas
+	// for aggregation; `perMoldSourceRefs` carries each mold's source ref
+	// (used at save time to derive the per-mold flux file slug);
+	// `schemaConflicts` is populated by AggregateSchemas. `moldOverrides`
+	// stores conflict-expanded per-mold values; key shape is
+	// "<moldName>\x00<dottedFluxKey>" — the NUL separator avoids collisions
+	// with mold names that contain colons or dots. (moldOverrides is
+	// populated in Task 7 — declared here so Close() can reset it.)
+	foundryName       string
+	perMoldSchemas    map[string][]mold.FluxVar
+	perMoldSourceRefs map[string]string
+	schemaConflicts   map[string][]string
+	moldOverrides     map[string]any
 }
 
 // New returns a closed picker model.
@@ -88,6 +102,11 @@ func (m Model) Close() Model {
 	m.focus = focusFilter
 	m.editor = editorState{}
 	m.saving = saveState{}
+	m.foundryName = ""
+	m.perMoldSchemas = nil
+	m.perMoldSourceRefs = nil
+	m.schemaConflicts = nil
+	m.moldOverrides = nil
 	return m
 }
 

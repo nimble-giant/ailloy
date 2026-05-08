@@ -80,17 +80,19 @@ var foundryUpdateCmd = &cobra.Command{
 }
 
 var (
-	foundryInstallGlobal        bool
-	foundryInstallWithWorkflows bool
-	foundryInstallDryRun        bool
-	foundryInstallForce         bool
-	foundryInstallClaudePlugin  bool
-	foundryInstallShallow       bool
+	foundryCastGlobal        bool
+	foundryCastWithWorkflows bool
+	foundryCastDryRun        bool
+	foundryCastForce         bool
+	foundryCastClaudePlugin  bool
+	foundryCastShallow       bool
+	foundryCastValueFiles    []string
+	foundryCastSetOverrides  []string
 )
 
-var foundryInstallCmd = &cobra.Command{
-	Use:     "install <name|url>",
-	Aliases: []string{"cast-all"},
+var foundryCastCmd = &cobra.Command{
+	Use:     "cast <name|url>",
+	Aliases: []string{"install"},
 	Short:   "Cast every mold listed by a foundry",
 	Long: `Cast every mold listed by the named foundry.
 
@@ -98,7 +100,7 @@ The foundry is looked up by name or URL across the effective foundries
 (verified default + registered). Molds already present in the target
 lockfile are skipped unless --force is given.`,
 	Args: cobra.ExactArgs(1),
-	RunE: runFoundryInstall,
+	RunE: runFoundryCast,
 }
 
 func init() {
@@ -109,17 +111,21 @@ func init() {
 	foundryCmd.AddCommand(foundryListCmd)
 	foundryCmd.AddCommand(foundryRemoveCmd)
 	foundryCmd.AddCommand(foundryUpdateCmd)
-	foundryCmd.AddCommand(foundryInstallCmd)
+	foundryCmd.AddCommand(foundryCastCmd)
 
 	foundrySearchCmd.Flags().BoolVar(&searchIndexOnly, "index-only", false, "only search registered foundry indexes")
 	foundrySearchCmd.Flags().BoolVar(&searchGitHubOnly, "github-only", false, "only search GitHub Topics")
 
-	foundryInstallCmd.Flags().BoolVarP(&foundryInstallGlobal, "global", "g", false, "install each mold under ~/ instead of the current project")
-	foundryInstallCmd.Flags().BoolVar(&foundryInstallWithWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks")
-	foundryInstallCmd.Flags().BoolVar(&foundryInstallDryRun, "dry-run", false, "list what would be installed without casting")
-	foundryInstallCmd.Flags().BoolVar(&foundryInstallForce, "force", false, "re-cast molds that are already installed")
-	foundryInstallCmd.Flags().BoolVar(&foundryInstallClaudePlugin, "claude-plugin", false, "package each mold as a Claude Code plugin under .claude/plugins/<slug>/")
-	foundryInstallCmd.Flags().BoolVar(&foundryInstallShallow, "shallow", false, "install only the named foundry's direct molds (skip nested foundries)")
+	foundryCastCmd.Flags().BoolVarP(&foundryCastGlobal, "global", "g", false, "install each mold under ~/ instead of the current project")
+	foundryCastCmd.Flags().BoolVar(&foundryCastWithWorkflows, "with-workflows", false, "include GitHub Actions workflow blanks")
+	foundryCastCmd.Flags().BoolVar(&foundryCastDryRun, "dry-run", false, "list what would be installed without casting")
+	foundryCastCmd.Flags().BoolVar(&foundryCastForce, "force", false, "re-cast molds that are already installed")
+	foundryCastCmd.Flags().BoolVar(&foundryCastClaudePlugin, "claude-plugin", false, "package each mold as a Claude Code plugin under .claude/plugins/<slug>/")
+	foundryCastCmd.Flags().BoolVar(&foundryCastShallow, "shallow", false, "install only the named foundry's direct molds (skip nested foundries)")
+	foundryCastCmd.Flags().StringArrayVar(&foundryCastSetOverrides, "set", nil,
+		"override flux variable for every mold (format: key=value, can be repeated)")
+	foundryCastCmd.Flags().StringArrayVarP(&foundryCastValueFiles, "values", "f", nil,
+		"flux value files applied to every mold (can be repeated, later files override earlier)")
 }
 
 func runFoundrySearch(_ *cobra.Command, args []string) error {
@@ -394,7 +400,7 @@ func nameFromFoundryURL(url string) string {
 	return "foundry"
 }
 
-func runFoundryInstall(_ *cobra.Command, args []string) error {
+func runFoundryCast(_ *cobra.Command, args []string) error {
 	nameOrURL := args[0]
 
 	cfg, err := index.LoadConfig()
@@ -406,12 +412,14 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 	fmt.Println()
 
 	reports, warnings, err := InstallFoundryCore(context.Background(), cfg, nameOrURL, InstallFoundryOptions{
-		Global:        foundryInstallGlobal,
-		WithWorkflows: foundryInstallWithWorkflows,
-		DryRun:        foundryInstallDryRun,
-		Force:         foundryInstallForce,
-		ClaudePlugin:  foundryInstallClaudePlugin,
-		Shallow:       foundryInstallShallow,
+		Global:        foundryCastGlobal,
+		WithWorkflows: foundryCastWithWorkflows,
+		DryRun:        foundryCastDryRun,
+		Force:         foundryCastForce,
+		ClaudePlugin:  foundryCastClaudePlugin,
+		Shallow:       foundryCastShallow,
+		ValueFiles:    foundryCastValueFiles,
+		SetOverrides:  foundryCastSetOverrides,
 	})
 	if err != nil {
 		return err
@@ -451,7 +459,7 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 				extra = " " + styles.SubtleStyle.Render(r.Version)
 			}
 			fmt.Println(" " + styles.InfoStyle.Render("skipped (already installed)") + extra)
-		case foundryInstallDryRun:
+		case foundryCastDryRun:
 			fmt.Println(" " + styles.InfoStyle.Render("would install"))
 		default:
 			installed++
@@ -459,7 +467,7 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	if len(reports) == 0 && foundryInstallShallow {
+	if len(reports) == 0 && foundryCastShallow {
 		fmt.Println(styles.InfoStyle.Render("Nothing to install — this foundry only aggregates nested foundries."))
 		fmt.Println(styles.SubtleStyle.Render("Drop --shallow to install transitively."))
 		return nil
@@ -467,15 +475,34 @@ func runFoundryInstall(_ *cobra.Command, args []string) error {
 
 	fmt.Println()
 	summary := fmt.Sprintf("installed %d · skipped %d · failed %d", installed, skipped, failed)
-	if foundryInstallDryRun {
+	if foundryCastDryRun {
 		summary = fmt.Sprintf("would install %d · skipped %d · failed %d", len(reports)-skipped-failed, skipped, failed)
 	}
 	fmt.Println(styles.SuccessStyle.Render(summary))
+
+	// Per-key apply/skip summary for --set overrides.
+	keys := setOverrideKeys(foundryCastSetOverrides)
+	if fluxSummary := formatFoundryFluxSummary(reports, keys); fluxSummary != "" {
+		fmt.Println()
+		fmt.Print(fluxSummary)
+	}
 
 	if failed > 0 {
 		return fmt.Errorf("%d mold(s) failed to install", failed)
 	}
 	return nil
+}
+
+// setOverrideKeys returns the key portion of each "key=value" --set entry,
+// preserving order, so the foundry summary can iterate keys deterministically.
+func setOverrideKeys(setOverrides []string) []string {
+	keys := make([]string, 0, len(setOverrides))
+	for _, kv := range setOverrides {
+		if eq := strings.IndexByte(kv, '='); eq != -1 {
+			keys = append(keys, kv[:eq])
+		}
+	}
+	return keys
 }
 
 // renderResolutionWarnings prints non-fatal foundry resolution warnings —

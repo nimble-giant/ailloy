@@ -3,6 +3,10 @@ package foundries
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -107,11 +111,15 @@ func New(deps Deps) App {
 		_, err := deps.UpdateFoundries(cfg)
 		return err
 	}
-	regInstall := func(cfg *index.Config, nameOrURL string) ([]registered.InstallReport, error) {
+	regInstall := func(
+		cfg *index.Config,
+		nameOrURL string,
+		perMoldOverrides map[string][]string,
+	) ([]registered.InstallReport, error) {
 		if deps.InstallFoundry == nil {
 			return nil, errMissingDep
 		}
-		reports, err := deps.InstallFoundry(context.Background(), cfg, nameOrURL, InstallFoundryOptions{})
+		reports, err := deps.InstallFoundry(context.Background(), cfg, nameOrURL, InstallFoundryOptions{}, perMoldOverrides)
 		out := make([]registered.InstallReport, 0, len(reports))
 		for _, r := range reports {
 			out = append(out, registered.InstallReport{
@@ -147,6 +155,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Picker is sized here; tabs receive WindowSizeMsg via the broadcast
 		// loop below.
 		a.picker, _ = a.picker.Update(m)
+	case fluxpicker.FoundrySchemasFetchedMsg:
+		a.picker = a.picker.WithFoundrySchemas(m.FoundryName, m.Schemas, m.SourceRefs)
+		return a, nil
 	case fluxpicker.SchemaFetchedMsg:
 		var cmd tea.Cmd
 		a.picker, cmd = a.picker.Update(m)
@@ -180,6 +191,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.active = (a.active + tabCount - 1) % tabCount
 			return a, nil
 		case "f":
+			if a.active == TabFoundries {
+				name, scope, ok := a.registered.CurrentFoundry()
+				if !ok {
+					return a, nil
+				}
+				a.picker = a.picker.OpenForFoundry(name, scope, nil, nil).SetFetching(true)
+				return a, fetchFoundrySchemasCmd(a.cfg, name)
+			}
 			ref, scope, ok := a.currentMold()
 			if !ok {
 				return a, nil
@@ -271,6 +290,125 @@ func fetchSchemaCmd(ref string) tea.Cmd {
 			Defaults: defaults,
 			Err:      err,
 		}
+	}
+}
+
+// fetchFoundrySchemasCmd resolves a foundry by name, walks its molds, and
+// fetches each one's flux schema. The result is delivered as a
+// FoundrySchemasFetchedMsg for the picker to fold in.
+func fetchFoundrySchemasCmd(cfg *index.Config, foundryName string) tea.Cmd {
+	return func() tea.Msg {
+		schemas, refs, err := loadFoundrySchemas(cfg, foundryName)
+		return fluxpicker.FoundrySchemasFetchedMsg{
+			FoundryName: foundryName,
+			Schemas:     schemas,
+			SourceRefs:  refs,
+			Err:         err,
+		}
+	}
+}
+
+// loadFoundrySchemas resolves the foundry by name and fetches the schema for
+// each mold it exposes. Returned maps are keyed by mold name.
+func loadFoundrySchemas(cfg *index.Config, foundryName string) (
+	map[string][]mold.FluxVar,
+	map[string]string,
+	error,
+) {
+	cacheDir, err := index.IndexCacheDir()
+	if err != nil {
+		return nil, nil, err
+	}
+	var match *index.FoundryEntry
+	for _, e := range cfg.EffectiveFoundries() {
+		if strings.EqualFold(e.Name, foundryName) {
+			c := e
+			match = &c
+			break
+		}
+	}
+	if match == nil {
+		return nil, nil, fmt.Errorf("foundry %q not found", foundryName)
+	}
+	fetcher, err := index.NewFetcher(defaultGitRunner())
+	if err != nil {
+		return nil, nil, err
+	}
+	r := index.NewResolver(index.CacheFirstLookup(cacheDir, fetcher))
+	_, allMolds, err := r.Resolve(match.URL)
+	if err != nil {
+		return nil, nil, err
+	}
+	schemas := map[string][]mold.FluxVar{}
+	refs := map[string]string{}
+	for _, mm := range allMolds {
+		schema := loadMoldSchemaForPicker(mm.Entry.Source)
+		if len(schema) == 0 {
+			continue
+		}
+		schemas[mm.Entry.Name] = schema
+		refs[mm.Entry.Name] = mm.Entry.Source
+	}
+	return schemas, refs, nil
+}
+
+// loadMoldSchemaForPicker returns the deduplicated flux schema for a single
+// mold source. For local-path sources it mirrors the cast pipeline by using
+// LoadMoldFluxWithOres with the canonical search paths (so ore-namespaced
+// keys appear) and merging in any inline mold.yaml flux entries. For remote
+// refs it falls back to the plain schema fetch.
+//
+// Entries are deduped by Name (mold-local definitions win over inline ones)
+// because fluxpicker.AggregateSchemas treats every per-mold entry as a
+// distinct declaration when computing conflicts; duplicates within a single
+// mold's slice would falsely double-count and could trigger spurious
+// conflict markers.
+func loadMoldSchemaForPicker(source string) []mold.FluxVar {
+	if info, err := os.Stat(source); err == nil && info.IsDir() {
+		moldFS := os.DirFS(source)
+		var collected []mold.FluxVar
+		if merged, _, _, lerr := mold.LoadMoldFluxWithOres(moldFS, mold.BuildDefaultOreSearchPaths(moldFS, false)); lerr == nil {
+			collected = merged
+		}
+		// Inline mold.yaml flux declarations are not picked up by
+		// LoadMoldFluxWithOres; merge them in so molds that declare schema
+		// inline still surface their keys in the picker.
+		if mm, mlerr := mold.LoadMold(filepath.Join(source, "mold.yaml")); mlerr == nil && mm != nil {
+			collected = append(collected, mm.Flux...)
+		}
+		return dedupeFluxVarsByName(collected)
+	}
+	schema, _, ferr := mold.FetchSchemaFromSource(context.Background(), source)
+	if ferr != nil {
+		// Skip molds whose schema can't be fetched; the picker still works
+		// for the rest. Better than aborting the whole flow.
+		return nil
+	}
+	return schema
+}
+
+// dedupeFluxVarsByName returns a slice with duplicate Names removed,
+// preserving first-seen order.
+func dedupeFluxVarsByName(in []mold.FluxVar) []mold.FluxVar {
+	if len(in) == 0 {
+		return in
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := make([]mold.FluxVar, 0, len(in))
+	for _, v := range in {
+		if _, ok := seen[v.Name]; ok {
+			continue
+		}
+		seen[v.Name] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
+func defaultGitRunner() index.GitRunner {
+	return func(args ...string) ([]byte, error) {
+		cmd := exec.Command("git", args...) // #nosec G204 -- args constructed internally
+		return cmd.CombinedOutput()
 	}
 }
 
