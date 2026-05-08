@@ -47,10 +47,41 @@ type FluxVar struct {
 	Discover    *DiscoverSpec  `yaml:"discover,omitempty"` // Dynamic discovery specification
 }
 
-// Dependency declares a dependency on an ingot.
+// Dependency declares a dependency on an ingot or ore. Exactly one of Ingot
+// or Ore must be set per entry; this is enforced at temper time via
+// Dependency.Kind().
 type Dependency struct {
-	Ingot   string `yaml:"ingot"`
+	Ingot   string `yaml:"ingot,omitempty"`
+	Ore     string `yaml:"ore,omitempty"`
 	Version string `yaml:"version"`
+	As      string `yaml:"as,omitempty"` // ore-only namespace alias; ignored when Ingot is set
+}
+
+// Kind returns "ingot" or "ore" based on which field is set. It is an error
+// for both or neither to be set; callers should treat that as a configuration
+// problem to surface at temper or pre-cast time.
+func (d Dependency) Kind() (string, error) {
+	switch {
+	case d.Ingot != "" && d.Ore != "":
+		return "", fmt.Errorf("dependency entry has both 'ingot' and 'ore' set; pick one")
+	case d.Ingot != "":
+		return "ingot", nil
+	case d.Ore != "":
+		return "ore", nil
+	default:
+		return "", fmt.Errorf("dependency entry has neither 'ingot' nor 'ore' set")
+	}
+}
+
+// Source returns the non-empty of Ingot or Ore. When both are set (which is
+// invalid per Kind() and should be caught by temper), Ingot is returned —
+// callers should validate via Kind() first if they need to detect ambiguity.
+// Returns "" if neither is set.
+func (d Dependency) Source() string {
+	if d.Ingot != "" {
+		return d.Ingot
+	}
+	return d.Ore
 }
 
 // OutputTarget represents a single output directory or file mapping.

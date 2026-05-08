@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -78,8 +79,27 @@ func runAnneal(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	// Resolve schema and flux defaults
-	schema, fluxDefaults, err := resolveAnnealSchema(reader)
+	// Auto-install any declared ingot/ore deps before resolving the schema so
+	// the wizard sees ore-prefixed entries. Anneal is project-scoped; remote
+	// molds may not declare local-path deps (mirrors cast's rule).
+	if manifest, mErr := reader.LoadManifest(); mErr == nil && manifest != nil {
+		moldKey := ""
+		if foundry.IsRemoteReference(moldDir) {
+			if parsed, perr := foundry.ParseReference(moldDir); perr == nil {
+				moldKey = parsed.CacheKey()
+				if parsed.Subpath != "" {
+					moldKey += "@" + parsed.Subpath
+				}
+			}
+		}
+		allowLocalDeps := !foundry.IsRemoteReference(moldDir)
+		if err := installDeclaredDeps(manifest, moldKey, false, allowLocalDeps, false); err != nil {
+			log.Printf("warning: installing declared deps for %s: %v", moldDir, err)
+		}
+	}
+
+	// Resolve schema and flux defaults (ore-merged).
+	schema, fluxDefaults, err := resolveAnnealSchema(reader, false)
 	if err != nil {
 		return err
 	}
@@ -117,33 +137,50 @@ func runAnneal(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-// resolveAnnealSchema resolves the schema and flux defaults from a mold.
-// Precedence: flux.schema.yaml > mold.yaml flux declarations > inferred from flux.yaml keys.
-func resolveAnnealSchema(reader *blanks.MoldReader) ([]mold.FluxVar, map[string]any, error) {
+// resolveAnnealSchema resolves the merged schema and flux defaults a mold's
+// anneal wizard should prompt against. Precedence (highest first):
+//
+//  1. flux.schema.yaml on the mold, merged with installed-ore overlays via
+//     LoadMoldFluxWithOres so ore-prefixed entries (e.g. ore.status.enabled)
+//     show up alongside the mold's own keys.
+//  2. mold.yaml flux declarations (no ore merge — used for older molds that
+//     never declared a flux.schema.yaml).
+//  3. Inferred from flux.yaml keys (no ore merge — defaults-only fallback).
+//
+// `global` selects the ore search-path scope (currently identical for both
+// project and global, but reserved for future scope-aware lookups).
+func resolveAnnealSchema(reader *blanks.MoldReader, global bool) ([]mold.FluxVar, map[string]any, error) {
 	// Load flux defaults
 	fluxDefaults, err := reader.LoadFluxDefaults()
 	if err != nil {
 		fluxDefaults = make(map[string]any)
 	}
 
-	// Try flux.schema.yaml first
-	schema, err := reader.LoadFluxSchema()
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading flux schema: %w", err)
+	// Try flux.schema.yaml first via the ore-aware loader so wizard prompts
+	// include any installed ore overlays.
+	mergedSchema, mergedDefaults, _, mergeErr := mold.LoadMoldFluxWithOres(reader.FS(), readerSearchPaths(reader, global))
+	if mergeErr != nil {
+		return nil, nil, fmt.Errorf("loading flux schema: %w", mergeErr)
 	}
-	if schema != nil {
-		return schema, fluxDefaults, nil
+	if len(mergedSchema) > 0 {
+		// Prefer the merged defaults map (ore-then-mold layering) when
+		// LoadMoldFluxWithOres surfaces a schema. Fall back to whatever
+		// reader.LoadFluxDefaults returned otherwise.
+		if mergedDefaults != nil {
+			fluxDefaults = mergedDefaults
+		}
+		return mergedSchema, fluxDefaults, nil
 	}
 
-	// Fall back to mold.yaml flux declarations
+	// Fall back to mold.yaml flux declarations.
 	manifest, err := reader.LoadManifest()
 	if err == nil && manifest != nil && len(manifest.Flux) > 0 {
 		return manifest.Flux, fluxDefaults, nil
 	}
 
-	// Fall back: infer schema from flux.yaml keys
+	// Fall back: infer schema from flux.yaml keys.
 	if len(fluxDefaults) > 0 {
-		schema = inferSchemaFromFlux(fluxDefaults)
+		schema := inferSchemaFromFlux(fluxDefaults)
 		return schema, fluxDefaults, nil
 	}
 

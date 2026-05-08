@@ -62,6 +62,17 @@ func runUninstall(_ *cobra.Command, args []string) error {
 	if subpath != "" {
 		display = source + "//" + subpath
 	}
+	// Cascade-prune unshared ingots/ores once the mold has been removed.
+	// moldKey mirrors the cast-time key (source@subpath when subpath is set).
+	if err == nil && !uninstallDryRun {
+		moldKey := source
+		if subpath != "" {
+			moldKey += "@" + subpath
+		}
+		if cerr := cascadeUninstallArtifacts(manifestPath, moldKey, uninstallGlobal); cerr != nil {
+			fmt.Println(styles.WarningStyle.Render("⚠️  ") + "cascade cleanup: " + cerr.Error())
+		}
+	}
 	if err != nil {
 		if errors.Is(err, foundry.ErrLegacyEntry) {
 			fmt.Println(styles.WarningStyle.Render("⚠️  ") + err.Error())

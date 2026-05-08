@@ -66,6 +66,13 @@ func runTemper(_ *cobra.Command, args []string) error {
 	fsys := os.DirFS(moldDir)
 	result := mold.Temper(fsys)
 
+	// For molds, layer in ephemeral ore-resolution diagnostics so the
+	// merged-schema view is validated end-to-end. Local-path deps are
+	// allowed because temper only operates on local trees.
+	if result.ManifestKind == "mold" {
+		appendOreDiagnostics(fsys, result)
+	}
+
 	if result.Name != "" {
 		fmt.Println(styles.InfoStyle.Render("Package: ") +
 			styles.CodeStyle.Render(result.Name) +
@@ -280,6 +287,86 @@ func runAssayOnDir(dir string) error {
 		errs, warns, suggestions)))
 
 	return nil
+}
+
+// appendOreDiagnostics enriches a mold's temper result with diagnostics from
+// the merged ore view: schema conflicts (SeverityError), shadowed overlay
+// entries (SeverityWarning, informational), and orphan defaults
+// (SeverityWarning). Resolution is ephemeral — never writes to .ailloy/ores/.
+//
+// Local-path deps are allowed: temper always runs against a local tree.
+func appendOreDiagnostics(fsys fs.FS, result *mold.TemperResult) {
+	manifest, err := mold.LoadMoldFromFS(fsys, "mold.yaml")
+	if err != nil || manifest == nil || len(manifest.Dependencies) == 0 {
+		return
+	}
+
+	resolver, rerr := ResolveDepsEphemeral(manifest, true)
+	if rerr != nil {
+		result.Diagnostics = append(result.Diagnostics, mold.Diagnostic{
+			Severity: mold.SeverityError,
+			Message:  fmt.Sprintf("resolving ore dependencies: %v", rerr),
+			File:     "mold.yaml",
+		})
+		return
+	}
+
+	baseSchema, _ := mold.LoadFluxSchema(fsys, "flux.schema.yaml")
+	if baseSchema == nil && len(manifest.Flux) > 0 {
+		baseSchema = manifest.Flux
+	}
+	baseDefaults, _ := mold.LoadFluxFile(fsys, "flux.yaml")
+	if baseDefaults == nil {
+		baseDefaults = map[string]any{}
+	}
+
+	mergedSchema, mergedDefaults, report, merr := resolver.MergeInto(baseSchema, baseDefaults)
+	if merr != nil {
+		result.Diagnostics = append(result.Diagnostics, mold.Diagnostic{
+			Severity: mold.SeverityError,
+			Message:  fmt.Sprintf("merging ore schema: %v", merr),
+			File:     "mold.yaml",
+		})
+		return
+	}
+
+	for _, sh := range report.Shadowed {
+		result.Diagnostics = append(result.Diagnostics, mold.Diagnostic{
+			Severity: mold.SeverityWarning,
+			Message:  fmt.Sprintf("ore key %q shadowed by mold-local entry (overlay source: %s)", sh.Name, sh.Source),
+		})
+	}
+
+	// Orphan defaults: any key in mergedDefaults without a matching merged
+	// schema entry (other than the well-known top-level "output" mapping).
+	for _, orphan := range mold.ValidateOrphanDefaults(mergedSchema, mergedDefaults) {
+		if isWellKnownDefault(orphan) {
+			continue
+		}
+		result.Diagnostics = append(result.Diagnostics, mold.Diagnostic{
+			Severity: mold.SeverityWarning,
+			Message:  fmt.Sprintf("default %q has no matching schema entry", orphan),
+			File:     "flux.yaml",
+		})
+	}
+}
+
+// isWellKnownDefault returns true for top-level flux keys that aren't
+// schema-driven (like the output mapping). Used to suppress orphan-default
+// warnings for the rendering pipeline's reserved keys.
+func isWellKnownDefault(dotted string) bool {
+	if dotted == "" {
+		return true
+	}
+	root := dotted
+	if i := strings.IndexByte(dotted, '.'); i >= 0 {
+		root = dotted[:i]
+	}
+	switch root {
+	case "output":
+		return true
+	}
+	return false
 }
 
 // loadTemperFlux loads layered flux values using the same Helm-style precedence as forge/cast.

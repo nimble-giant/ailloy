@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"dario.cat/mergo"
 	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
@@ -53,9 +54,20 @@ func init() {
 }
 
 // loadForgeFlux loads layered flux values using Helm-style precedence:
-// mold flux.yaml < mold.yaml schema defaults < -f files (left to right) < --set flags
-func loadForgeFlux(reader *blanks.MoldReader) (map[string]any, error) {
-	// Layer 1: Load mold flux.yaml as base
+// ore defaults < mold flux.yaml < mold.yaml schema defaults < -f files
+// (left to right) < --set flags. The resolver may be nil — callers that
+// don't resolve ore deps will get pre-Phase-9 behavior.
+func loadForgeFlux(reader *blanks.MoldReader, resolver *EphemeralOreResolver) (map[string]any, error) {
+	// Layer 0: Ore-namespace defaults (resolved ephemerally). Lowest priority;
+	// the mold's own flux.yaml deep-merges on top via mergo.WithOverride.
+	flux := make(map[string]any)
+	if resolver != nil {
+		if err := mergo.Merge(&flux, resolver.Defaults()); err != nil {
+			return nil, fmt.Errorf("layering ore defaults: %w", err)
+		}
+	}
+
+	// Layer 1: Load mold flux.yaml on top of ore defaults
 	fluxDefaults, err := reader.LoadFluxDefaults()
 	if err != nil {
 		fluxDefaults = make(map[string]any)
@@ -67,9 +79,8 @@ func loadForgeFlux(reader *blanks.MoldReader) (map[string]any, error) {
 		fluxDefaults = mold.ApplyFluxDefaults(manifest.Flux, fluxDefaults)
 	}
 
-	flux := make(map[string]any)
-	for k, v := range fluxDefaults {
-		flux[k] = v
+	if err := mergo.Merge(&flux, fluxDefaults, mergo.WithOverride); err != nil {
+		return nil, fmt.Errorf("merging mold defaults over ore defaults: %w", err)
 	}
 
 	// Layer 3: Layer -f files left-to-right (each overrides previous)
@@ -107,12 +118,7 @@ type renderedFile struct {
 }
 
 func runForge(_ *cobra.Command, args []string) error {
-	reader, err := resolveForgeReader(args)
-	if err != nil {
-		return err
-	}
-
-	flux, err := loadForgeFlux(reader)
+	reader, remote, err := resolveForgeReader(args)
 	if err != nil {
 		return err
 	}
@@ -122,18 +128,35 @@ func runForge(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load mold manifest: %w", err)
 	}
 
-	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section
+	// Resolve ore deps ephemerally for the preview render — never touches
+	// .ailloy/ores/. Local-path deps are refused when the parent mold itself
+	// was loaded from a remote source (mirrors installDeclaredDeps' rule).
+	oreResolver, err := ResolveDepsEphemeral(manifest, !remote)
+	if err != nil {
+		return fmt.Errorf("resolving ore deps for forge: %w", err)
+	}
+
+	flux, err := loadForgeFlux(reader, oreResolver)
+	if err != nil {
+		return err
+	}
+
+	// Validate: prefer flux.schema.yaml, fall back to mold.yaml flux: section.
 	schema, _ := reader.LoadFluxSchema()
 	if schema == nil && len(manifest.Flux) > 0 {
 		schema = manifest.Flux
 	}
-	if err := mold.ValidateFlux(schema, flux); err != nil {
+	mergedSchema, _, _, mergeErr := oreResolver.MergeInto(schema, nil)
+	if mergeErr != nil {
+		return fmt.Errorf("merging ore schema overlays: %w", mergeErr)
+	}
+	if err := mold.ValidateFlux(mergedSchema, flux); err != nil {
 		log.Printf("warning: %v", err)
 	}
 
 	// Build ingot resolver
-	resolver := buildIngotResolver(flux, reader.Root())
-	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
+	ingotResolver := buildIngotResolver(flux, reader.Root())
+	opts := []mold.TemplateOption{mold.WithIngotResolver(ingotResolver)}
 
 	// Load ignore patterns from .ailloyignore and mold.yaml.
 	ignorePatterns := mold.LoadIgnorePatterns(reader.FS(), manifest)
@@ -284,23 +307,27 @@ func writeForgeFiles(files []renderedFile, outputDir string, forceReplaceOnParse
 }
 
 // resolveForgeReader creates a MoldReader from args or the embedded mold.
-func resolveForgeReader(args []string) (*blanks.MoldReader, error) {
+// The remote return flag indicates whether the mold itself was loaded from a
+// remote source — used by the caller to refuse local-path ore deps from a
+// remotely-resolved mold.
+func resolveForgeReader(args []string) (*blanks.MoldReader, bool, error) {
 	if len(args) >= 1 {
 		if foundry.IsRemoteReference(args[0]) {
 			fsys, root, err := foundry.ResolveWithRoot(args[0])
 			if err != nil {
-				return nil, fmt.Errorf("resolving remote mold: %w", err)
+				return nil, true, fmt.Errorf("resolving remote mold: %w", err)
 			}
-			return blanks.NewMoldReaderFromFS(fsys, root), nil
+			return blanks.NewMoldReaderFromFS(fsys, root), true, nil
 		}
-		return blanks.NewMoldReaderFromPath(args[0])
+		reader, err := blanks.NewMoldReaderFromPath(args[0])
+		return reader, false, err
 	}
 	if smelt.HasEmbeddedMold() {
 		fsys, err := smelt.OpenEmbeddedMold()
 		if err != nil {
-			return nil, fmt.Errorf("opening embedded mold: %w", err)
+			return nil, false, fmt.Errorf("opening embedded mold: %w", err)
 		}
-		return blanks.NewMoldReader(fsys), nil
+		return blanks.NewMoldReader(fsys), false, nil
 	}
-	return nil, fmt.Errorf("mold directory is required: ailloy forge <mold-dir>")
+	return nil, false, fmt.Errorf("mold directory is required: ailloy forge <mold-dir>")
 }

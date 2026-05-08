@@ -381,3 +381,42 @@ func TestLoadMoldFromFS_NotFound(t *testing.T) {
 		t.Error("expected error for missing file")
 	}
 }
+
+func TestDependency_Kind_Ingot(t *testing.T) {
+	d := Dependency{Ingot: "github.com/x/y", Version: "1.0.0"}
+	k, err := d.Kind()
+	if err != nil || k != "ingot" {
+		t.Errorf("Kind = (%q, %v); want (ingot, nil)", k, err)
+	}
+}
+
+func TestDependency_Kind_Ore(t *testing.T) {
+	d := Dependency{Ore: "github.com/x/y", Version: "1.0.0", As: "foo"}
+	k, err := d.Kind()
+	if err != nil || k != "ore" {
+		t.Errorf("Kind = (%q, %v); want (ore, nil)", k, err)
+	}
+}
+
+func TestDependency_Kind_BothSet_Errors(t *testing.T) {
+	d := Dependency{Ingot: "a", Ore: "b", Version: "1.0.0"}
+	if _, err := d.Kind(); err == nil {
+		t.Error("expected error when both ingot and ore set")
+	}
+}
+
+func TestDependency_Kind_NeitherSet_Errors(t *testing.T) {
+	d := Dependency{Version: "1.0.0"}
+	if _, err := d.Kind(); err == nil {
+		t.Error("expected error when neither set")
+	}
+}
+
+func TestDependency_Source(t *testing.T) {
+	if (Dependency{Ingot: "g/x"}).Source() != "g/x" {
+		t.Error("ingot source")
+	}
+	if (Dependency{Ore: "g/y"}).Source() != "g/y" {
+		t.Error("ore source")
+	}
+}

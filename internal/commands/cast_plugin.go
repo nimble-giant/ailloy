@@ -45,7 +45,7 @@ func castClaudePlugin(reader *blanks.MoldReader, source string) error {
 		fmt.Println()
 	}
 
-	flux, err := loadCastFlux(reader, source)
+	flux, _, err := loadCastFlux(reader, source)
 	if err != nil {
 		flux = make(map[string]any)
 	}

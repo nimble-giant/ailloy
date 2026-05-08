@@ -69,6 +69,24 @@ For ingots (`ingot.yaml` present), temper checks:
 | File references | Error | All files listed in `files:` must exist |
 | Template syntax | Error | All `.md` files must have valid Go template syntax |
 
+## Validating Ores
+
+When run on an ore directory (one containing `ore.yaml`), `ailloy temper` validates:
+
+- **Manifest fields**: `apiVersion: v1`, `kind: ore`, snake_case `name`, semver `version`.
+- **Schema entries unprefixed**: every entry in `flux.schema.yaml` has a `name` that does NOT start with `ore.` or `<ore-name>.`. The loader prepends the prefix at install time; a pre-prefixed entry would double-prefix.
+- **Defaults unprefixed**: `flux.yaml` does NOT have a top-level `ore` key. Defaults are written under `<key>: <value>` directly; the loader wraps them under `ore.<name>:` at merge time.
+- **`enabled: bool` required**: every ore must declare an `enabled: bool` schema entry — the master toggle that consumers gate on with `{{if .ore.<name>.enabled}}...{{end}}`.
+- **Discover blocks parse cleanly** (template syntax in `discover.command` and `discover.parse`).
+- **Orphan defaults reported as warnings**: any key in `flux.yaml` without a matching schema entry surfaces as a warning.
+
+When run on a mold directory, temper additionally:
+
+- Validates each `dependencies[]` entry has exactly one of `ingot:` or `ore:` set (and `as:` is snake_case if present).
+- Ephemerally resolves declared ore deps (no disk writes) and surfaces conflict errors (overlay-vs-overlay collisions), shadowed-key info (mold-local entries that win over an installed ore), and orphan-default warnings.
+
+See [docs/ore.md](ore.md) for the ore packaging story and authoring conventions.
+
 ## Errors vs Warnings
 
 - **Errors** are blocking — `temper` exits with a non-zero exit code when any error is found

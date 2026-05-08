@@ -1,6 +1,7 @@
 package mold
 
 import (
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -76,7 +77,7 @@ func TestTemper_NoManifest(t *testing.T) {
 	if len(errors) != 1 {
 		t.Fatalf("expected 1 error, got %d", len(errors))
 	}
-	if errors[0].Message != "no mold.yaml or ingot.yaml found" {
+	if errors[0].Message != "no mold.yaml, ingot.yaml, or ore.yaml found" {
 		t.Errorf("unexpected error message: %s", errors[0].Message)
 	}
 }
@@ -478,6 +479,93 @@ func TestTemperResult_ErrorsAndWarnings(t *testing.T) {
 	}
 	if len(r.Warnings()) != 2 {
 		t.Errorf("expected 2 warnings, got %d", len(r.Warnings()))
+	}
+}
+
+func TestTemper_DependencyBothIngotAndOre(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+dependencies:
+  - ingot: a
+    ore: b
+    version: "1.0.0"
+`)},
+	}
+
+	result := Temper(fsys)
+
+	if !result.HasErrors() {
+		t.Fatal("expected errors when dependency has both ingot and ore set")
+	}
+
+	found := false
+	for _, d := range result.Diagnostics {
+		if d.Severity != SeverityError {
+			continue
+		}
+		if strings.Contains(d.Message, "ingot") && strings.Contains(d.Message, "ore") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected SeverityError mentioning both 'ingot' and 'ore', got: %v", result.Errors())
+	}
+}
+
+func TestTemper_DependencyNeitherIngotNorOre(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+dependencies:
+  - version: "1.0.0"
+`)},
+	}
+
+	result := Temper(fsys)
+
+	if !result.HasErrors() {
+		t.Fatal("expected errors when dependency has neither ingot nor ore set")
+	}
+
+	found := false
+	for _, d := range result.Diagnostics {
+		if d.Severity != SeverityError {
+			continue
+		}
+		if strings.Contains(d.Message, "ingot") && strings.Contains(d.Message, "ore") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected SeverityError mentioning both 'ingot' and 'ore', got: %v", result.Errors())
+	}
+}
+
+func TestTemper_DependencyOreOnlyValid(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+dependencies:
+  - ore: github.com/x/y
+    version: "^1.0.0"
+    as: foo
+`)},
+	}
+
+	result := Temper(fsys)
+
+	if result.HasErrors() {
+		t.Errorf("expected no errors for valid ore-only dependency, got: %v", result.Errors())
 	}
 }
 

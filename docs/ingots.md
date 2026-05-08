@@ -212,3 +212,25 @@ ailloy ingot add github.com/my-org/my-ingot@v1.0.0
 ```
 
 For more on remote resolution, versioning, and caching, see the [Remote Molds guide](foundry.md).
+
+## Removing Ingots
+
+Remove an installed ingot:
+
+```bash
+ailloy ingot remove github-patterns
+ailloy ingot remove github-patterns --global  # remove from ~/.ailloy/ingots/
+ailloy ingot remove github-patterns --force   # bypass dependents check
+```
+
+`ailloy ingot remove` refuses to delete an ingot that other molds still depend on (per the cast-time provenance tracked in `installed.yaml`'s `dependents` list). Use `--force` to override or `ailloy uninstall <mold>` to remove the dependent mold (which cascade-removes its unshared ingots automatically).
+
+The bidirectional verb form also works: `ailloy remove ingot <name>`.
+
+## Cascade Uninstall
+
+When you uninstall a mold (`ailloy uninstall <mold>`), ailloy walks every ingot and ore the mold installed and decrements their `dependents` list. Any artifact whose `dependents` becomes empty is cascade-removed from disk and from `installed.yaml` / `ailloy.lock`.
+
+User-direct installs (via `ailloy ingot add` or `ailloy ore add`) carry a `"user"` sentinel in their `dependents` list. They survive any number of mold uninstalls and must be explicitly removed.
+
+See [docs/ore.md](ore.md) for the parallel ore semantics.
