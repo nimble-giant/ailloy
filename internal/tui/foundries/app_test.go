@@ -12,7 +12,6 @@ import (
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/fluxpicker"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/registered"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
-	"github.com/nimble-giant/ailloy/pkg/mold"
 )
 
 func TestApp_FOpensPickerWhenMoldHighlighted(t *testing.T) {
@@ -177,16 +176,15 @@ molds:
 		}
 		t.Fatalf("schemas missing delta entry; got keys=%v", keys)
 	}
-	var got []mold.FluxVar = deltaSchema // explicit type assertion as a guard
 	found := false
-	for _, fv := range got {
+	for _, fv := range deltaSchema {
 		if fv.Name == "ore.status.value" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("delta schema missing ore.status.value; got %+v", got)
+		t.Errorf("delta schema missing ore.status.value; got %+v", deltaSchema)
 	}
 }
 
