@@ -3,6 +3,7 @@ package foundry
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -59,6 +60,82 @@ func TestInstalledManifest_RoundTrip(t *testing.T) {
 	}
 	if loaded.Molds[1].Subpath != "sub/path" {
 		t.Errorf("Subpath = %q", loaded.Molds[1].Subpath)
+	}
+}
+
+func TestInstalledManifest_RoundTrip_CastOptions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".ailloy", "installed.yaml")
+
+	ts := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+	original := &InstalledManifest{
+		APIVersion: "v1",
+		Molds: []InstalledEntry{
+			{
+				Name:    "with-options",
+				Source:  "github.com/x/y",
+				Version: "v1.0.0",
+				Commit:  "abc123",
+				CastAt:  ts,
+				CastOptions: &CastOptionsRecord{
+					WithWorkflows: true,
+					ValueFiles:    []string{"./flux/prod.yaml"},
+					SetOverrides:  []string{"agent.targets=foo,bar"},
+				},
+			},
+			{
+				Name:    "without-options",
+				Source:  "github.com/x/z",
+				Version: "v1.0.0",
+				Commit:  "def456",
+				CastAt:  ts,
+			},
+		},
+	}
+
+	if err := WriteInstalledManifest(path, original); err != nil {
+		t.Fatalf("WriteInstalledManifest: %v", err)
+	}
+
+	loaded, err := ReadInstalledManifest(path)
+	if err != nil {
+		t.Fatalf("ReadInstalledManifest: %v", err)
+	}
+	if len(loaded.Molds) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(loaded.Molds))
+	}
+
+	withOpts := loaded.Molds[0]
+	if withOpts.CastOptions == nil {
+		t.Fatalf("expected CastOptions to round-trip, got nil")
+	}
+	if !withOpts.CastOptions.WithWorkflows {
+		t.Errorf("WithWorkflows = false, want true")
+	}
+	if got, want := withOpts.CastOptions.ValueFiles, []string{"./flux/prod.yaml"}; len(got) != 1 || got[0] != want[0] {
+		t.Errorf("ValueFiles = %v, want %v", got, want)
+	}
+	if got, want := withOpts.CastOptions.SetOverrides, []string{"agent.targets=foo,bar"}; len(got) != 1 || got[0] != want[0] {
+		t.Errorf("SetOverrides = %v, want %v", got, want)
+	}
+
+	without := loaded.Molds[1]
+	if without.CastOptions != nil {
+		t.Errorf("expected CastOptions to be nil for entry without options, got %+v", without.CastOptions)
+	}
+
+	// Verify the on-disk yaml omits the castOptions block when absent.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx := strings.Index(string(raw), "name: without-options")
+	if idx == -1 {
+		t.Fatalf("expected to find 'name: without-options' in:\n%s", raw)
+	}
+	tail := string(raw)[idx:]
+	if strings.Contains(tail, "castOptions") {
+		t.Errorf("entry without options should not emit castOptions yaml; got:\n%s", tail)
 	}
 }
 

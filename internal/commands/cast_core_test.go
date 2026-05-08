@@ -195,7 +195,7 @@ func TestRecordCastedFiles_SubpathMold(t *testing.T) {
 		{RelPath: ".claude/agents/shortcut.md", SHA256: "deadbeef"},
 	}
 
-	if err := recordCastedFiles(result, files, false, nil); err != nil {
+	if err := recordCastedFiles(result, files, false, nil, nil); err != nil {
 		t.Fatalf("recordCastedFiles: %v", err)
 	}
 

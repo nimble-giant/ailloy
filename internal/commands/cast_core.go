@@ -208,7 +208,12 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 			installed = append(installed, foundry.InstalledFile{RelPath: rel, SHA256: sum})
 		}
 		res.FilesCast = installed
-		if err := recordCastedFiles(remoteResult, installed, opts.Global, silentLogger); err != nil {
+		castOpts := &foundry.CastOptionsRecord{
+			WithWorkflows: opts.WithWorkflows,
+			ValueFiles:    opts.ValueFiles,
+			SetOverrides:  opts.SetOverrides,
+		}
+		if err := recordCastedFiles(remoteResult, installed, opts.Global, castOpts, silentLogger); err != nil {
 			silentLogger.Printf("warning: failed to record installed files: %v", err)
 		}
 	}

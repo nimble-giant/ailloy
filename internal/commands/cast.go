@@ -384,7 +384,12 @@ func castProject(reader *blanks.MoldReader, source string) error {
 			}
 			installed = append(installed, foundry.InstalledFile{RelPath: rel, SHA256: sum})
 		}
-		if err := recordCastedFiles(resolvedRemote, installed, castGlobal, nil); err != nil {
+		castOpts := &foundry.CastOptionsRecord{
+			WithWorkflows: withWorkflows,
+			ValueFiles:    castValFiles,
+			SetOverrides:  castSetFlags,
+		}
+		if err := recordCastedFiles(resolvedRemote, installed, castGlobal, castOpts, nil); err != nil {
 			log.Printf("warning: failed to record installed files: %v", err)
 		}
 	}
@@ -773,10 +778,12 @@ func copyResolvedFilesWithSchema(reader *blanks.MoldReader, manifest *mold.Mold,
 	return nil
 }
 
-// recordInstalled upserts the just-cast mold into the installed manifest.
-// logger receives the "corrupt manifest, resetting" warning; pass a discarding
-// logger from TUI callers to keep the alt-screen clean.
-func recordInstalled(result *foundry.ResolveResult, global bool, logger *log.Logger) error {
+// recordInstalled upserts the just-cast mold into the installed manifest,
+// preserving the option-shaped flags that drove this cast so a future
+// `recast` can replay them. logger receives the "corrupt manifest, resetting"
+// warning; pass a discarding logger from TUI callers to keep the alt-screen
+// clean.
+func recordInstalled(result *foundry.ResolveResult, global bool, opts *foundry.CastOptionsRecord, logger *log.Logger) error {
 	if logger == nil {
 		logger = log.Default()
 	}
@@ -792,14 +799,22 @@ func recordInstalled(result *foundry.ResolveResult, global bool, logger *log.Log
 	if manifest == nil {
 		manifest = &foundry.InstalledManifest{APIVersion: "v1"}
 	}
-	manifest.UpsertEntry(foundry.InstalledEntry{
+	entry := foundry.InstalledEntry{
 		Name:    result.Ref.Repo,
 		Source:  result.Ref.CacheKey(),
 		Subpath: result.Ref.Subpath,
 		Version: result.Resolved.Tag,
 		Commit:  result.Resolved.Commit,
 		CastAt:  time.Now().UTC(),
-	})
+	}
+	if opts != nil && (opts.WithWorkflows || len(opts.ValueFiles) > 0 || len(opts.SetOverrides) > 0) {
+		// Copy to detach from caller's slice ownership.
+		copied := *opts
+		copied.ValueFiles = append([]string(nil), opts.ValueFiles...)
+		copied.SetOverrides = append([]string(nil), opts.SetOverrides...)
+		entry.CastOptions = &copied
+	}
+	manifest.UpsertEntry(entry)
 	return foundry.WriteInstalledManifest(path, manifest)
 }
 
@@ -807,10 +822,11 @@ func recordInstalled(result *foundry.ResolveResult, global bool, logger *log.Log
 // and backfills its Files list in one place so the lookup key cannot drift
 // from the write key. The lookup must use Ref.CacheKey() (host/owner/repo) —
 // not OverrideKey, which inlines the subpath and would not match the entry
-// recordInstalled just wrote for monorepo foundries. logger is forwarded to
-// recordInstalled so TUI callers can keep the alt-screen clean.
-func recordCastedFiles(result *foundry.ResolveResult, files []foundry.InstalledFile, global bool, logger *log.Logger) error {
-	if err := recordInstalled(result, global, logger); err != nil {
+// recordInstalled just wrote for monorepo foundries. opts persists the cast
+// arguments for `recast`; logger is forwarded so TUI callers can keep the
+// alt-screen clean.
+func recordCastedFiles(result *foundry.ResolveResult, files []foundry.InstalledFile, global bool, opts *foundry.CastOptionsRecord, logger *log.Logger) error {
+	if err := recordInstalled(result, global, opts, logger); err != nil {
 		return err
 	}
 	path := manifestPathFor(global)
