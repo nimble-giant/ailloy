@@ -34,9 +34,7 @@ After download, the cache path is printed.`,
 	RunE: runIngotGet,
 }
 
-var (
-	ingotAddGlobal bool
-)
+var ingotAddGlobal bool
 
 var ingotAddCmd = &cobra.Command{
 	Use:   "add <reference>",
@@ -130,11 +128,11 @@ func runIngotAdd(_ *cobra.Command, args []string) error {
 	return installIngotsFromFS(fsys, result, ingotAddGlobal)
 }
 
-// runIngotAddFromLocal is a test-only seam that drives the multi-package install
-// pipeline against a local fs.FS without going through the foundry resolver.
-// We synthesize a ResolveResult that recordInstalledArtifact / lock writes will
-// accept; the source string uses the local path so identity is stable across
-// re-installs from the same source.
+// runIngotAddFromLocal is a test-only seam (not part of the CLI surface) that
+// drives the multi-package install pipeline against a local fs.FS without
+// going through the foundry resolver. We synthesize a ResolveResult so the
+// manifest + lock writes carry a stable source identity ("local/fs/<base>")
+// across re-installs from the same source.
 func runIngotAddFromLocal(localDir string, global bool) error {
 	fsys := os.DirFS(localDir)
 	result := &foundry.ResolveResult{
@@ -167,9 +165,51 @@ func installIngotsFromFS(fsys fs.FS, result *foundry.ResolveResult, global bool)
 		return fmt.Errorf("no ingot.yaml found at root or under ingots/<name>/")
 	}
 
+	// Read manifest once; we'll batch all package upserts before writing.
+	manifestPath := manifestPathFor(global)
+	var manifest *foundry.InstalledManifest
+	if manifestPath != "" {
+		manifest, _ = foundry.ReadInstalledManifest(manifestPath)
+		if manifest == nil {
+			manifest = &foundry.InstalledManifest{APIVersion: "v1"}
+		}
+	}
+
+	// Read lock once; project-scope only. ailloy.lock is project-only today.
+	var lock *foundry.LockFile
+	if !global {
+		lock, _ = foundry.ReadLockFile(foundry.LockFileName)
+	}
+
 	for _, p := range pkgs {
-		if err := installSingleIngot(fsys, p, result, global); err != nil {
-			return err
+		entry, lerr := installSingleIngot(fsys, p, result, global)
+		if lerr != nil {
+			return lerr
+		}
+		if manifest != nil {
+			manifest.UpsertArtifact("ingot", entry)
+		}
+		if lock != nil {
+			lock.UpsertArtifactLock("ingot", foundry.LockEntry{
+				Name:      entry.Name,
+				Source:    entry.Source,
+				Subpath:   entry.Subpath,
+				Version:   entry.Version,
+				Commit:    entry.Commit,
+				Timestamp: entry.InstalledAt,
+			})
+		}
+	}
+
+	if manifest != nil && manifestPath != "" {
+		if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
+			log.Printf("warning: failed to update installed manifest: %v", err)
+		}
+	}
+	// Update ailloy.lock if present (project scope only).
+	if lock != nil {
+		if err := foundry.WriteLockFile(foundry.LockFileName, lock); err != nil {
+			log.Printf("warning: failed to update lock file: %v", err)
 		}
 	}
 
@@ -182,7 +222,10 @@ func installIngotsFromFS(fsys fs.FS, result *foundry.ResolveResult, global bool)
 	return nil
 }
 
-func installSingleIngot(fsys fs.FS, pkg mold.IngotPackage, result *foundry.ResolveResult, global bool) error {
+// installSingleIngot copies one package onto disk and returns the ArtifactEntry
+// the caller should upsert into the installed manifest. The caller batches the
+// manifest + lock writes; this function only owns disk-side install of files.
+func installSingleIngot(fsys fs.FS, pkg mold.IngotPackage, result *foundry.ResolveResult, global bool) (foundry.ArtifactEntry, error) {
 	// Effective subpath: the resolver may already have rooted fsys at a //subpath
 	// (in which case result.Ref.Subpath is set and pkg.Subpath is "" because pkg
 	// was discovered at the root of that already-narrowed fsys). When we fan out
@@ -197,20 +240,20 @@ func installSingleIngot(fsys fs.FS, pkg mold.IngotPackage, result *foundry.Resol
 	if global {
 		home, herr := os.UserHomeDir()
 		if herr != nil {
-			return fmt.Errorf("determining home directory: %w", herr)
+			return foundry.ArtifactEntry{}, fmt.Errorf("determining home directory: %w", herr)
 		}
 		baseRoot = filepath.Join(home, ".ailloy", "ingots")
 	}
 	destDir := filepath.Join(baseRoot, pkg.Name)
 	if err := os.MkdirAll(destDir, 0o750); err != nil {
-		return fmt.Errorf("creating ingot directory: %w", err)
+		return foundry.ArtifactEntry{}, fmt.Errorf("creating ingot directory: %w", err)
 	}
 
 	pkgFS := fsys
 	if pkg.Root != "." {
 		sub, serr := fs.Sub(fsys, pkg.Root)
 		if serr != nil {
-			return fmt.Errorf("scoping fs to %s: %w", pkg.Root, serr)
+			return foundry.ArtifactEntry{}, fmt.Errorf("scoping fs to %s: %w", pkg.Root, serr)
 		}
 		pkgFS = sub
 	}
@@ -227,43 +270,22 @@ func installSingleIngot(fsys fs.FS, pkg mold.IngotPackage, result *foundry.Resol
 		if rerr != nil {
 			return fmt.Errorf("reading %s: %w", p, rerr)
 		}
-		if err := os.WriteFile(destPath, content, 0o644); err != nil { //#nosec G306
+		if err := os.WriteFile(destPath, content, 0o644); err != nil { // #nosec G306 -- ingot files need to be readable
 			return fmt.Errorf("writing %s: %w", destPath, err)
 		}
 		fmt.Println(styles.SuccessStyle.Render("  + ") + styles.CodeStyle.Render(destPath))
 		return nil
 	}); err != nil {
-		return fmt.Errorf("copying ingot files: %w", err)
+		return foundry.ArtifactEntry{}, fmt.Errorf("copying ingot files: %w", err)
 	}
 
-	// Synthesize a per-package ResolveResult so the recordInstalledArtifact +
-	// lock writes carry the correct (Source, Subpath) identity. Ref is a
-	// pointer, so we deep-copy it before mutating to avoid clobbering shared
-	// state across pkgs in the same fan-out.
-	perPkgResult := *result
-	refCopy := *result.Ref
-	refCopy.Subpath = effectiveSubpath
-	refCopy.Repo = pkg.Name
-	perPkgResult.Ref = &refCopy
-
-	if err := recordInstalledArtifact("ingot", &perPkgResult, "", global); err != nil {
-		log.Printf("warning: failed to update installed manifest: %v", err)
-	}
-
-	if !global {
-		if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
-			lock.UpsertArtifactLock("ingot", foundry.LockEntry{
-				Name:      pkg.Name,
-				Source:    result.Ref.CacheKey(),
-				Subpath:   effectiveSubpath,
-				Version:   result.Resolved.Tag,
-				Commit:    result.Resolved.Commit,
-				Timestamp: time.Now().UTC(),
-			})
-			if werr := foundry.WriteLockFile(foundry.LockFileName, lock); werr != nil {
-				log.Printf("warning: failed to update lock file: %v", werr)
-			}
-		}
-	}
-	return nil
+	return foundry.ArtifactEntry{
+		Name:        pkg.Name,
+		Source:      result.Ref.CacheKey(),
+		Subpath:     effectiveSubpath,
+		Version:     result.Resolved.Tag,
+		Commit:      result.Resolved.Commit,
+		InstalledAt: time.Now().UTC(),
+		Dependents:  []string{"user"},
+	}, nil
 }

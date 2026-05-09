@@ -65,6 +65,9 @@ func TestRunIngotAdd_SingleIngot_RecordsArtifactAndLock(t *testing.T) {
 	if im.Ingots[0].Subpath != "" {
 		t.Errorf("expected empty subpath for root layout, got %q", im.Ingots[0].Subpath)
 	}
+	if im.Ingots[0].Source != "local/fs/src" {
+		t.Errorf("expected Source=local/fs/src, got %q", im.Ingots[0].Source)
+	}
 	if len(im.Ingots[0].Dependents) != 1 || im.Ingots[0].Dependents[0] != "user" {
 		t.Errorf("expected dependents=[user], got %v", im.Ingots[0].Dependents)
 	}
@@ -75,6 +78,9 @@ func TestRunIngotAdd_SingleIngot_RecordsArtifactAndLock(t *testing.T) {
 	}
 	if len(lf.Ingots) != 1 || lf.Ingots[0].Name != "solo" {
 		t.Fatalf("expected 1 ingot in lock named solo, got %+v", lf.Ingots)
+	}
+	if lf.Ingots[0].Source != "local/fs/src" {
+		t.Errorf("expected lock Source=local/fs/src, got %q", lf.Ingots[0].Source)
 	}
 }
 
@@ -117,6 +123,11 @@ func TestRunIngotAdd_MultiIngot_InstallsAll(t *testing.T) {
 	if bySubpath["ingots/footer"] != "footer" || bySubpath["ingots/header"] != "header" {
 		t.Errorf("expected per-package subpaths, got %v", bySubpath)
 	}
+	for _, e := range im.Ingots {
+		if e.Source != "local/fs/src" {
+			t.Errorf("expected all ingots to share Source=local/fs/src, got %q", e.Source)
+		}
+	}
 
 	lf, err := foundry.ReadLockFile(lockPath)
 	if err != nil || lf == nil {
@@ -124,6 +135,11 @@ func TestRunIngotAdd_MultiIngot_InstallsAll(t *testing.T) {
 	}
 	if len(lf.Ingots) != 2 {
 		t.Fatalf("expected 2 ingots in lock, got %d (%+v)", len(lf.Ingots), lf.Ingots)
+	}
+	for _, e := range lf.Ingots {
+		if e.Source != "local/fs/src" {
+			t.Errorf("expected lock entries to share Source=local/fs/src, got %q", e.Source)
+		}
 	}
 }
 
