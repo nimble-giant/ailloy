@@ -61,6 +61,36 @@ func TestDiscoverIngotPackages_NoIngot(t *testing.T) {
 	}
 }
 
+func TestDiscoverIngotPackages_IngotsDirOnlyFiles(t *testing.T) {
+	fsys := fstest.MapFS{
+		"ingots/README.md": &fstest.MapFile{Data: []byte("loose file, no subdirs")},
+	}
+	pkgs, err := DiscoverIngotPackages(fsys)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Fatalf("expected 0 packages when ingots/ has no subdirs, got %d", len(pkgs))
+	}
+}
+
+func TestDiscoverIngotPackages_SkipsHiddenDirs(t *testing.T) {
+	fsys := fstest.MapFS{
+		"ingots/.git/ingot.yaml":   &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: ingot\nname: bogus\nversion: 0.0.0\n")},
+		"ingots/header/ingot.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: ingot\nname: header\nversion: 1.0.0\n")},
+	}
+	pkgs, err := DiscoverIngotPackages(fsys)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(pkgs) != 1 {
+		t.Fatalf("expected 1 package (hidden .git skipped), got %d", len(pkgs))
+	}
+	if pkgs[0].Name != "header" {
+		t.Errorf("expected header, got %q", pkgs[0].Name)
+	}
+}
+
 func TestDiscoverIngotPackages_RootShadowsMulti(t *testing.T) {
 	fsys := fstest.MapFS{
 		"ingot.yaml":               &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: ingot\nname: root\nversion: 0.1.0\n")},

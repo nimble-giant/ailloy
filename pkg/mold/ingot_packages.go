@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"path"
 	"sort"
+	"strings"
 )
 
 // IngotPackage describes one ingot package discovered inside an fs.FS. Root is
@@ -60,9 +61,13 @@ func DiscoverIngotPackages(fsys fs.FS) ([]IngotPackage, error) {
 
 	var names []string
 	for _, e := range entries {
-		if e.IsDir() {
-			names = append(names, e.Name())
+		if !e.IsDir() {
+			continue
 		}
+		if strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		names = append(names, e.Name())
 	}
 	sort.Strings(names)
 
@@ -70,15 +75,12 @@ func DiscoverIngotPackages(fsys fs.FS) ([]IngotPackage, error) {
 	for _, name := range names {
 		root := path.Join("ingots", name)
 		manifestPath := path.Join(root, "ingot.yaml")
-		if _, serr := fs.Stat(fsys, manifestPath); serr != nil {
-			if errors.Is(serr, fs.ErrNotExist) {
-				continue
-			}
-			return nil, fmt.Errorf("stat %s: %w", manifestPath, serr)
-		}
 		ingot, perr := LoadIngotFromFS(fsys, manifestPath)
 		if perr != nil {
-			return nil, fmt.Errorf("loading ingot at %s: %w", root, perr)
+			if errors.Is(perr, fs.ErrNotExist) {
+				continue
+			}
+			return nil, fmt.Errorf("loading ingot at %s: %w", manifestPath, perr)
 		}
 		pkgs = append(pkgs, IngotPackage{
 			Name:    ingot.Name,
