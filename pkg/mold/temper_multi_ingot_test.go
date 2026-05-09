@@ -23,7 +23,7 @@ func TestTemper_MultiIngot_ValidatesEach(t *testing.T) {
 	}
 	found := false
 	for _, e := range errs {
-		if e.File == "ingots/footer/ingot.yaml" || (e.File == "ingot.yaml" && contains(e.Message, "missing.md")) {
+		if e.File == "ingots/footer/ingot.yaml" {
 			found = true
 			break
 		}
@@ -47,6 +47,22 @@ func TestTemper_MultiIngot_AllValid(t *testing.T) {
 	}
 }
 
-func contains(s, sub string) bool {
-	return strings.Contains(s, sub)
+func TestTemper_MultiIngot_ParseError(t *testing.T) {
+	fsys := fstest.MapFS{
+		"ingots/broken/ingot.yaml": &fstest.MapFile{Data: []byte(":- not yaml")},
+	}
+	result := Temper(fsys)
+	if !result.HasErrors() {
+		t.Fatalf("expected errors for malformed multi-ingot manifest, got %+v", result.Diagnostics)
+	}
+	found := false
+	for _, e := range result.Errors() {
+		if strings.Contains(e.Message, "scanning ingots/") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected diagnostic mentioning 'scanning ingots/', got %+v", result.Errors())
+	}
 }

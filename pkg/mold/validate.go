@@ -547,9 +547,10 @@ func temperIngotAt(fsys fs.FS, manifestPath string, result *TemperResult) {
 		return
 	}
 
-	// Single-at-root path sets these once. Multi-ingot leaves them set to the
-	// last package processed; the wrapper in Temper picks a stable headline
-	// from the discovered packages list.
+	// In the single-at-root path, result.Name is empty on entry, so this
+	// always fires. In multi-ingot fan-out, the wrapper in Temper overwrites
+	// Name/Version from pkgs[0] after the loop, so this guard's value is
+	// moot there — kept only to avoid surprising single-call callers.
 	if result.Name == "" {
 		result.Name = i.Name
 		result.Version = i.Version
