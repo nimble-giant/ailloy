@@ -125,6 +125,7 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 		// always single-package today (PR #192 requires explicit subpath for
 		// multi-ore selection).
 		if kind == "ingot" {
+			// d.As is ore-only; ingots have no alias support today (per issue #200 scope).
 			pkgs, derr := mold.DiscoverIngotPackages(fsys)
 			if derr != nil {
 				return fmt.Errorf("discovering ingots at %s: %w", ref, derr)
@@ -133,6 +134,23 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 				return fmt.Errorf("no ingot.yaml found at %s", ref)
 			}
 			for _, pkg := range pkgs {
+				pkgSubpath := subpath
+				if pkgSubpath == "" {
+					pkgSubpath = pkg.Subpath
+				}
+
+				// Per-package skip: identical contract to the dep-level skip-check above,
+				// but keyed on the per-package (sourceID, pkgSubpath) identity so multi-ingot
+				// entries match correctly. Without this, every cast re-copies every package
+				// and refreshes InstalledAt, producing spurious lock drift under
+				// `quench --verify`.
+				if existing := findArtifactBySource(im, "ingot", sourceID, pkgSubpath, ""); existing != nil {
+					if moldKey != "" && !containsString(existing.Dependents, moldKey) {
+						existing.Dependents = append(existing.Dependents, moldKey)
+					}
+					continue
+				}
+
 				pkgFS := fsys
 				if pkg.Root != "." {
 					sub, serr := fs.Sub(fsys, pkg.Root)
@@ -140,10 +158,6 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 						return fmt.Errorf("scoping fs to %s: %w", pkg.Root, serr)
 					}
 					pkgFS = sub
-				}
-				pkgSubpath := subpath
-				if pkgSubpath == "" {
-					pkgSubpath = pkg.Subpath
 				}
 				baseDir, derr2 := artifactInstallDir("ingot", pkg.Name, global)
 				if derr2 != nil {
