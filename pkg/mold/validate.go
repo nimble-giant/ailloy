@@ -533,11 +533,6 @@ func temperMold(fsys fs.FS, result *TemperResult) {
 	validateTemplates(fsys, outputFiles, result)
 }
 
-// temperIngot validates an ingot package at the FS root.
-func temperIngot(fsys fs.FS, result *TemperResult) {
-	temperIngotAt(fsys, "ingot.yaml", result)
-}
-
 // temperIngotAt validates an ingot package whose manifest is at manifestPath,
 // resolving file references relative to the manifest's directory. Used by both
 // single-at-root temper and multi-ingot fan-out.
