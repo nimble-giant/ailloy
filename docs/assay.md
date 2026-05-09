@@ -57,6 +57,14 @@ ailloy lint
 | `skill-token-budget` | Warning | Skill body exceeds [~5000 tokens](https://agentskills.io/specification#progressive-disclosure) (configurable); move reference material to separate files |
 | `description-imperative` | Suggestion | Description uses [declarative phrasing](https://agentskills.io/skill-creation/optimizing-descriptions#writing-effective-descriptions) ("This skill does...") instead of imperative ("Analyzes...") |
 
+### Mold-tree rules
+
+These rules lint a mold's source tree (rather than rendered AI instruction files) and are invoked automatically by [`ailloy temper`](temper.md):
+
+| Rule | Severity | Description |
+|------|----------|-------------|
+| `ore-shadowing` | Warning | A mold has both a packaged ore at `./ores/<n>/` and hand-rolled `ore.<n>.*` entries in `flux.schema.yaml`; the hand-rolled entries silently shadow the package and almost always indicate a missed cleanup after migrating from the in-tree convention |
+
 ## Claude Plugin Directory Support
 
 Assay automatically detects and lints **Claude plugin directories** — any directory containing a `.claude-plugin/plugin.json` manifest. This includes marketplace repositories that bundle multiple plugins at arbitrary nesting depths.

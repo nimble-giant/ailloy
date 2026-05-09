@@ -236,6 +236,8 @@ assay:
         error-pct: 25             # error when instructions exceed this % of effective context window
         # warn-tokens: 18400     # optional: override with absolute token count
         # error-tokens: 46000    # optional: override with absolute token count
+    ore-shadowing:
+      enabled: true              # warn when a mold has both ./ores/<n>/ and ore.<n>.* entries in flux.schema.yaml
   ignore: []
     # - "vendor/**"
     # - ".claude/rules/generated-*.md"
