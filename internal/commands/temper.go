@@ -71,6 +71,7 @@ func runTemper(_ *cobra.Command, args []string) error {
 	// allowed because temper only operates on local trees.
 	if result.ManifestKind == "mold" {
 		appendOreDiagnostics(fsys, result)
+		appendMoldAssayDiagnostics(moldDir, result)
 	}
 
 	if result.Name != "" {
@@ -364,6 +365,39 @@ func isWellKnownDefault(dotted string) bool {
 	}
 	switch root {
 	case "output":
+		return true
+	}
+	return false
+}
+
+// appendMoldAssayDiagnostics runs assay rules whose Check function operates on
+// a mold tree (rather than rendered AI instruction files), and appends their
+// findings to the temper result. Suppression follows the standard assay
+// convention: rules can be disabled via .ailloyrc.yaml at the mold root.
+func appendMoldAssayDiagnostics(moldDir string, result *mold.TemperResult) {
+	cfg, err := assay.LoadConfig(moldDir)
+	if err != nil {
+		cfg = assay.DefaultConfig()
+	}
+	ctx := &assay.RuleContext{RootDir: moldDir, Config: cfg}
+	for _, rule := range assay.AllRules() {
+		if !isMoldTreeRule(rule.Name()) {
+			continue
+		}
+		if !cfg.IsRuleEnabled(rule.Name()) {
+			continue
+		}
+		result.Diagnostics = append(result.Diagnostics, rule.Check(ctx)...)
+	}
+}
+
+// isMoldTreeRule names assay rules that lint a mold's source tree (not
+// rendered AI instruction files). They have no DetectedFile inputs and read
+// straight from ctx.RootDir, so they're invoked by temper rather than the
+// assay command's file-driven scan.
+func isMoldTreeRule(name string) bool {
+	switch name {
+	case "ore-shadowing":
 		return true
 	}
 	return false

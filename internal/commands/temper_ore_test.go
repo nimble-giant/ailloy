@@ -56,6 +56,62 @@ dependencies:
 	}
 }
 
+// TestTemper_OnMold_OreShadowingRule_Fires verifies that running temper on a
+// mold with both a packaged mold-local ore and stale hand-rolled
+// `ore.<name>.*` entries in flux.schema.yaml surfaces the ore-shadowing
+// warning.
+func TestTemper_OnMold_OreShadowingRule_Fires(t *testing.T) {
+	moldDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(moldDir, "mold.yaml"), []byte("apiVersion: v1\nkind: mold\nname: test-mold\nversion: 1.0.0\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	writeOreFiles(t, filepath.Join(moldDir, "ores", "status"), "status")
+	schema := "- name: ore.status.enabled\n  type: bool\n"
+	if err := os.WriteFile(filepath.Join(moldDir, "flux.schema.yaml"), []byte(schema), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := &mold.TemperResult{ManifestKind: "mold"}
+	appendMoldAssayDiagnostics(moldDir, result)
+
+	var saw bool
+	for _, d := range result.Warnings() {
+		if d.Rule == "ore-shadowing" && strings.Contains(d.Message, "ore.status.") {
+			saw = true
+		}
+	}
+	if !saw {
+		t.Errorf("expected ore-shadowing warning, got %+v", result.Diagnostics)
+	}
+}
+
+// TestTemper_OnMold_OreShadowingRule_SuppressedByConfig verifies that
+// disabling the rule via .ailloyrc.yaml prevents the warning.
+func TestTemper_OnMold_OreShadowingRule_SuppressedByConfig(t *testing.T) {
+	moldDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(moldDir, "mold.yaml"), []byte("apiVersion: v1\nkind: mold\nname: test-mold\nversion: 1.0.0\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	writeOreFiles(t, filepath.Join(moldDir, "ores", "status"), "status")
+	schema := "- name: ore.status.enabled\n  type: bool\n"
+	if err := os.WriteFile(filepath.Join(moldDir, "flux.schema.yaml"), []byte(schema), 0644); err != nil {
+		t.Fatal(err)
+	}
+	rcYAML := "assay:\n  rules:\n    ore-shadowing:\n      enabled: false\n"
+	if err := os.WriteFile(filepath.Join(moldDir, ".ailloyrc.yaml"), []byte(rcYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := &mold.TemperResult{ManifestKind: "mold"}
+	appendMoldAssayDiagnostics(moldDir, result)
+
+	for _, d := range result.Diagnostics {
+		if d.Rule == "ore-shadowing" {
+			t.Errorf("ore-shadowing should be suppressed, but fired: %+v", d)
+		}
+	}
+}
+
 // TestTemper_OnOreDir_PrefixedEntry_Errors verifies that an ore directory
 // whose flux.schema.yaml contains a pre-prefixed entry name (`ore.x` or
 // `<oreName>.x`) is reported as an error — entries must be unprefixed.
