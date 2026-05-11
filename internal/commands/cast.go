@@ -394,6 +394,15 @@ func castProject(reader *blanks.MoldReader, source string) error {
 		}
 	}
 
+	// Cast transitive mold deps (mold-on-mold dependencies). No-op when the
+	// root has no mold-kind deps. Runs after the root is recorded so cycles
+	// or conflicts surface alongside the root cast result.
+	if resolvedRemote != nil {
+		if err := castTransitiveDeps(resolvedRemote, manifest, flux, destPrefix); err != nil {
+			return fmt.Errorf("casting transitive dependencies: %w", err)
+		}
+	}
+
 	// Success celebration
 	fmt.Println()
 	successMessage := "Project casting complete!"
@@ -783,7 +792,12 @@ func copyResolvedFilesWithSchema(reader *blanks.MoldReader, manifest *mold.Mold,
 // `recast` can replay them. logger receives the "corrupt manifest, resetting"
 // warning; pass a discarding logger from TUI callers to keep the alt-screen
 // clean.
-func recordInstalled(result *foundry.ResolveResult, global bool, opts *foundry.CastOptionsRecord, logger *log.Logger) error {
+//
+// installedAs is "direct" for top-level casts (the user typed `ailloy cast
+// <ref>`) and "transitive" for molds pulled in by another mold's
+// dependencies. installedBy is the list of parent source[@subpath] strings
+// for transitives — empty/ignored for direct casts.
+func recordInstalled(result *foundry.ResolveResult, global bool, opts *foundry.CastOptionsRecord, installedAs string, installedBy []string, logger *log.Logger) error {
 	if logger == nil {
 		logger = log.Default()
 	}
@@ -799,13 +813,31 @@ func recordInstalled(result *foundry.ResolveResult, global bool, opts *foundry.C
 	if manifest == nil {
 		manifest = &foundry.InstalledManifest{APIVersion: "v1"}
 	}
+	// Preserve any pre-existing InstalledBy entries when a transitive is also
+	// reached via additional parents, so multi-parent reverse edges accumulate
+	// like ArtifactEntry.Dependents already does.
+	mergedBy := append([]string(nil), installedBy...)
+	if existing := manifest.FindBySource(result.Ref.CacheKey(), result.Ref.Subpath); existing != nil {
+		for _, p := range existing.InstalledBy {
+			if !containsString(mergedBy, p) {
+				mergedBy = append(mergedBy, p)
+			}
+		}
+		// A mold cast directly stays direct even if it was previously seen as
+		// transitive; the user explicitly asked for it now.
+		if installedAs == "" {
+			installedAs = existing.InstalledAs
+		}
+	}
 	entry := foundry.InstalledEntry{
-		Name:    result.Ref.Repo,
-		Source:  result.Ref.CacheKey(),
-		Subpath: result.Ref.Subpath,
-		Version: result.Resolved.Tag,
-		Commit:  result.Resolved.Commit,
-		CastAt:  time.Now().UTC(),
+		Name:        result.Ref.Repo,
+		Source:      result.Ref.CacheKey(),
+		Subpath:     result.Ref.Subpath,
+		Version:     result.Resolved.Tag,
+		Commit:      result.Resolved.Commit,
+		CastAt:      time.Now().UTC(),
+		InstalledAs: installedAs,
+		InstalledBy: mergedBy,
 	}
 	if opts != nil && (opts.WithWorkflows || len(opts.ValueFiles) > 0 || len(opts.SetOverrides) > 0) {
 		// Copy to detach from caller's slice ownership.
@@ -826,7 +858,14 @@ func recordInstalled(result *foundry.ResolveResult, global bool, opts *foundry.C
 // arguments for `recast`; logger is forwarded so TUI callers can keep the
 // alt-screen clean.
 func recordCastedFiles(result *foundry.ResolveResult, files []foundry.InstalledFile, global bool, opts *foundry.CastOptionsRecord, logger *log.Logger) error {
-	if err := recordInstalled(result, global, opts, logger); err != nil {
+	return recordCastedFilesWithProvenance(result, files, global, opts, "direct", nil, logger)
+}
+
+// recordCastedFilesWithProvenance is recordCastedFiles with explicit
+// InstalledAs / InstalledBy plumbing for transitive mold deps. The default
+// recordCastedFiles call sets installedAs="direct" and no installedBy.
+func recordCastedFilesWithProvenance(result *foundry.ResolveResult, files []foundry.InstalledFile, global bool, opts *foundry.CastOptionsRecord, installedAs string, installedBy []string, logger *log.Logger) error {
+	if err := recordInstalled(result, global, opts, installedAs, installedBy, logger); err != nil {
 		return err
 	}
 	path := manifestPathFor(global)

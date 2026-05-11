@@ -74,6 +74,29 @@ func ResolveVersion(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
 	}
 }
 
+// RemoteTags lists the semver tags (tag → commit SHA) for the given remote
+// URL, optionally narrowed to a monorepo subpath via the prefix selection
+// rules (`<subpath>-v*` tags when present, falling back to plain tags).
+//
+// Used by graph-aware resolvers (transitive mold deps) that need to intersect
+// constraints from multiple parents and pick the highest-compatible version
+// without re-issuing one git ls-remote per constraint.
+func RemoteTags(url, subpath string, git GitRunner) (map[string]string, error) {
+	all, err := remoteTags(url, git)
+	if err != nil {
+		return nil, err
+	}
+	prefix := ""
+	if s := strings.Trim(subpath, "/"); s != "" {
+		if i := strings.LastIndex(s, "/"); i != -1 {
+			prefix = s[i+1:]
+		} else {
+			prefix = s
+		}
+	}
+	return selectTagsForPrefix(all, prefix), nil
+}
+
 // remoteTags fetches all semver tags from the remote and returns a map of
 // version → commit SHA. Annotated tags (^{}) override lightweight tag SHAs.
 func remoteTags(url string, git GitRunner) (map[string]string, error) {

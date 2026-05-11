@@ -47,37 +47,58 @@ type FluxVar struct {
 	Discover    *DiscoverSpec  `yaml:"discover,omitempty"` // Dynamic discovery specification
 }
 
-// Dependency declares a dependency on an ingot or ore. Exactly one of Ingot
-// or Ore must be set per entry; this is enforced at temper time via
-// Dependency.Kind().
+// Dependency declares a dependency on a mold, ingot, or ore. Exactly one of
+// Mold, Ingot, or Ore must be set per entry; this is enforced at temper time
+// via Dependency.Kind().
+//
+// `Mold` accepts the same reference syntax as top-level `ailloy cast` — a
+// foundry-resolvable name, a git URL, or a local path. `With` carries
+// Helm-style sub-chart values that seed the dep's flux at cast time.
 type Dependency struct {
-	Ingot   string `yaml:"ingot,omitempty"`
-	Ore     string `yaml:"ore,omitempty"`
-	Version string `yaml:"version"`
-	As      string `yaml:"as,omitempty"` // ore-only namespace alias; ignored when Ingot is set
+	Mold    string         `yaml:"mold,omitempty"`
+	Ingot   string         `yaml:"ingot,omitempty"`
+	Ore     string         `yaml:"ore,omitempty"`
+	Version string         `yaml:"version"`
+	As      string         `yaml:"as,omitempty"`   // ore namespace alias; for mold deps, alias used in --set <as>.<key>
+	With    map[string]any `yaml:"with,omitempty"` // mold-only: Helm-style values passed into the dep's flux
 }
 
-// Kind returns "ingot" or "ore" based on which field is set. It is an error
-// for both or neither to be set; callers should treat that as a configuration
-// problem to surface at temper or pre-cast time.
+// Kind returns "mold", "ingot", or "ore" based on which field is set. It is
+// an error for more than one or none to be set; callers should treat that
+// as a configuration problem to surface at temper or pre-cast time.
 func (d Dependency) Kind() (string, error) {
+	set := 0
+	if d.Mold != "" {
+		set++
+	}
+	if d.Ingot != "" {
+		set++
+	}
+	if d.Ore != "" {
+		set++
+	}
 	switch {
-	case d.Ingot != "" && d.Ore != "":
-		return "", fmt.Errorf("dependency entry has both 'ingot' and 'ore' set; pick one")
+	case set > 1:
+		return "", fmt.Errorf("dependency entry must set exactly one of 'mold', 'ingot', 'ore'")
+	case d.Mold != "":
+		return "mold", nil
 	case d.Ingot != "":
 		return "ingot", nil
 	case d.Ore != "":
 		return "ore", nil
 	default:
-		return "", fmt.Errorf("dependency entry has neither 'ingot' nor 'ore' set")
+		return "", fmt.Errorf("dependency entry has none of 'mold', 'ingot', 'ore' set")
 	}
 }
 
-// Source returns the non-empty of Ingot or Ore. When both are set (which is
-// invalid per Kind() and should be caught by temper), Ingot is returned —
-// callers should validate via Kind() first if they need to detect ambiguity.
-// Returns "" if neither is set.
+// Source returns the non-empty of Mold, Ingot, or Ore. When more than one is
+// set (which is invalid per Kind() and should be caught by temper), the order
+// is Mold, then Ingot, then Ore — callers should validate via Kind() first if
+// they need to detect ambiguity. Returns "" if none is set.
 func (d Dependency) Source() string {
+	if d.Mold != "" {
+		return d.Mold
+	}
 	if d.Ingot != "" {
 		return d.Ingot
 	}

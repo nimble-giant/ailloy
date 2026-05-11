@@ -420,3 +420,102 @@ func TestDependency_Source(t *testing.T) {
 		t.Error("ore source")
 	}
 }
+
+func TestDependency_Kind_Mold(t *testing.T) {
+	d := Dependency{Mold: "github.com/x/y", Version: "^1.0.0"}
+	k, err := d.Kind()
+	if err != nil || k != "mold" {
+		t.Errorf("Kind = (%q, %v); want (mold, nil)", k, err)
+	}
+}
+
+func TestDependency_Kind_MoldWithIngot_Errors(t *testing.T) {
+	d := Dependency{Mold: "a", Ingot: "b", Version: "1.0.0"}
+	if _, err := d.Kind(); err == nil {
+		t.Error("expected error when both mold and ingot set")
+	}
+}
+
+func TestDependency_Kind_MoldWithOre_Errors(t *testing.T) {
+	d := Dependency{Mold: "a", Ore: "b", Version: "1.0.0"}
+	if _, err := d.Kind(); err == nil {
+		t.Error("expected error when both mold and ore set")
+	}
+}
+
+func TestDependency_Source_Mold(t *testing.T) {
+	if (Dependency{Mold: "g/m"}).Source() != "g/m" {
+		t.Error("mold source")
+	}
+}
+
+func TestParseMold_MoldDependency(t *testing.T) {
+	data := []byte(`
+apiVersion: v1
+kind: mold
+name: parent
+version: 1.0.0
+dependencies:
+  - mold: github.com/example/child
+    version: "^1.0.0"
+    as: child-alias
+    with:
+      key1: value1
+      nested:
+        inner: 42
+`)
+	m, err := ParseMold(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(m.Dependencies) != 1 {
+		t.Fatalf("expected 1 dependency, got %d", len(m.Dependencies))
+	}
+	d := m.Dependencies[0]
+	if d.Mold != "github.com/example/child" {
+		t.Errorf("Mold = %q; want github.com/example/child", d.Mold)
+	}
+	if d.As != "child-alias" {
+		t.Errorf("As = %q; want child-alias", d.As)
+	}
+	if d.With["key1"] != "value1" {
+		t.Errorf("With[key1] = %v; want value1", d.With["key1"])
+	}
+	if got, _ := d.Kind(); got != "mold" {
+		t.Errorf("Kind = %q; want mold", got)
+	}
+}
+
+func TestValidateMold_MoldDependency(t *testing.T) {
+	m := &Mold{
+		APIVersion: "v1",
+		Kind:       "mold",
+		Name:       "parent",
+		Version:    "1.0.0",
+		Dependencies: []Dependency{
+			{Mold: "github.com/x/y", Version: "^1.0.0"},
+		},
+	}
+	if err := ValidateMold(m); err != nil {
+		t.Errorf("expected no error for valid mold dependency, got: %v", err)
+	}
+}
+
+func TestValidateMold_MoldDepInvalidVersion(t *testing.T) {
+	m := &Mold{
+		APIVersion: "v1",
+		Kind:       "mold",
+		Name:       "parent",
+		Version:    "1.0.0",
+		Dependencies: []Dependency{
+			{Mold: "github.com/x/y", Version: "garbage"},
+		},
+	}
+	err := ValidateMold(m)
+	if err == nil {
+		t.Fatal("expected error for invalid mold dep version")
+	}
+	if !strings.Contains(err.Error(), "dependencies[0].version") {
+		t.Errorf("expected dep version error, got: %v", err)
+	}
+}

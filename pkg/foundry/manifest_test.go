@@ -404,6 +404,123 @@ func TestArtifact_All_YieldsAllKinds(t *testing.T) {
 	}
 }
 
+func TestInstalledEntry_RoundTrip_InstalledAsAndInstalledBy(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "installed.yaml")
+	ts := time.Date(2026, 5, 8, 9, 0, 0, 0, time.UTC)
+	original := &InstalledManifest{
+		APIVersion: "v1",
+		Molds: []InstalledEntry{
+			{
+				Name: "top", Source: "g/top", Version: "v1.0.0", Commit: "111", CastAt: ts,
+				InstalledAs: "direct",
+			},
+			{
+				Name: "leaf", Source: "g/leaf", Version: "v1.0.0", Commit: "222", CastAt: ts,
+				InstalledAs: "transitive",
+				InstalledBy: []string{"g/top"},
+			},
+		},
+	}
+	if err := WriteInstalledManifest(path, original); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadInstalledManifest(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Molds) != 2 {
+		t.Fatalf("len = %d", len(got.Molds))
+	}
+	if got.Molds[0].InstalledAs != "direct" {
+		t.Errorf("Molds[0].InstalledAs = %q; want direct", got.Molds[0].InstalledAs)
+	}
+	if got.Molds[1].InstalledAs != "transitive" {
+		t.Errorf("Molds[1].InstalledAs = %q; want transitive", got.Molds[1].InstalledAs)
+	}
+	if len(got.Molds[1].InstalledBy) != 1 || got.Molds[1].InstalledBy[0] != "g/top" {
+		t.Errorf("Molds[1].InstalledBy = %v", got.Molds[1].InstalledBy)
+	}
+}
+
+func TestInstalledEntry_OmitsEmptyInstalledFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "installed.yaml")
+	m := &InstalledManifest{
+		APIVersion: "v1",
+		Molds: []InstalledEntry{
+			{Name: "m", Source: "g/m", Version: "v1.0.0", Commit: "abc"},
+		},
+	}
+	if err := WriteInstalledManifest(path, m); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "installedAs") {
+		t.Errorf("expected installedAs to be omitted when empty:\n%s", raw)
+	}
+	if strings.Contains(string(raw), "installedBy") {
+		t.Errorf("expected installedBy to be omitted when empty:\n%s", raw)
+	}
+}
+
+func TestInstalledManifest_RemoveMoldDependent_RemovesOrphanTransitives(t *testing.T) {
+	m := &InstalledManifest{
+		APIVersion: "v1",
+		Molds: []InstalledEntry{
+			{Name: "top", Source: "g/top", Version: "v1.0.0", InstalledAs: "direct"},
+			{
+				Name: "leaf-only-via-top", Source: "g/leaf-a", Version: "v1.0.0",
+				InstalledAs: "transitive", InstalledBy: []string{"g/top"},
+			},
+			{
+				Name: "shared", Source: "g/shared", Version: "v1.0.0",
+				InstalledAs: "transitive", InstalledBy: []string{"g/top", "g/other"},
+			},
+		},
+	}
+	orphans := m.RemoveMoldDependent("g/top")
+	// leaf-only-via-top has only g/top as a parent → orphan, removed.
+	// shared still has g/other → kept with g/top stripped.
+	if len(orphans) != 1 || orphans[0].Name != "leaf-only-via-top" {
+		t.Errorf("orphans = %+v; want only leaf-only-via-top", orphans)
+	}
+	if len(m.Molds) != 2 {
+		t.Fatalf("expected 2 molds after orphan removal, got %d: %+v", len(m.Molds), m.Molds)
+	}
+	// `top` should still be present (direct, not affected).
+	// `shared` should still be present, with InstalledBy stripped of g/top.
+	for _, e := range m.Molds {
+		if e.Name == "shared" {
+			if len(e.InstalledBy) != 1 || e.InstalledBy[0] != "g/other" {
+				t.Errorf("shared.InstalledBy = %v; want [g/other]", e.InstalledBy)
+			}
+		}
+	}
+}
+
+func TestInstalledManifest_RemoveMoldDependent_DirectsAreNeverOrphaned(t *testing.T) {
+	m := &InstalledManifest{
+		APIVersion: "v1",
+		Molds: []InstalledEntry{
+			{Name: "directly-cast", Source: "g/d", InstalledAs: "direct", InstalledBy: []string{"g/parent"}},
+		},
+	}
+	orphans := m.RemoveMoldDependent("g/parent")
+	if len(orphans) != 0 {
+		t.Errorf("direct molds must never become orphans, got: %+v", orphans)
+	}
+	if len(m.Molds) != 1 {
+		t.Fatalf("direct mold must remain: %+v", m.Molds)
+	}
+	if len(m.Molds[0].InstalledBy) != 0 {
+		t.Errorf("InstalledBy should still be stripped: %+v", m.Molds[0].InstalledBy)
+	}
+}
+
 func TestManifest_AbsentDoesNotBreakLockReads(t *testing.T) {
 	dir := t.TempDir()
 	origDir, err := os.Getwd()

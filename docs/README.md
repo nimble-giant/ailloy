@@ -21,6 +21,7 @@ These guides teach you how to create, package, and share your own AI workflow pa
 - [Flux Variables](flux.md) — Configure blanks with variables, schemas, and value layering
 - [Ingots](ingots.md) — Create and use reusable template components
 - [Ore](ore.md) — Reusable flux partials for opt-in business-logic data structures
+- [Mold Dependencies](mold-dependencies.md) — Compose molds; transitive resolution, conflict handling, lockfile, uninstall cascade
 - [Packaging Molds](smelt.md) — Package molds into distributable tarballs or binaries
 
 ## Operations
