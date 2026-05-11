@@ -62,8 +62,9 @@ func runUninstall(_ *cobra.Command, args []string) error {
 	if subpath != "" {
 		display = source + "//" + subpath
 	}
-	// Cascade-prune unshared ingots/ores once the mold has been removed.
-	// moldKey mirrors the cast-time key (source@subpath when subpath is set).
+	// Cascade-prune unshared ingots/ores AND orphaned transitive mold deps
+	// once the parent mold has been removed. moldKey mirrors the cast-time
+	// key (source@subpath when subpath is set).
 	if err == nil && !uninstallDryRun {
 		moldKey := source
 		if subpath != "" {
@@ -71,6 +72,9 @@ func runUninstall(_ *cobra.Command, args []string) error {
 		}
 		if cerr := cascadeUninstallArtifacts(manifestPath, moldKey, uninstallGlobal); cerr != nil {
 			fmt.Println(styles.WarningStyle.Render("⚠️  ") + "cascade cleanup: " + cerr.Error())
+		}
+		if cerr := cascadeUninstallTransitiveMolds(manifestPath, moldKey, uninstallGlobal, uninstallDryRun); cerr != nil {
+			fmt.Println(styles.WarningStyle.Render("⚠️  ") + "transitive-mold cascade: " + cerr.Error())
 		}
 	}
 	if err != nil {

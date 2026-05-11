@@ -76,6 +76,12 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 
 	for _, d := range manifest.Dependencies {
 		kind, _ := d.Kind() // already validated above
+		// Mold-on-mold dependencies are resolved transitively by the cast
+		// pipeline (see castTransitiveDeps), not here. This function is for
+		// ingot/ore artifacts only.
+		if kind == "mold" {
+			continue
+		}
 		ref := d.Source()
 
 		if !allowLocalDeps && !foundry.IsRemoteReference(ref) {
@@ -435,6 +441,90 @@ func artifactInstallDir(kind, name string, global bool) (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".ailloy", kind+"s", name), nil
+}
+
+// cascadeUninstallTransitiveMolds is the mold equivalent of
+// cascadeUninstallArtifacts: when a parent mold is uninstalled, any
+// transitive mold it had pulled in (InstalledAs="transitive") loses one
+// reverse-edge in its InstalledBy list. Transitives whose InstalledBy drains
+// to empty are uninstalled (their files removed and manifest entry dropped).
+//
+// Direct casts (InstalledAs="direct") are never garbage-collected by this
+// pass — only the parent reference is stripped from their InstalledBy.
+//
+// Recursion: a removed transitive may itself have pulled in further
+// transitives; we cascade through them the same way until no orphans
+// remain. The recursion is bounded by the manifest's mold count.
+func cascadeUninstallTransitiveMolds(manifestPath, parentKey string, global, dryRun bool) error {
+	if manifestPath == "" || parentKey == "" {
+		return nil
+	}
+	for {
+		im, err := foundry.ReadInstalledManifest(manifestPath)
+		if err != nil {
+			return err
+		}
+		if im == nil {
+			return nil
+		}
+
+		// Find transitives whose InstalledBy contains only the parent key being
+		// removed. After the parent is gone, those become orphans and need a
+		// real UninstallMold call (so their files come out + lock entry drops).
+		type orphan struct {
+			source  string
+			subpath string
+			label   string
+		}
+		var orphans []orphan
+		mutated := false
+		for i := range im.Molds {
+			e := &im.Molds[i]
+			if !containsString(e.InstalledBy, parentKey) {
+				continue
+			}
+			e.InstalledBy = stripDependent(e.InstalledBy, parentKey)
+			mutated = true
+			if e.InstalledAs == "transitive" && len(e.InstalledBy) == 0 {
+				lbl := e.Source
+				if e.Subpath != "" {
+					lbl += "@" + e.Subpath
+				}
+				orphans = append(orphans, orphan{source: e.Source, subpath: e.Subpath, label: lbl})
+			}
+		}
+		if mutated {
+			if err := foundry.WriteInstalledManifest(manifestPath, im); err != nil {
+				return fmt.Errorf("writing manifest after cascading mold parent edges: %w", err)
+			}
+		}
+		if len(orphans) == 0 {
+			return nil
+		}
+
+		// Uninstall each orphan. Their files come off disk, and their entry is
+		// dropped from the manifest. After each one we re-run the cascade so
+		// the next orphan's own transitives also get cleaned up.
+		for _, o := range orphans {
+			ures, uerr := foundry.UninstallMold(manifestPath, o.source, o.subpath, foundry.UninstallOptions{
+				Force:  uninstallForce,
+				DryRun: dryRun,
+			})
+			if uerr != nil {
+				log.Printf("warning: cascade-uninstall of transitive mold %s: %v", o.label, uerr)
+				continue
+			}
+			fmt.Println(styles.SuccessStyle.Render("  Cascade-removed: ") + styles.AccentStyle.Render("mold "+o.label) +
+				styles.SubtleStyle.Render(fmt.Sprintf(" (%d file(s))", len(ures.Deleted))))
+			// Recurse: this orphan might have its own transitives.
+			if err := cascadeUninstallTransitiveMolds(manifestPath, o.label, global, dryRun); err != nil {
+				return err
+			}
+		}
+		// Loop again in case there are still orphans to process. Bounded by the
+		// finite manifest size; at minimum each iteration strips one entry.
+		return nil
+	}
 }
 
 // cascadeUninstallArtifacts strips moldKey from every ingot/ore Dependents

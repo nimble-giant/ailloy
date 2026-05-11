@@ -34,6 +34,13 @@ type CastOptionsRecord struct {
 // UninstallMold so the uninstall flow knows what to remove and can detect
 // post-cast modifications. They are intentionally on the manifest (not the
 // lock) so uninstall keeps working when ailloy.lock has not been opted into.
+//
+// InstalledAs distinguishes molds the user cast directly ("direct") from
+// molds installed because some other mold depends on them ("transitive").
+// InstalledBy mirrors ArtifactEntry.Dependents: it lists the parent molds
+// (by source[@subpath]) that pulled this mold in transitively, enabling
+// cascade-uninstall — when a transitive's last parent goes away, it can
+// be GC'd. Direct molds are never garbage-collected by the cascade.
 type InstalledEntry struct {
 	Name        string             `yaml:"name"`
 	Source      string             `yaml:"source"`
@@ -44,6 +51,8 @@ type InstalledEntry struct {
 	Files       []string           `yaml:"files,omitempty"`
 	FileHashes  map[string]string  `yaml:"fileHashes,omitempty"`
 	CastOptions *CastOptionsRecord `yaml:"castOptions,omitempty"`
+	InstalledAs string             `yaml:"installedAs,omitempty"` // "direct" | "transitive"
+	InstalledBy []string           `yaml:"installedBy,omitempty"` // parent mold source[@subpath] strings
 }
 
 // ArtifactEntry records an installed ingot or ore. Mirrors InstalledEntry
@@ -162,6 +171,29 @@ func (m *InstalledManifest) UpsertArtifact(kind string, entry ArtifactEntry) {
 		}
 	}
 	*list = append(*list, entry)
+}
+
+// RemoveMoldDependent strips parentKey from every transitive mold's
+// InstalledBy list. Returns the entries whose InstalledBy became empty AND
+// were installed as transitives — those are removed from the manifest as
+// orphans (caller GCs their files). Direct entries are never removed even
+// when their InstalledBy goes empty, since the user cast them explicitly.
+func (m *InstalledManifest) RemoveMoldDependent(parentKey string) []InstalledEntry {
+	if m == nil {
+		return nil
+	}
+	var orphans []InstalledEntry
+	kept := m.Molds[:0]
+	for _, e := range m.Molds {
+		e.InstalledBy = stripString(e.InstalledBy, parentKey)
+		if e.InstalledAs == "transitive" && len(e.InstalledBy) == 0 {
+			orphans = append(orphans, e)
+			continue
+		}
+		kept = append(kept, e)
+	}
+	m.Molds = kept
+	return orphans
 }
 
 // RemoveDependent strips moldKey from every artifact's Dependents list.
