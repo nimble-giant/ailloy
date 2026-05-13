@@ -9,6 +9,17 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/safepath"
 )
 
+// OreOutputKey is the reserved top-level key in an ore's flux.yaml whose
+// value is a map of source-path → destination overrides that gets merged
+// into the consuming mold's `output:` mapping at cast time. See docs/ore.md
+// for merge semantics and the `from:` selector for blanks.
+const OreOutputKey = "output"
+
+// OreBlanksDir is the reserved directory inside an ore package containing
+// template bodies addressable by `output:` mappings (either ore-supplied or
+// consumer-supplied via `from: ore/<namespace>/blanks/...`).
+const OreBlanksDir = "blanks"
+
 // Ore represents an ore.yaml manifest. An ore is a packaged flux-schema
 // fragment that consumers install with `ailloy ore add`.
 type Ore struct {
