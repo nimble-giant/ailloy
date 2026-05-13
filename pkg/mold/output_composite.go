@@ -109,12 +109,43 @@ func ResolveFilesWithOreSources(output any, moldFS fs.FS, oreSources []OreSource
 }
 
 // fromEntry holds a parsed `from: ore/<ns>/<path>` consumer output entry.
+// Unlike OutputTarget.Process (*bool, nil-default), fromEntry.process is a
+// resolved bool because it flows directly to ResolvedFile without going
+// through OutputTarget.ShouldProcess().
 type fromEntry struct {
 	from     string
 	dest     string
 	process  bool
 	set      map[string]any
 	strategy string
+}
+
+// parseFromEntryFields extracts a `from: ore/<ns>/<path>` entry from a map.
+// Returns the parsed fromEntry and true if `from:` is present and non-empty;
+// returns the zero value and false otherwise. `defaultDest` is used when the
+// map does not set `dest:` explicitly.
+func parseFromEntryFields(m map[string]any, defaultDest string) (fromEntry, bool) {
+	from, _ := m["from"].(string)
+	if from == "" {
+		return fromEntry{}, false
+	}
+	dest, _ := m["dest"].(string)
+	if dest == "" {
+		dest = defaultDest
+	}
+	process := true
+	if p, ok := m["process"].(bool); ok {
+		process = p
+	}
+	set, _ := m["set"].(map[string]any)
+	strategy, _ := m["strategy"].(string)
+	return fromEntry{
+		from:     from,
+		dest:     dest,
+		process:  process,
+		set:      set,
+		strategy: strategy,
+	}, true
 }
 
 // splitFromEntries separates consumer output entries that carry a `from:` key
@@ -136,31 +167,8 @@ func splitFromEntries(output any) ([]fromEntry, any, error) {
 	for key, val := range m {
 		switch v := val.(type) {
 		case map[string]any:
-			from, hasFrom := v["from"].(string)
-			dest, _ := v["dest"].(string)
-			if hasFrom && from != "" {
-				process := true
-				if p, ok := v["process"].(bool); ok {
-					process = p
-				}
-				var set map[string]any
-				if s, ok := v["set"].(map[string]any); ok {
-					set = s
-				}
-				var strategy string
-				if s, ok := v["strategy"].(string); ok {
-					strategy = s
-				}
-				if dest == "" {
-					dest = key
-				}
-				fromEntries = append(fromEntries, fromEntry{
-					from:     from,
-					dest:     dest,
-					process:  process,
-					set:      set,
-					strategy: strategy,
-				})
+			if fe, ok := parseFromEntryFields(v, key); ok {
+				fromEntries = append(fromEntries, fe)
 				// Do not include in remainder — ResolveFiles cannot handle these.
 				continue
 			}
@@ -175,31 +183,8 @@ func splitFromEntries(output any) ([]fromEntry, any, error) {
 					regularList = append(regularList, entry)
 					continue
 				}
-				from, hasFrom := em["from"].(string)
-				dest, _ := em["dest"].(string)
-				if hasFrom && from != "" {
-					process := true
-					if p, ok := em["process"].(bool); ok {
-						process = p
-					}
-					var set map[string]any
-					if s, ok := em["set"].(map[string]any); ok {
-						set = s
-					}
-					var strategy string
-					if s, ok := em["strategy"].(string); ok {
-						strategy = s
-					}
-					if dest == "" {
-						dest = key
-					}
-					fromEntries = append(fromEntries, fromEntry{
-						from:     from,
-						dest:     dest,
-						process:  process,
-						set:      set,
-						strategy: strategy,
-					})
+				if fe, ok := parseFromEntryFields(em, key); ok {
+					fromEntries = append(fromEntries, fe)
 				} else {
 					regularList = append(regularList, entry)
 				}
@@ -228,16 +213,15 @@ func splitFromEntries(output any) ([]fromEntry, any, error) {
 // namespace and path parts. Empty namespace or path is an error.
 func parseOreFromSelector(s string) (namespace string, relpath string, err error) {
 	const prefix = "ore/"
-	if !strings.HasPrefix(s, prefix) {
+	rest, ok := strings.CutPrefix(s, prefix)
+	if !ok {
 		return "", "", fmt.Errorf("from selector %q must start with %q (form: ore/<namespace>/<path>)", s, prefix)
 	}
-	rest := s[len(prefix):]
-	slash := strings.IndexByte(rest, '/')
-	if slash < 0 {
+	ns, p, ok := strings.Cut(rest, "/")
+	if !ok {
 		return "", "", fmt.Errorf("from selector %q must include a path after the namespace", s)
 	}
-	ns := rest[:slash]
-	p := path.Clean(rest[slash+1:])
+	p = path.Clean(p)
 	if ns == "" || p == "" || p == "." {
 		return "", "", fmt.Errorf("from selector %q has empty namespace or path", s)
 	}
