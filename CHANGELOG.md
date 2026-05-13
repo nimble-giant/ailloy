@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.30](https://github.com/nimble-giant/ailloy/compare/v0.6.29...v0.6.30) (2026-05-13)
+
+
+### Features
+
+* **assay:** add ore-shadowing lint for hand-rolled entries vs packaged ore ([6ee1743](https://github.com/nimble-giant/ailloy/commit/6ee1743eedac9d4617d1adc71d7ce2daa25e4f5f)), closes [#186](https://github.com/nimble-giant/ailloy/issues/186)
+* transitive mold dependencies (refs [#193](https://github.com/nimble-giant/ailloy/issues/193)) ([a0b42b4](https://github.com/nimble-giant/ailloy/commit/a0b42b422291649d391d409ad3036229df19b05b))
+
 ## [0.6.29](https://github.com/nimble-giant/ailloy/compare/v0.6.28...v0.6.29) (2026-05-08)
 
 
