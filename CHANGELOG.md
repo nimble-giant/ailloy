@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.31](https://github.com/nimble-giant/ailloy/compare/v0.6.30...v0.6.31) (2026-05-13)
+
+
+### Features
+
+* **cli:** multi-ingot package layout (parity with ore) ([67ce6be](https://github.com/nimble-giant/ailloy/commit/67ce6be0bc62f441a17ecc364ab09ae0e5410620))
+
 ## [0.6.30](https://github.com/nimble-giant/ailloy/compare/v0.6.29...v0.6.30) (2026-05-13)
 
 
