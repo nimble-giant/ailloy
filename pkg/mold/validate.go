@@ -304,12 +304,65 @@ func temperOre(fsys fs.FS, result *TemperResult) {
 			File:     "flux.yaml",
 		})
 	}
+	// Validate the optional `output:` overlay block. We do this before the
+	// orphan-defaults walk and we delete the `output` key from defaults so
+	// the orphan walker doesn't flag it.
+	if rawOutput, hasOutput := defaults[OreOutputKey]; hasOutput {
+		validateOreOutputBlock(fsys, rawOutput, result)
+		delete(defaults, OreOutputKey)
+	}
 	for _, orphan := range ValidateOrphanDefaults(schema, defaults) {
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: SeverityWarning,
 			Message:  fmt.Sprintf("flux.yaml has %q with no matching schema entry", orphan),
 			File:     "flux.yaml",
 		})
+	}
+}
+
+// validateOreOutputBlock validates an ore-supplied `output:` overlay. Rules:
+//   - top-level value must be a map
+//   - each value parses as a valid output target (string, map, or list)
+//   - `from:` keys are forbidden — only consumer molds may reference other
+//     ores via `from:`
+//   - source-path keys must resolve to existing files inside the ore package
+func validateOreOutputBlock(fsys fs.FS, raw any, result *TemperResult) {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityError,
+			Message:  "flux.yaml `output:` must be a map of source-path → target",
+			File:     "flux.yaml",
+		})
+		return
+	}
+	for src, val := range m {
+		targets, err := parseOutputValue(val)
+		if err != nil {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("flux.yaml output[%q]: %v", src, err),
+				File:     "flux.yaml",
+			})
+			continue
+		}
+		for _, t := range targets {
+			if t.From != "" {
+				result.Diagnostics = append(result.Diagnostics, Diagnostic{
+					Severity: SeverityError,
+					Message:  fmt.Sprintf("flux.yaml output[%q]: `from:` is not allowed in ore-supplied output entries (ores cannot reference other ores' blanks)", src),
+					File:     "flux.yaml",
+				})
+			}
+		}
+		// Source key must exist in the ore filesystem.
+		if _, err := fs.Stat(fsys, src); err != nil {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("flux.yaml output references %q which does not exist in the ore package", src),
+				File:     "flux.yaml",
+			})
+		}
 	}
 }
 
