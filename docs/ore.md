@@ -155,7 +155,7 @@ See the [Anneal guide](anneal.md) for the full discovery field reference.
 
 ## Ore Package Structure
 
-An ore package is a directory containing three files:
+An ore package is, at minimum, a directory containing three files. Ores may also ship optional output mappings and template bodies — see [Optional: shipping output mappings and template bodies](#optional-shipping-output-mappings-and-template-bodies) below.
 
 ```
 my-status-ore/
@@ -206,6 +206,102 @@ field_id: ""
 options:
   ready: { id: "", label: Ready }
 ```
+
+### Optional: shipping output mappings and template bodies
+
+An ore can also ship a complete reusable rendering — schema + defaults + **output fan-out** + **template bodies** — by adding two optional pieces:
+
+```
+my-multi-target-ore/
+├── ore.yaml
+├── flux.schema.yaml
+├── flux.yaml               # may include a top-level output: block
+└── blanks/                 # template files addressable from output:
+    ├── AGENTS.md
+    └── agents/
+        └── example.md
+```
+
+`flux.yaml` `output:` block — entries get merged into the consuming mold's `output:` map at cast time:
+
+```yaml
+enabled: true
+targets: [claude, opencode]
+
+output:
+  blanks/AGENTS.md: AGENTS.md
+  blanks/agents:
+    - dest: .claude/agents
+      set:
+        current_target: claude
+    - dest: .opencode/agents
+      set:
+        current_target: opencode
+```
+
+Source-path keys (the left-hand side of each output entry) reference paths **inside the ore package** — typically files under `blanks/`. Destinations are project-relative. Per-destination `set:` injects template context for that render pass, exactly like consumer-side `set:`.
+
+#### Merge semantics for ore-supplied `output:`
+
+When a consuming mold also defines an `output:` entry for the same source-path key:
+
+- **Consumer wins.** The ore-supplied entry is ignored.
+- The shadowed entry is recorded in `OreLoadReport.ShadowedOutput` and surfaced by `ailloy forge --debug`.
+- This mirrors the precedence rule already used for schema and defaults.
+
+When two ores declare the same source-path key (and the consumer does not):
+
+- **Error.** Resolve by overriding in the consumer's `output:` or by aliasing one of the ores with `as:` in the dependency declaration.
+
+Ore-supplied output entries render in the **consumer's flux context** — they can reference `{{ .project.x }}`, `{{ .ore.<other>.y }}`, etc. They render once per consumer cast, exactly like consumer-authored entries.
+
+#### Referencing ore blanks from a consumer mold
+
+A consumer mold can compose with an ore's blanks without depending on the ore declaring the destination itself. Use `from:` in a consumer output entry:
+
+```yaml
+# consumer's flux.yaml
+output:
+  AGENTS.md:
+    from: ore/agent_targets/blanks/AGENTS.md
+    dest: AGENTS.md
+```
+
+`from:` is only valid in **consumer-side** output entries. `ailloy temper` rejects `from:` inside an ore's own `output:` block — ores cannot reference other ores' blanks, that path is reserved for consumer composition.
+
+#### Worked example: `agent_targets`
+
+A complete worked example lives in [`testdata/agent_targets/`](../testdata/agent_targets/). The ore ships an `output:` block that fans `blanks/agents/` out to both `.claude/agents` and `.opencode/agents` with per-target `set: { current_target: <name> }` context, plus `blanks/AGENTS.md → AGENTS.md`. A consumer can pick up the entire multi-target rendering with nothing but a one-line dependency:
+
+```yaml
+# consumer/mold.yaml
+apiVersion: v1
+kind: Mold
+name: my_consumer
+version: 0.1.0
+dependencies:
+  - ore: github.com/.../agent_targets
+    version: 0.1.0
+```
+
+No `output:` block needed in the consumer. Cast renders `AGENTS.md`, `.claude/agents/...`, and `.opencode/agents/...` from the ore's blanks, each with its per-target context.
+
+#### Debug provenance
+
+Run `ailloy forge --debug` to see which file came from which ore:
+
+```
+[forge --debug] resolved output (dest ← src @ origin):
+  AGENTS.md                                ← blanks/AGENTS.md                         @ ore:agent_targets
+  .claude/agents/example.md                ← blanks/agents/example.md                 @ ore:agent_targets
+  .opencode/agents/example.md              ← blanks/agents/example.md                 @ ore:agent_targets
+```
+
+Use this to confirm a consumer's overrides land where you expect and to find unexpected shadowing.
+
+#### Backward compatibility
+
+The classic three-file ore (no `output:` block, no `blanks/` directory) continues to work unchanged. Both new pieces are additive — `ailloy temper` accepts ores with neither, either, or both.
 
 ## Creating an Ore
 
