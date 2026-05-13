@@ -363,7 +363,17 @@ func castProject(reader *blanks.MoldReader, source string) error {
 		resolveOpts = append(resolveOpts, mold.WithIgnorePatterns(ignorePatterns))
 	}
 
-	resolved, err := mold.ResolveFiles(flux["output"], reader.FS(), resolveOpts...)
+	// Resolve ore deps ephemerally to get OreSource records (fs handles +
+	// extracted output overlays). The on-disk schema/defaults path
+	// (loadCastFlux → LoadMoldFluxWithOres) doesn't expose FS handles, so
+	// we layer this read-only resolution on top. installDeclaredDeps above
+	// already pulled the deps; ResolveDepsEphemeral hits the same foundry
+	// cache and produces matching content.
+	depResolver, derr := ResolveDepsEphemeral(manifest, allowLocalDeps)
+	if derr != nil {
+		return fmt.Errorf("resolving ore output overlays: %w", derr)
+	}
+	resolved, err := mold.ResolveFilesWithOreSources(flux["output"], reader.FS(), depResolver.OreSources(), resolveOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to resolve output files: %w", err)
 	}
@@ -727,6 +737,17 @@ func offerAgentsImport(claudePath string) {
 		styles.SuccessStyle.Render(" import to ") + styles.CodeStyle.Render(claudePath))
 }
 
+// chooseFS returns rf.SrcFS when non-nil, falling back to the mold's primary
+// fs. Resolved files originating from an ore (or a consumer `from: ore/...`
+// selector) carry a non-nil SrcFS; mold-origin files carry nil and fall back
+// to the reader.
+func chooseFS(rf mold.ResolvedFile, primary fs.FS) fs.FS {
+	if rf.SrcFS != nil {
+		return rf.SrcFS
+	}
+	return primary
+}
+
 // copyResolvedFiles copies resolved mold files to the project, applying template
 // processing where indicated by the output mapping. Schema for validation is
 // inferred from the reader / mold manifest. Cast-time callers should prefer
@@ -769,7 +790,7 @@ func copyResolvedFilesWithSchema(reader *blanks.MoldReader, manifest *mold.Mold,
 	}
 
 	for _, rf := range resolved {
-		content, err := fs.ReadFile(reader.FS(), rf.SrcPath)
+		content, err := fs.ReadFile(chooseFS(rf, reader.FS()), rf.SrcPath)
 		if err != nil {
 			return fmt.Errorf("failed to read %s: %w", rf.SrcPath, err)
 		}

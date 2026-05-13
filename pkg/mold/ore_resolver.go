@@ -84,6 +84,12 @@ func LoadOreOverlaysFromFS(fsys fs.FS, root string, seen map[string]struct{}) ([
 		if oreDefaults == nil {
 			oreDefaults = map[string]any{}
 		}
+		// Extract the ore-supplied `output:` block out of its flux.yaml
+		// BEFORE wrapping the remaining defaults under ore.<ns>. — the
+		// output overlay belongs in the consumer's top-level output map,
+		// not under the ore namespace. The extracted overlay is recovered
+		// at cast/forge time via ResolveDepsEphemeral.OreSources().
+		ExtractOreOutput(oreDefaults) // mutates oreDefaults
 		oreNs, _ := defaults["ore"].(map[string]any)
 		if oreNs == nil {
 			oreNs = map[string]any{}
