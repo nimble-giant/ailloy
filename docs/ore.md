@@ -1,17 +1,18 @@
 # Ore
 
-Ore are reusable flux partials — structured data objects in the flux namespace that mold authors can opt into. Where [ingots](ingots.md) are reusable *template* partials (chunks of blank content), ore are reusable *flux* partials (chunks of values schema). Together they let you share both the prose and the data shapes that drive it.
+Ore are reusable **behavior** packages — versioned units that mold authors can opt into. At minimum, an ore is a named group of related flux fields under `ore.<name>.*` (a reusable *data shape*). Optionally, an ore can also ship its own `output:` fan-out mappings and a `blanks/` directory of template bodies, delivering a complete, turnkey rendering. Where [ingots](ingots.md) are reusable *template fragments* you embed inside a blank via `{{ ingot "..." }}`, ore are reusable *capabilities*: schema + defaults + (optionally) output mappings + (optionally) the blanks themselves — versioned together.
 
-A typical ore is a named group of related flux fields under `ore.<name>.*`. For example, `ore.status` describes the "Status" data model with an `enabled` toggle, a `field_id`, a `field_mapping`, and a map of `options`. Blanks consume an ore via conditionals (`{{if .ore.status.enabled}}…{{end}}`) and dotted access (`{{.ore.status.field_id}}`).
+A typical data-shape ore is `ore.status`: an `enabled` toggle, a `field_id`, a `field_mapping`, and a map of `options`. Blanks consume it via conditionals (`{{if .ore.status.enabled}}…{{end}}`) and dotted access (`{{.ore.status.field_id}}`). A behavior ore goes further — it can ship the blanks themselves and the per-destination fan-out that uses them, so a consumer mold gets the full rendering with nothing but a one-line `dependencies: - ore: <ref>` declaration. See [Optional: shipping output mappings and template bodies](#optional-shipping-output-mappings-and-template-bodies) for that side of the surface.
 
-Ore are typically **optional** (`enabled: false` by default) and **shareable**: many molds can adopt the same ore schema so a values file or anneal session configured for one mold drops cleanly into another.
+Ore are typically **optional** (`enabled: false` by default) and **shareable**: many molds can adopt the same ore so a values file or anneal session configured for one mold drops cleanly into another.
 
 ## When to Use Ore
 
 | Need | Use |
 |------|-----|
-| Reusable prose / instruction blocks | [Ingot](ingots.md) |
-| Reusable structured data shape (with `enabled` toggle) | **Ore** |
+| Reusable prose / instruction fragment embedded in a blank | [Ingot](ingots.md) |
+| Reusable structured data shape (with `enabled` toggle) | **Ore** (data-shape) |
+| Reusable complete rendering — schema + output fan-out + template bodies — versioned as one unit | **Ore** (behavior) |
 | Single value, one-off | Plain [flux variable](flux.md) |
 
 Pick ore when:
@@ -19,8 +20,9 @@ Pick ore when:
 - Multiple blanks (or multiple molds) need the same data shape — not just the same value
 - The data represents an **opt-in capability** that some users will turn on and others will leave off
 - The fields wrap an external system whose IDs/options can't be hardcoded (e.g., GitHub Project field IDs)
+- **Or** you have a complete rendering (templates + destinations + per-target context) that several molds duplicate today — bundle it as a behavior ore and collapse each consumer to a one-line dep
 
-Pick an ingot instead when the reusable thing is text — a preamble, a CLI cheat-sheet, a coding-standards block.
+Pick an ingot instead when the reusable thing is a *fragment of text* that gets embedded inside another template — a preamble, a CLI cheat-sheet, a coding-standards block. Pick an ore when the reusable thing is a *whole rendering* with its own destination(s).
 
 ## Anatomy of an Ore
 
