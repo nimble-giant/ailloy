@@ -16,6 +16,12 @@ import (
 type EphemeralOreResolver struct {
 	overlays []mold.OverlaySchema
 	defaults map[string]any
+	// sources records each resolved ore's fs.FS, namespace, and any
+	// ore-supplied `output:` overlay extracted from its flux.yaml. Used by
+	// cast/forge to merge ore-supplied output mappings into the consumer
+	// mold's output and to resolve `from:` selectors that point into an
+	// ore's blanks/ tree.
+	sources []mold.OreSource
 }
 
 // Overlays returns the prefixed schema overlays produced from declared ore
@@ -35,6 +41,16 @@ func (r *EphemeralOreResolver) Defaults() map[string]any {
 		return nil
 	}
 	return r.defaults
+}
+
+// OreSources returns one OreSource per resolved ore dep, carrying the
+// namespace, the ore's fs.FS, and any ore-supplied output overlay extracted
+// from its flux.yaml. Empty for nil receiver.
+func (r *EphemeralOreResolver) OreSources() []mold.OreSource {
+	if r == nil {
+		return nil
+	}
+	return r.sources
 }
 
 // ResolveDepsEphemeral walks manifest.Dependencies and resolves each ore
@@ -124,6 +140,16 @@ func ResolveDepsEphemeral(manifest *mold.Mold, allowLocalDeps bool) (*EphemeralO
 		if oreDefaults == nil {
 			oreDefaults = map[string]any{}
 		}
+		// Pull the optional `output:` overlay out of the ore's flux.yaml
+		// BEFORE wrapping the remaining defaults under ore.<name>. — output
+		// belongs in the consumer's top-level output map, not under the
+		// ore namespace.
+		oreOutput := mold.ExtractOreOutput(oreDefaults)
+		r.sources = append(r.sources, mold.OreSource{
+			Namespace: name,
+			FS:        fsys,
+			Output:    oreOutput,
+		})
 		nsMap, _ := r.defaults["ore"].(map[string]any)
 		if nsMap == nil {
 			nsMap = map[string]any{}
