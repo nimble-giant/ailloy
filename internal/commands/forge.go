@@ -258,7 +258,7 @@ func buildIngotResolver(flux map[string]any, moldRoot string) *mold.IngotResolve
 // row with its origin (mold or ore:<namespace>) so authors can see where each
 // rendered file came from. Triggered by `forge --debug`.
 func printForgeDebugProvenance(w io.Writer, resolved []mold.ResolvedFile) {
-	fmt.Fprintln(w, "[forge --debug] resolved output (dest ← src @ origin):")
+	_, _ = fmt.Fprintln(w, "[forge --debug] resolved output (dest ← src @ origin):")
 	for _, rf := range resolved {
 		origin := rf.Origin
 		if origin == "" {
@@ -266,7 +266,7 @@ func printForgeDebugProvenance(w io.Writer, resolved []mold.ResolvedFile) {
 		} else {
 			origin = "ore:" + origin
 		}
-		fmt.Fprintf(w, "  %-40s ← %-40s @ %s\n", rf.DestPath, rf.SrcPath, origin)
+		_, _ = fmt.Fprintf(w, "  %-40s ← %-40s @ %s\n", rf.DestPath, rf.SrcPath, origin)
 	}
 }
 
