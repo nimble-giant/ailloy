@@ -3,6 +3,7 @@ package mold
 import (
 	"fmt"
 	"io/fs"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -422,12 +423,35 @@ func (r *TemperResult) Suggestions() []Diagnostic {
 func Temper(fsys fs.FS) *TemperResult {
 	result := &TemperResult{}
 
-	// Detect manifest type
 	hasMold := fileExists(fsys, "mold.yaml")
 	hasIngot := fileExists(fsys, "ingot.yaml")
 	hasOre := fileExists(fsys, "ore.yaml")
 
-	if !hasMold && !hasIngot && !hasOre {
+	switch {
+	case hasMold:
+		result.ManifestKind = "mold"
+		temperMold(fsys, result)
+		return result
+	case hasIngot:
+		result.ManifestKind = "ingot"
+		temperIngotAt(fsys, "ingot.yaml", result)
+		return result
+	case hasOre:
+		result.ManifestKind = "ore"
+		temperOre(fsys, result)
+		return result
+	}
+
+	// No top-level manifest. Look for multi-ingot layout.
+	pkgs, err := DiscoverIngotPackages(fsys)
+	if err != nil {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("scanning ingots/: %v", err),
+		})
+		return result
+	}
+	if len(pkgs) == 0 {
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: SeverityError,
 			Message:  "no mold.yaml, ingot.yaml, or ore.yaml found",
@@ -435,18 +459,33 @@ func Temper(fsys fs.FS) *TemperResult {
 		return result
 	}
 
-	switch {
-	case hasMold:
-		result.ManifestKind = "mold"
-		temperMold(fsys, result)
-	case hasIngot:
-		result.ManifestKind = "ingot"
-		temperIngot(fsys, result)
-	case hasOre:
-		result.ManifestKind = "ore"
-		temperOre(fsys, result)
+	result.ManifestKind = "ingot"
+	for _, p := range pkgs {
+		sub, serr := fs.Sub(fsys, p.Root)
+		if serr != nil {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("scoping fs to %s: %v", p.Root, serr),
+			})
+			continue
+		}
+		// Validate the package against its own scoped FS, but tag any diagnostics
+		// with the package-relative file path so the user can navigate to it.
+		pre := len(result.Diagnostics)
+		temperIngotAt(sub, "ingot.yaml", result)
+		for i := pre; i < len(result.Diagnostics); i++ {
+			if result.Diagnostics[i].File != "" {
+				result.Diagnostics[i].File = path.Join(p.Root, result.Diagnostics[i].File)
+			}
+		}
 	}
-
+	// Surface a stable Name/Version for the result header. With N packages we
+	// pick the first lexicographic package; that mirrors how `cast` reports the
+	// repo's headline package for monorepos.
+	if len(pkgs) > 0 {
+		result.Name = pkgs[0].Name
+		result.Version = pkgs[0].Version
+	}
 	return result
 }
 
@@ -494,46 +533,51 @@ func temperMold(fsys fs.FS, result *TemperResult) {
 	validateTemplates(fsys, outputFiles, result)
 }
 
-// temperIngot validates an ingot package.
-func temperIngot(fsys fs.FS, result *TemperResult) {
-	i, err := LoadIngotFromFS(fsys, "ingot.yaml")
+// temperIngotAt validates an ingot package whose manifest is at manifestPath,
+// resolving file references relative to the manifest's directory. Used by both
+// single-at-root temper and multi-ingot fan-out.
+func temperIngotAt(fsys fs.FS, manifestPath string, result *TemperResult) {
+	i, err := LoadIngotFromFS(fsys, manifestPath)
 	if err != nil {
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: SeverityError,
-			Message:  fmt.Sprintf("failed to parse ingot.yaml: %v", err),
-			File:     "ingot.yaml",
+			Message:  fmt.Sprintf("failed to parse %s: %v", manifestPath, err),
+			File:     manifestPath,
 		})
 		return
 	}
 
-	result.Name = i.Name
-	result.Version = i.Version
+	// In the single-at-root path, result.Name is empty on entry, so this
+	// always fires. In multi-ingot fan-out, the wrapper in Temper overwrites
+	// Name/Version from pkgs[0] after the loop, so this guard's value is
+	// moot there — kept only to avoid surprising single-call callers.
+	if result.Name == "" {
+		result.Name = i.Name
+		result.Version = i.Version
+	}
 
-	// Validate manifest fields
 	if err := ValidateIngot(i); err != nil {
 		for _, line := range extractValidationErrors(err) {
 			result.Diagnostics = append(result.Diagnostics, Diagnostic{
 				Severity: SeverityError,
 				Message:  line,
-				File:     "ingot.yaml",
+				File:     manifestPath,
 			})
 		}
 	}
 
-	// Validate file references
 	if len(i.Files) > 0 {
 		for _, f := range i.Files {
 			if !fileExists(fsys, f) {
 				result.Diagnostics = append(result.Diagnostics, Diagnostic{
 					Severity: SeverityError,
 					Message:  fmt.Sprintf("referenced file not found: %s", f),
-					File:     "ingot.yaml",
+					File:     manifestPath,
 				})
 			}
 		}
 	}
 
-	// Validate template syntax only for ingot files
 	ingotPaths := make(map[string]bool, len(i.Files))
 	for _, f := range i.Files {
 		ingotPaths[f] = true

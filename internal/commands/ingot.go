@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -33,10 +34,16 @@ After download, the cache path is printed.`,
 	RunE: runIngotGet,
 }
 
+var ingotAddGlobal bool
+
 var ingotAddCmd = &cobra.Command{
 	Use:   "add <reference>",
 	Short: "Download and register an ingot",
 	Long: `Download an ingot and register it in the project's .ailloy/ingots/ directory.
+
+If the reference points to a multi-ingot repo (containing ingots/<name>/ingot.yaml
+entries) and no //subpath is given, every ingot in the repo is installed. To install
+just one, use the //ingots/<name> subpath suffix.
 
 The ingot files are copied into .ailloy/ingots/<name>/ for use by the template engine.`,
 	Args: cobra.ExactArgs(1),
@@ -47,6 +54,8 @@ func init() {
 	rootCmd.AddCommand(ingotCmd)
 	ingotCmd.AddCommand(ingotGetCmd)
 	ingotCmd.AddCommand(ingotAddCmd)
+
+	ingotAddCmd.Flags().BoolVar(&ingotAddGlobal, "global", false, "install under ~/.ailloy/ingots/ instead of ./.ailloy/ingots/")
 }
 
 func runIngotGet(_ *cobra.Command, args []string) error {
@@ -116,52 +125,167 @@ func runIngotAdd(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("resolving ingot: %w", err)
 	}
 
-	// Validate ingot.yaml exists.
-	ingot, err := mold.LoadIngotFromFS(fsys, "ingot.yaml")
+	return installIngotsFromFS(fsys, result, ingotAddGlobal)
+}
+
+// runIngotAddFromLocal is a test-only seam (not part of the CLI surface) that
+// drives the multi-package install pipeline against a local fs.FS without
+// going through the foundry resolver. We synthesize a ResolveResult so the
+// manifest + lock writes carry a stable source identity ("local/fs/<base>")
+// across re-installs from the same source.
+func runIngotAddFromLocal(localDir string, global bool) error {
+	fsys := os.DirFS(localDir)
+	result := &foundry.ResolveResult{
+		Ref: &foundry.Reference{
+			Host:  "local",
+			Owner: "fs",
+			Repo:  filepath.Base(localDir),
+		},
+		Resolved: foundry.ResolvedVersion{
+			Tag:    "local",
+			Commit: "local",
+		},
+	}
+	return installIngotsFromFS(fsys, result, global)
+}
+
+// installIngotsFromFS handles single-ingot and multi-ingot layouts. Per
+// issue #200:
+//   - Bare ref into multi-layout: install every ingot.
+//   - //subpath ref: foundry.Resolve already roots fsys at the subpath, so
+//     this looks like single-at-root and installs just that one.
+//   - Root manifest in fsys: install the single ingot.
+//   - No manifests anywhere: error.
+func installIngotsFromFS(fsys fs.FS, result *foundry.ResolveResult, global bool) error {
+	pkgs, err := mold.DiscoverIngotPackages(fsys)
 	if err != nil {
-		return fmt.Errorf("invalid ingot manifest: %w", err)
+		return fmt.Errorf("discovering ingots: %w", err)
+	}
+	if len(pkgs) == 0 {
+		return fmt.Errorf("no ingot.yaml found at root or under ingots/<name>/")
 	}
 
-	// Copy ingot into project .ailloy/ingots/<name>/
-	destDir := filepath.Join(".ailloy", "ingots", ingot.Name)
-	if err := os.MkdirAll(destDir, 0750); err != nil {
-		return fmt.Errorf("creating ingot directory: %w", err)
+	// Read manifest once; we'll batch all package upserts before writing.
+	manifestPath := manifestPathFor(global)
+	var manifest *foundry.InstalledManifest
+	if manifestPath != "" {
+		manifest, _ = foundry.ReadInstalledManifest(manifestPath)
+		if manifest == nil {
+			manifest = &foundry.InstalledManifest{APIVersion: "v1"}
+		}
 	}
 
-	err = fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	// Read lock once; project-scope only. ailloy.lock is project-only today.
+	var lock *foundry.LockFile
+	if !global {
+		lock, _ = foundry.ReadLockFile(foundry.LockFileName)
+	}
+
+	for _, p := range pkgs {
+		entry, lerr := installSingleIngot(fsys, p, result, global)
+		if lerr != nil {
+			return lerr
 		}
-
-		destPath := filepath.Join(destDir, path)
-
-		if d.IsDir() {
-			return os.MkdirAll(destPath, 0750)
+		if manifest != nil {
+			manifest.UpsertArtifact("ingot", entry)
 		}
-
-		content, err := fs.ReadFile(fsys, path)
-		if err != nil {
-			return fmt.Errorf("reading %s: %w", path, err)
+		if lock != nil {
+			lock.UpsertArtifactLock("ingot", foundry.LockEntry{
+				Name:      entry.Name,
+				Source:    entry.Source,
+				Subpath:   entry.Subpath,
+				Version:   entry.Version,
+				Commit:    entry.Commit,
+				Timestamp: entry.InstalledAt,
+			})
 		}
+	}
 
-		if err := os.WriteFile(destPath, content, 0644); err != nil { // #nosec G306 -- ingot files need to be readable
-			return fmt.Errorf("writing %s: %w", destPath, err)
+	if manifest != nil && manifestPath != "" {
+		if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
+			log.Printf("warning: failed to update installed manifest: %v", err)
 		}
-
-		fmt.Println(styles.SuccessStyle.Render("  + ") + styles.CodeStyle.Render(destPath))
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("copying ingot files: %w", err)
+	}
+	// Update ailloy.lock if present (project scope only).
+	if lock != nil {
+		if err := foundry.WriteLockFile(foundry.LockFileName, lock); err != nil {
+			log.Printf("warning: failed to update lock file: %v", err)
+		}
 	}
 
 	fmt.Println()
-	fmt.Println(styles.SuccessStyle.Render("Ingot added: ") + styles.AccentStyle.Render(ingot.Name+" "+ingot.Version))
-	fmt.Println(styles.InfoStyle.Render("Installed to: ") + styles.CodeStyle.Render(destDir))
+	if len(pkgs) == 1 {
+		fmt.Println(styles.SuccessStyle.Render("Ingot added: ") + styles.AccentStyle.Render(pkgs[0].Name+" "+pkgs[0].Version))
+	} else {
+		fmt.Println(styles.SuccessStyle.Render(fmt.Sprintf("Installed %d ingots from %s", len(pkgs), result.Ref.CacheKey())))
+	}
+	return nil
+}
 
-	if err := recordInstalled(result, false, nil, "direct", nil, nil); err != nil {
-		log.Printf("warning: failed to update installed manifest: %v", err)
+// installSingleIngot copies one package onto disk and returns the ArtifactEntry
+// the caller should upsert into the installed manifest. The caller batches the
+// manifest + lock writes; this function only owns disk-side install of files.
+func installSingleIngot(fsys fs.FS, pkg mold.IngotPackage, result *foundry.ResolveResult, global bool) (foundry.ArtifactEntry, error) {
+	// Effective subpath: the resolver may already have rooted fsys at a //subpath
+	// (in which case result.Ref.Subpath is set and pkg.Subpath is "" because pkg
+	// was discovered at the root of that already-narrowed fsys). When we fan out
+	// over a multi-package fsys, pkg.Subpath carries "ingots/<name>" and joins
+	// with result.Ref.Subpath which is "". We pick whichever is non-empty.
+	effectiveSubpath := result.Ref.Subpath
+	if effectiveSubpath == "" {
+		effectiveSubpath = pkg.Subpath
 	}
 
-	return nil
+	baseRoot := filepath.Join(".ailloy", "ingots")
+	if global {
+		home, herr := os.UserHomeDir()
+		if herr != nil {
+			return foundry.ArtifactEntry{}, fmt.Errorf("determining home directory: %w", herr)
+		}
+		baseRoot = filepath.Join(home, ".ailloy", "ingots")
+	}
+	destDir := filepath.Join(baseRoot, pkg.Name)
+	if err := os.MkdirAll(destDir, 0o750); err != nil {
+		return foundry.ArtifactEntry{}, fmt.Errorf("creating ingot directory: %w", err)
+	}
+
+	pkgFS := fsys
+	if pkg.Root != "." {
+		sub, serr := fs.Sub(fsys, pkg.Root)
+		if serr != nil {
+			return foundry.ArtifactEntry{}, fmt.Errorf("scoping fs to %s: %w", pkg.Root, serr)
+		}
+		pkgFS = sub
+	}
+
+	if err := fs.WalkDir(pkgFS, ".", func(p string, d fs.DirEntry, werr error) error {
+		if werr != nil {
+			return werr
+		}
+		destPath := filepath.Join(destDir, p)
+		if d.IsDir() {
+			return os.MkdirAll(destPath, 0o750)
+		}
+		content, rerr := fs.ReadFile(pkgFS, p)
+		if rerr != nil {
+			return fmt.Errorf("reading %s: %w", p, rerr)
+		}
+		if err := os.WriteFile(destPath, content, 0o644); err != nil { // #nosec G306 -- ingot files need to be readable
+			return fmt.Errorf("writing %s: %w", destPath, err)
+		}
+		fmt.Println(styles.SuccessStyle.Render("  + ") + styles.CodeStyle.Render(destPath))
+		return nil
+	}); err != nil {
+		return foundry.ArtifactEntry{}, fmt.Errorf("copying ingot files: %w", err)
+	}
+
+	return foundry.ArtifactEntry{
+		Name:        pkg.Name,
+		Source:      result.Ref.CacheKey(),
+		Subpath:     effectiveSubpath,
+		Version:     result.Resolved.Tag,
+		Commit:      result.Resolved.Commit,
+		InstalledAt: time.Now().UTC(),
+		Dependents:  []string{"user"},
+	}, nil
 }

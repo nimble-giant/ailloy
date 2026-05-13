@@ -53,6 +53,35 @@ ingots/
 
 Bare files are simpler but limited to a single file. The resolver tries the manifest-based form first, then falls back to bare files.
 
+## Multi-Ingot Repository Layout
+
+A single git repository can ship multiple ingots side-by-side. Place each one under `ingots/<name>/` with its own `ingot.yaml`:
+
+```
+my-ingots/
+├── ingots/
+│   ├── pr-helpers/
+│   │   ├── ingot.yaml
+│   │   └── content.md
+│   └── issue-helpers/
+│       ├── ingot.yaml
+│       └── content.md
+```
+
+A repo with a top-level `ingot.yaml` is still treated as a single ingot at root — that remains the default and is unaffected. The two layouts are mutually exclusive: if a top-level `ingot.yaml` exists, the `ingots/` directory is ignored.
+
+`ailloy ingot add github.com/org/repo` against a multi-ingot repo (no `//subpath`) installs every ingot in the repo. To install just one, append the subpath: `ailloy ingot add github.com/org/repo//ingots/pr-helpers`.
+
+Mold `mold.yaml` dependency entries follow the same rule. A bare ref pulls in every ingot in the repo at cast time; a `//subpath` ref pins one:
+
+```yaml
+dependencies:
+  - ingot: github.com/org/repo                       # all ingots
+  - ingot: github.com/org/repo//ingots/pr-helpers    # just one
+```
+
+`ailloy temper github.com/org/repo` validates each ingot in the repo independently and aggregates the diagnostics — one bad ingot does not mask the others.
+
 ## Creating an Ingot
 
 ### 1. Create the ingot directory

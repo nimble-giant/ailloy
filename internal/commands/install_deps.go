@@ -121,25 +121,80 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 		sourceID = resolvedSource
 		subpath = resolvedSubpath
 
-		// Validate manifest matches kind.
-		manifestName := ""
-		switch kind {
-		case "ingot":
-			ingot, ierr := mold.LoadIngotFromFS(fsys, "ingot.yaml")
-			if ierr != nil {
-				return fmt.Errorf("invalid ingot manifest at %s: %w", ref, ierr)
+		// Validate manifest matches kind. Ingots may be multi-package; ore is
+		// always single-package today (PR #192 requires explicit subpath for
+		// multi-ore selection).
+		if kind == "ingot" {
+			// d.As is ore-only; ingots have no alias support today (per issue #200 scope).
+			pkgs, derr := mold.DiscoverIngotPackages(fsys)
+			if derr != nil {
+				return fmt.Errorf("discovering ingots at %s: %w", ref, derr)
 			}
-			manifestName = ingot.Name
-		case "ore":
-			ore, oerr := mold.LoadOreFromFS(fsys, "ore.yaml")
-			if oerr != nil {
-				return fmt.Errorf("invalid ore manifest at %s: %w", ref, oerr)
+			if len(pkgs) == 0 {
+				return fmt.Errorf("no ingot.yaml found at %s", ref)
 			}
-			if ore.Kind != "ore" {
-				return fmt.Errorf("manifest at %s has kind=%q, expected 'ore'", ref, ore.Kind)
+			for _, pkg := range pkgs {
+				pkgSubpath := subpath
+				if pkgSubpath == "" {
+					pkgSubpath = pkg.Subpath
+				}
+
+				// Per-package skip: identical contract to the dep-level skip-check above,
+				// but keyed on the per-package (sourceID, pkgSubpath) identity so multi-ingot
+				// entries match correctly. Without this, every cast re-copies every package
+				// and refreshes InstalledAt, producing spurious lock drift under
+				// `quench --verify`.
+				if existing := findArtifactBySource(im, "ingot", sourceID, pkgSubpath, ""); existing != nil {
+					if moldKey != "" && !containsString(existing.Dependents, moldKey) {
+						existing.Dependents = append(existing.Dependents, moldKey)
+					}
+					continue
+				}
+
+				pkgFS := fsys
+				if pkg.Root != "." {
+					sub, serr := fs.Sub(fsys, pkg.Root)
+					if serr != nil {
+						return fmt.Errorf("scoping fs to %s: %w", pkg.Root, serr)
+					}
+					pkgFS = sub
+				}
+				baseDir, derr2 := artifactInstallDir("ingot", pkg.Name, global)
+				if derr2 != nil {
+					return fmt.Errorf("determining install dir for ingot %s: %w", pkg.Name, derr2)
+				}
+				if err := copyFromFS(pkgFS, baseDir); err != nil {
+					return fmt.Errorf("copying ingot to %s: %w", baseDir, err)
+				}
+				entry := foundry.ArtifactEntry{
+					Name:        pkg.Name,
+					Source:      sourceID,
+					Subpath:     pkgSubpath,
+					Version:     version,
+					Commit:      commit,
+					InstalledAt: time.Now().UTC(),
+				}
+				if moldKey != "" {
+					entry.Dependents = []string{moldKey}
+				}
+				im.UpsertArtifact("ingot", entry)
+				if !silent {
+					fmt.Println(styles.SuccessStyle.Render("  Installed: ") + styles.AccentStyle.Render(pkg.Name+" "+version))
+				}
 			}
-			manifestName = ore.Name
+			continue
 		}
+
+		// Ores: single-package, optional alias.
+		manifestName := ""
+		ore, oerr := mold.LoadOreFromFS(fsys, "ore.yaml")
+		if oerr != nil {
+			return fmt.Errorf("invalid ore manifest at %s: %w", ref, oerr)
+		}
+		if ore.Kind != "ore" {
+			return fmt.Errorf("manifest at %s has kind=%q, expected 'ore'", ref, ore.Kind)
+		}
+		manifestName = ore.Name
 
 		// Install-dir name resolution (alias if set, else manifest name).
 		installName := manifestName
