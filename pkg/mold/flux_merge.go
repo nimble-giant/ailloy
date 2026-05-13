@@ -25,6 +25,19 @@ type OreLoadReport struct {
 	// Sources records the source of each entry in the merged schema, keyed by
 	// FluxVar.Name. "" means the mold itself.
 	Sources map[string]string
+	// ShadowedOutput records output mappings an ore declared but a consumer
+	// mold-local entry won. Same precedence rule as schema: consumer wins.
+	ShadowedOutput []ShadowedOutputEntry
+	// OutputSources records the source of each entry in the merged output map,
+	// keyed by source path (the map key). "" means the consumer mold itself.
+	OutputSources map[string]string
+}
+
+// ShadowedOutputEntry records an output source-path key that an ore overlay
+// defined but a consumer mold-local entry won.
+type ShadowedOutputEntry struct {
+	Key    string // the source-path map key (e.g. "blanks/AGENTS.md")
+	Source string // "ore:<namespace>" — the overlay that lost
 }
 
 // MergeFluxSchema combines a base schema (the mold's own flux.schema.yaml
