@@ -1,0 +1,5 @@
+apiVersion: v1
+kind: ore
+name: agent_targets
+version: 0.1.0
+description: "Multi-target rendering for Claude and OpenCode agent surfaces"

@@ -1,0 +1,14 @@
+enabled: true
+targets:
+  - claude
+  - opencode
+
+output:
+  blanks/AGENTS.md: AGENTS.md
+  blanks/agents:
+    - dest: .claude/agents
+      set:
+        current_target: claude
+    - dest: .opencode/agents
+      set:
+        current_target: opencode

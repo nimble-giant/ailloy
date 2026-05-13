@@ -30,6 +30,7 @@ var reservedRootFiles = map[string]bool{
 	"flux.yaml":         true, // flux variable defaults
 	"flux.schema.yaml":  true, // flux validation schema
 	"ingot.yaml":        true, // ingot manifest
+	"ore.yaml":          true, // ore manifest
 	"README.md":         true, // mold documentation (not project readme)
 	"PLUGIN_SUMMARY.md": true, // plugin summary metadata
 	"LICENSE":           true, // mold license file

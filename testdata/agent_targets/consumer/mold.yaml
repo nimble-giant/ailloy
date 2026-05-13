@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: mold
+name: agent_targets_consumer
+version: 0.1.0
+description: "Demonstrates depending solely on agent_targets ore"
+dependencies:
+  - ore: ../ore
+    version: 0.1.0

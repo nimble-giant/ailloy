@@ -1,0 +1,9 @@
+- name: enabled
+  type: bool
+  description: "Enable agent-targets rendering"
+  default: "true"
+
+- name: targets
+  type: list
+  description: "Which agent surfaces to render for"
+  default: '["claude", "opencode"]'
