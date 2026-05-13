@@ -114,7 +114,13 @@ type OutputTarget struct {
 	Dest     string         `yaml:"dest"`
 	Process  *bool          `yaml:"process,omitempty"`  // nil = true (default)
 	Set      map[string]any `yaml:"set,omitempty"`      // per-destination context overrides
-	Strategy string         `yaml:"strategy,omitempty"` // "" or "replace" (default) | "merge"
+	Strategy string         `yaml:"strategy,omitempty"` // "" or "replace" (default) | "merge" | "append"
+	// From, if non-empty, overrides the map-key source path with an explicit
+	// source. Format: "ore/<namespace>/<path>" addresses a file inside an ore
+	// package's blanks/ (or other) tree. Used by consumer molds to reference
+	// an ore-shipped template without the ore needing to declare the
+	// destination itself.
+	From string `yaml:"from,omitempty"`
 }
 
 // ShouldProcess returns whether files under this target should be template-processed.
@@ -124,11 +130,19 @@ func (o OutputTarget) ShouldProcess() bool {
 
 // ResolvedFile represents a single file resolved from the output mapping.
 type ResolvedFile struct {
-	SrcPath  string         // path within the mold fs (e.g., "commands/hello.md")
+	SrcPath  string         // path within SrcFS (e.g., "commands/hello.md")
 	DestPath string         // output path (e.g., ".claude/commands/hello.md")
 	Process  bool           // whether to apply template processing
 	Set      map[string]any // context overrides applied to this render pass
-	Strategy string         // "" or "replace" (default) | "merge"
+	Strategy string         // "" or "replace" (default) | "merge" | "append"
+	// SrcFS identifies the filesystem the source bytes should be read from.
+	// nil means the mold's primary fs (the default for legacy mold-only
+	// resolution). Set to the ore's fs.FS for ore-supplied output entries
+	// and for consumer entries with `from: ore/<ns>/...`.
+	SrcFS fs.FS `yaml:"-"`
+	// Origin identifies the ore namespace this entry came from, for
+	// diagnostics. Empty means the consumer mold itself.
+	Origin string `yaml:"-"`
 }
 
 // Mold represents a mold.yaml manifest.

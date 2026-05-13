@@ -373,6 +373,13 @@ func parseTargetMap(v map[string]any) (OutputTarget, error) {
 			return t, fmt.Errorf("unknown strategy %q: must be \"replace\", \"merge\", or \"append\"", s)
 		}
 	}
+	if from, ok := v["from"]; ok {
+		f, ok := from.(string)
+		if !ok {
+			return t, fmt.Errorf("from must be a string")
+		}
+		t.From = f
+	}
 	return t, nil
 }
 
