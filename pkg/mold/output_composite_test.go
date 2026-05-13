@@ -3,6 +3,7 @@ package mold
 import (
 	"io/fs"
 	"sort"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -123,3 +124,70 @@ func TestResolveFilesWithOreSources_DeterministicOrder(t *testing.T) {
 }
 
 var _ fs.FS = (fstest.MapFS)(nil)
+
+// Regression: a consumer whose `output:` map consists ENTIRELY of `from:`
+// selectors used to fall through to ResolveFiles(nil, moldFS), which
+// triggered identity auto-discovery and resolved every non-reserved file
+// in the mold. The fix returns an empty map (not nil) so ResolveFiles
+// takes the explicit-map path instead.
+func TestResolveFilesWithOreSources_AllFromConsumerDoesNotAutoDiscoverMold(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"mold.yaml":           &fstest.MapFile{Data: []byte("name: c\n")},
+		"commands/hello.md":   &fstest.MapFile{Data: []byte("hi\n")},
+		"unrelated/extra.txt": &fstest.MapFile{Data: []byte("extra\n")},
+	}
+	oreFS := fstest.MapFS{
+		"blanks/AGENTS.md": &fstest.MapFile{Data: []byte("# from ore\n")},
+	}
+	output := map[string]any{
+		"AGENTS.md": map[string]any{
+			"from": "ore/agent_targets/blanks/AGENTS.md",
+			"dest": "AGENTS.md",
+		},
+	}
+	sources := []OreSource{{Namespace: "agent_targets", FS: oreFS}}
+
+	resolved, err := ResolveFilesWithOreSources(output, moldFS, sources)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resolved) != 1 {
+		t.Fatalf("expected exactly 1 resolved file (from: AGENTS.md), got %d: %+v", len(resolved), resolved)
+	}
+	if resolved[0].DestPath != "AGENTS.md" || resolved[0].Origin != "agent_targets" {
+		t.Errorf("wrong resolved entry: %+v", resolved[0])
+	}
+	// Specifically: the mold's commands/hello.md and unrelated/extra.txt
+	// must NOT appear in the resolved set.
+	for _, r := range resolved {
+		if r.SrcPath == "commands/hello.md" || r.SrcPath == "unrelated/extra.txt" {
+			t.Errorf("auto-discovery leaked mold file into resolved: %+v", r)
+		}
+	}
+}
+
+// Regression: a `from:` selector pointing at a directory used to pass
+// fs.Stat (directories exist) and then fail later with an obscure
+// "is a directory" error when cast/forge tried to ReadFile. The fix
+// rejects directory targets at resolve time with a clear message.
+func TestResolveFilesWithOreSources_FromSelectorRejectsDirectoryTarget(t *testing.T) {
+	moldFS := fstest.MapFS{"mold.yaml": &fstest.MapFile{Data: []byte("name: c\n")}}
+	oreFS := fstest.MapFS{
+		"blanks/agents/inner.md": &fstest.MapFile{Data: []byte("# inner\n")},
+	}
+	output := map[string]any{
+		"agents": map[string]any{
+			"from": "ore/at/blanks/agents",
+			"dest": "agents",
+		},
+	}
+	sources := []OreSource{{Namespace: "at", FS: oreFS}}
+
+	_, err := ResolveFilesWithOreSources(output, moldFS, sources)
+	if err == nil {
+		t.Fatal("expected error for directory `from:` target, got nil")
+	}
+	if !strings.Contains(err.Error(), "directory") {
+		t.Errorf("error should mention directory, got: %v", err)
+	}
+}

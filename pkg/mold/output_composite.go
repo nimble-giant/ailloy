@@ -69,8 +69,12 @@ func ResolveFilesWithOreSources(output any, moldFS fs.FS, oreSources []OreSource
 		if !ok {
 			return nil, fmt.Errorf("output entry for %q references ore %q but no such ore dependency is declared", fe.dest, ns)
 		}
-		if _, ferr := fs.Stat(src.FS, oreRelPath); ferr != nil {
+		info, ferr := fs.Stat(src.FS, oreRelPath)
+		if ferr != nil {
 			return nil, fmt.Errorf("output entry for %q references %q which does not exist in ore %q: %w", fe.dest, oreRelPath, ns, ferr)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("output entry for %q references %q in ore %q, but that is a directory — `from:` must point to a single file", fe.dest, oreRelPath, ns)
 		}
 		resolved = append(resolved, ResolvedFile{
 			SrcPath:  oreRelPath,
@@ -202,11 +206,12 @@ func splitFromEntries(output any) ([]fromEntry, any, error) {
 		return fromEntries[i].dest < fromEntries[j].dest
 	})
 
-	var remainderOut any
-	if len(remainder) > 0 {
-		remainderOut = remainder
-	}
-	return fromEntries, remainderOut, nil
+	// Always return a map (possibly empty) when the consumer declared an
+	// `output:` block. Returning nil here would cause ResolveFiles to fall
+	// into identity/auto-discovery mode and walk the entire mold — wrong if
+	// the consumer's only output was a set of `from:` selectors that all got
+	// extracted.
+	return fromEntries, remainder, nil
 }
 
 // parseOreFromSelector splits a "ore/<namespace>/<path>" selector into its
