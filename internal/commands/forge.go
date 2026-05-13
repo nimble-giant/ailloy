@@ -3,6 +3,7 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -39,6 +40,7 @@ var (
 	forgeSetValues                []string
 	forgeValFiles                 []string
 	forgeForceReplaceOnParseError bool
+	forgeDebug                    bool
 )
 
 func init() {
@@ -51,6 +53,7 @@ func init() {
 		"force-replace-on-parse-error",
 		false,
 		"if a destination uses strategy: merge but is unparseable, replace it instead of erroring (only used with --output)")
+	forgeCmd.Flags().BoolVar(&forgeDebug, "debug", false, "print resolved output mapping with source provenance (ore vs mold) before rendering")
 }
 
 // loadForgeFlux loads layered flux values using Helm-style precedence:
@@ -168,14 +171,18 @@ func runForge(_ *cobra.Command, args []string) error {
 	}
 
 	// Resolve all output files from the flux.
-	resolved, err := mold.ResolveFiles(flux["output"], reader.FS(), resolveOpts...)
+	resolved, err := mold.ResolveFilesWithOreSources(flux["output"], reader.FS(), oreResolver.OreSources(), resolveOpts...)
 	if err != nil {
 		return fmt.Errorf("resolving output files: %w", err)
 	}
 
+	if forgeDebug {
+		printForgeDebugProvenance(os.Stderr, resolved)
+	}
+
 	var files []renderedFile
 	for _, rf := range resolved {
-		content, err := fs.ReadFile(reader.FS(), rf.SrcPath)
+		content, err := fs.ReadFile(chooseFS(rf, reader.FS()), rf.SrcPath)
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", rf.SrcPath, err)
 		}
@@ -245,6 +252,22 @@ func buildIngotResolver(flux map[string]any, moldRoot string) *mold.IngotResolve
 	}
 
 	return mold.NewIngotResolver(searchPaths, flux)
+}
+
+// printForgeDebugProvenance prints the resolved file list to w, annotating each
+// row with its origin (mold or ore:<namespace>) so authors can see where each
+// rendered file came from. Triggered by `forge --debug`.
+func printForgeDebugProvenance(w io.Writer, resolved []mold.ResolvedFile) {
+	fmt.Fprintln(w, "[forge --debug] resolved output (dest ← src @ origin):")
+	for _, rf := range resolved {
+		origin := rf.Origin
+		if origin == "" {
+			origin = "mold"
+		} else {
+			origin = "ore:" + origin
+		}
+		fmt.Fprintf(w, "  %-40s ← %-40s @ %s\n", rf.DestPath, rf.SrcPath, origin)
+	}
 }
 
 func printForgeFiles(files []renderedFile) error {
