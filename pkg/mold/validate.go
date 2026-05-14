@@ -178,6 +178,48 @@ func ValidateOre(o *Ore) error {
 	return nil
 }
 
+// temperLicense emits diagnostics about the optional `license` manifest field.
+// Authors who declare a license get checked for SPDX validity and the presence
+// of a LICENSE file; authors who omit it get an informational suggestion to
+// add one. None of these block validation — the field is optional.
+func temperLicense(fsys fs.FS, manifestFile, license string, result *TemperResult) {
+	if license == "" {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeveritySuggestion,
+			Message:  "no license declared; consider adding a `license:` field with an SPDX identifier (e.g. Apache-2.0, MIT)",
+			Tip:      "see https://spdx.org/licenses/ for the full SPDX list",
+			File:     manifestFile,
+			Rule:     "license-missing",
+		})
+		return
+	}
+
+	if !IsValidSPDX(license) {
+		msg := fmt.Sprintf("license %q is not a recognized SPDX identifier", license)
+		tip := "use `LicenseRef-<id>` for custom or proprietary licenses"
+		if suggestion := SuggestSPDX(license); suggestion != "" {
+			tip = fmt.Sprintf("did you mean %q? (or use `LicenseRef-<id>` for custom licenses)", suggestion)
+		}
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityWarning,
+			Message:  msg,
+			Tip:      tip,
+			File:     manifestFile,
+			Rule:     "license-spdx",
+		})
+	}
+
+	if !fileExists(fsys, "LICENSE") {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: SeverityWarning,
+			Message:  fmt.Sprintf("license %q declared but no LICENSE file found at package root", license),
+			Tip:      "add a LICENSE file with the full license text so consumers can read it",
+			File:     manifestFile,
+			Rule:     "license-file-missing",
+		})
+	}
+}
+
 // temperOre validates an ore-directory package. Rules:
 //   - manifest fields valid (apiVersion, kind=ore, snake_case name, semver version)
 //   - flux.schema.yaml present and parseable
@@ -216,6 +258,8 @@ func temperOre(fsys fs.FS, result *TemperResult) {
 			File:     "ore.yaml",
 		})
 	}
+
+	temperLicense(fsys, "ore.yaml", o.License, result)
 
 	schema, err := LoadFluxSchema(fsys, "flux.schema.yaml")
 	if err != nil {
@@ -568,6 +612,8 @@ func temperMold(fsys fs.FS, result *TemperResult) {
 		}
 	}
 
+	temperLicense(fsys, "mold.yaml", m.License, result)
+
 	// Validate output source references. Output can come from flux.yaml or
 	// from a top-level output: in mold.yaml; flux.yaml wins when both exist.
 	flux, _ := LoadFluxFile(fsys, "flux.yaml")
@@ -623,6 +669,8 @@ func temperIngotAt(fsys fs.FS, manifestPath string, result *TemperResult) {
 			})
 		}
 	}
+
+	temperLicense(fsys, manifestPath, i.License, result)
 
 	if len(i.Files) > 0 {
 		for _, f := range i.Files {

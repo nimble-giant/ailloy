@@ -16,6 +16,7 @@ type Ingot struct {
 	Name        string   `yaml:"name"`
 	Version     string   `yaml:"version"`
 	Description string   `yaml:"description,omitempty"`
+	License     string   `yaml:"license,omitempty"`
 	Files       []string `yaml:"files,omitempty"`
 	Requires    Requires `yaml:"requires,omitempty"`
 }

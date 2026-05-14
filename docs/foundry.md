@@ -19,6 +19,7 @@ kind: mold
 name: my-team-mold
 version: 1.0.0
 description: "My team's AI workflow blanks"
+license: Apache-2.0       # optional; SPDX identifier
 author:
   name: My Team
   url: https://github.com/my-org

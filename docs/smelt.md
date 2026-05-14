@@ -41,12 +41,20 @@ kind: mold
 name: my-team-mold
 version: 1.0.0
 description: "Our team's AI workflow blanks"
+license: Apache-2.0       # optional; SPDX identifier (see https://spdx.org/licenses/)
 author:
   name: My Team
   url: https://github.com/my-org
 requires:
   ailloy: ">=0.2.0"
 ```
+
+The `license` field is optional. When set, [`ailloy temper`](temper.md) will:
+
+- Warn if the value isn't a recognized SPDX identifier (use `LicenseRef-<id>` for custom or proprietary licenses).
+- Warn if no `LICENSE` file is present at the package root.
+
+Authors who omit the field get a low-severity suggestion to add one — it's never blocking.
 
 ## Step 2: Write `flux.yaml` (optional)
 
