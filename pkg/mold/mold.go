@@ -141,6 +141,7 @@ type Mold struct {
 	Author       Author       `yaml:"author,omitempty"`
 	Requires     Requires     `yaml:"requires,omitempty"`
 	Flux         []FluxVar    `yaml:"flux,omitempty"`
+	Output       any          `yaml:"output,omitempty"`
 	Dependencies []Dependency `yaml:"dependencies,omitempty"`
 	Ignore       []string     `yaml:"ignore,omitempty"`
 }
@@ -165,6 +166,20 @@ func LoadMoldFromFS(fsys fs.FS, path string) (*Mold, error) {
 		return nil, fmt.Errorf("reading mold manifest from fs: %w", err)
 	}
 	return ParseMold(data)
+}
+
+// ApplyManifestOutputDefault sets flux["output"] from the manifest's top-level
+// output: when flux doesn't already have an output mapping. This gives
+// mold.yaml's output: field parity with flux.yaml's, while keeping flux.yaml,
+// -f files, and --set as higher-precedence overrides.
+func ApplyManifestOutputDefault(flux map[string]any, manifest *Mold) {
+	if flux == nil || manifest == nil || manifest.Output == nil {
+		return
+	}
+	if _, has := flux["output"]; has {
+		return
+	}
+	flux["output"] = manifest.Output
 }
 
 // ParseMold parses raw YAML bytes into a Mold struct.

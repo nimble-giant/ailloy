@@ -267,7 +267,8 @@ func layerFluxForCore(reader *blanks.MoldReader, source string, valueFiles, setO
 	}
 	// Merge mold.yaml's in-line flux: schema in for molds that declare their
 	// schema inline rather than via a separate flux.schema.yaml.
-	if manifest, _ := reader.LoadManifest(); manifest != nil && len(manifest.Flux) > 0 {
+	manifest, _ := reader.LoadManifest()
+	if manifest != nil && len(manifest.Flux) > 0 {
 		defaults = mold.ApplyFluxDefaults(manifest.Flux, defaults)
 		if len(mergedSchema) == 0 {
 			mergedSchema = manifest.Flux
@@ -277,6 +278,7 @@ func layerFluxForCore(reader *blanks.MoldReader, source string, valueFiles, setO
 	for k, v := range defaults {
 		flux[k] = v
 	}
+	mold.ApplyManifestOutputDefault(flux, manifest)
 	if persisted := mold.PersistedFluxPaths(source); len(persisted) > 0 {
 		overlay, perr := mold.LayerFluxFiles(persisted)
 		if perr != nil {

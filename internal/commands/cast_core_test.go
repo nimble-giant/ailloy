@@ -73,6 +73,83 @@ opencode body
 	}
 }
 
+// TestCastMold_MoldYamlOutputMapping verifies that a top-level output: in
+// mold.yaml is honored as a fallback when no flux.yaml exists. Embedded flux
+// in mold.yaml has parity with a standalone flux.yaml's output: key.
+func TestCastMold_MoldYamlOutputMapping(t *testing.T) {
+	projectDir := t.TempDir()
+	t.Chdir(projectDir)
+	t.Setenv("HOME", t.TempDir())
+
+	moldDir := filepath.Join(projectDir, "mold")
+	if err := os.MkdirAll(filepath.Join(moldDir, "commands"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	manifest := []byte(`apiVersion: v1
+kind: Mold
+name: parity
+version: 0.1.0
+output:
+  commands: .claude/commands
+`)
+	if err := os.WriteFile(filepath.Join(moldDir, "mold.yaml"), manifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(moldDir, "commands", "hello.md"), []byte("hi"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := CastMold(t.Context(), moldDir, CastOptions{}); err != nil {
+		t.Fatalf("CastMold: %v", err)
+	}
+
+	expected := filepath.Join(projectDir, ".claude", "commands", "hello.md")
+	if _, err := os.Stat(expected); err != nil {
+		t.Fatalf("expected %s to exist (mold.yaml output mapping should be honored): %v", expected, err)
+	}
+}
+
+// TestCastMold_FluxYamlOverridesMoldYamlOutput verifies that flux.yaml's
+// output: still wins over mold.yaml's output: when both are present.
+func TestCastMold_FluxYamlOverridesMoldYamlOutput(t *testing.T) {
+	projectDir := t.TempDir()
+	t.Chdir(projectDir)
+	t.Setenv("HOME", t.TempDir())
+
+	moldDir := filepath.Join(projectDir, "mold")
+	if err := os.MkdirAll(filepath.Join(moldDir, "commands"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	manifest := []byte(`apiVersion: v1
+kind: Mold
+name: parity
+version: 0.1.0
+output:
+  commands: .claude/commands
+`)
+	if err := os.WriteFile(filepath.Join(moldDir, "mold.yaml"), manifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	flux := []byte("output:\n  commands: .cursor/rules\n")
+	if err := os.WriteFile(filepath.Join(moldDir, "flux.yaml"), flux, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(moldDir, "commands", "hello.md"), []byte("hi"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := CastMold(t.Context(), moldDir, CastOptions{}); err != nil {
+		t.Fatalf("CastMold: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(projectDir, ".cursor", "rules", "hello.md")); err != nil {
+		t.Fatalf("expected flux.yaml output (.cursor/rules) to win: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(projectDir, ".claude", "commands", "hello.md")); err == nil {
+		t.Errorf("mold.yaml output should have been overridden by flux.yaml")
+	}
+}
+
 // TestCastMold_ConcurrentRunsStaySilent guards against the regression where
 // CastMold used a process-global `castSilent` toggle plus a global
 // log.SetOutput() to suppress per-file "✅ Created" lines. When the foundries

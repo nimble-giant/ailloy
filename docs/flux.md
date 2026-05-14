@@ -71,11 +71,25 @@ flux:
     required: true
 ```
 
+### `mold.yaml` `output:` field
+
+`mold.yaml` may also declare a top-level `output:` mapping with the same syntax as `flux.yaml`'s `output:`. It acts as a fallback that's overridden by `flux.yaml`, `-f` value files, and `--set`. Useful for molds that ship sensible default destinations without requiring a separate `flux.yaml`:
+
+```yaml
+apiVersion: v1
+kind: mold
+name: my-mold
+version: 1.0.0
+output:
+  commands: .claude/commands
+  skills: .claude/skills
+```
+
 ## Value Precedence
 
 When blanks are rendered with `forge` or `cast`, flux values are resolved in this order (lowest to highest priority):
 
-1. **`mold.yaml` `flux:` schema defaults** — Default values from inline declarations
+1. **`mold.yaml` `flux:` schema defaults and `output:` field** — Default values from inline declarations
 2. **`flux.yaml` defaults** — Values shipped with the mold
 3. **`-f, --values` files** — Override files passed at install time (left to right, later files win)
 4. **`--set` flags** — Highest priority, set individual values from the command line

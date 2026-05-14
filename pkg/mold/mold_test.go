@@ -79,6 +79,54 @@ dependencies:
 	}
 }
 
+func TestParseMold_TopLevelOutput(t *testing.T) {
+	// A mold.yaml may declare a top-level output: mapping as a fallback for
+	// consumers that don't supply flux.yaml — full parity with flux.yaml's
+	// output: key.
+	data := []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+output:
+  commands: .claude/commands
+  workflows:
+    dest: .github/workflows
+    process: false
+`)
+
+	m, err := ParseMold(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m.Output == nil {
+		t.Fatal("expected Output to be populated, got nil")
+	}
+	outMap, ok := m.Output.(map[string]any)
+	if !ok {
+		t.Fatalf("expected Output to be map[string]any, got %T", m.Output)
+	}
+	if outMap["commands"] != ".claude/commands" {
+		t.Errorf("expected commands → .claude/commands, got %v", outMap["commands"])
+	}
+}
+
+func TestParseMold_NoOutput(t *testing.T) {
+	data := []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+`)
+	m, err := ParseMold(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m.Output != nil {
+		t.Errorf("expected Output to be nil when absent, got %v", m.Output)
+	}
+}
+
 func TestParseMold_InvalidYAML(t *testing.T) {
 	data := []byte(`{{{invalid yaml`)
 	_, err := ParseMold(data)
@@ -96,6 +144,49 @@ func TestParseMold_EmptyDocument(t *testing.T) {
 	// Empty YAML produces zero-value struct
 	if m.Name != "" {
 		t.Errorf("expected empty name, got %s", m.Name)
+	}
+}
+
+func TestApplyManifestOutputDefault_FillsWhenMissing(t *testing.T) {
+	flux := map[string]any{"project": map[string]any{"org": "acme"}}
+	manifest := &Mold{Output: map[string]any{"commands": ".claude/commands"}}
+
+	ApplyManifestOutputDefault(flux, manifest)
+
+	outMap, ok := flux["output"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected flux[output] to be map[string]any, got %T", flux["output"])
+	}
+	if outMap["commands"] != ".claude/commands" {
+		t.Errorf("expected commands → .claude/commands, got %v", outMap["commands"])
+	}
+}
+
+func TestApplyManifestOutputDefault_DoesNotOverrideExistingFluxOutput(t *testing.T) {
+	flux := map[string]any{"output": map[string]any{"commands": ".cursor/rules"}}
+	manifest := &Mold{Output: map[string]any{"commands": ".claude/commands"}}
+
+	ApplyManifestOutputDefault(flux, manifest)
+
+	outMap := flux["output"].(map[string]any)
+	if outMap["commands"] != ".cursor/rules" {
+		t.Errorf("expected flux.yaml output to win, got %v", outMap["commands"])
+	}
+}
+
+func TestApplyManifestOutputDefault_NilManifestIsNoop(t *testing.T) {
+	flux := map[string]any{}
+	ApplyManifestOutputDefault(flux, nil)
+	if _, has := flux["output"]; has {
+		t.Errorf("expected no output key, got %v", flux["output"])
+	}
+}
+
+func TestApplyManifestOutputDefault_NilManifestOutputIsNoop(t *testing.T) {
+	flux := map[string]any{}
+	ApplyManifestOutputDefault(flux, &Mold{})
+	if _, has := flux["output"]; has {
+		t.Errorf("expected no output key, got %v", flux["output"])
 	}
 }
 

@@ -223,6 +223,7 @@ func loadDepFlux(reader *blanks.MoldReader, manifest *mold.Mold, node *depgraph.
 	for k, v := range defaults {
 		flux[k] = v
 	}
+	mold.ApplyManifestOutputDefault(flux, manifest)
 
 	// Layer parent-supplied `with:` values.
 	for k, v := range node.With {

@@ -515,8 +515,13 @@ func temperMold(fsys fs.FS, result *TemperResult) {
 		}
 	}
 
-	// Validate output source references (output lives in flux.yaml)
+	// Validate output source references. Output can come from flux.yaml or
+	// from a top-level output: in mold.yaml; flux.yaml wins when both exist.
 	flux, _ := LoadFluxFile(fsys, "flux.yaml")
+	if flux == nil {
+		flux = map[string]any{}
+	}
+	ApplyManifestOutputDefault(flux, m)
 	if err := ValidateOutputSources(flux["output"], fsys); err != nil {
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: SeverityError,

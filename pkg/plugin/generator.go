@@ -96,6 +96,9 @@ func (g *Generator) loadBlanks() error {
 	if err != nil {
 		flux = make(map[string]any)
 	}
+	if manifest, mErr := g.reader.LoadManifest(); mErr == nil {
+		mold.ApplyManifestOutputDefault(flux, manifest)
+	}
 
 	resolved, err := mold.ResolveFiles(flux["output"], g.reader.FS())
 	if err != nil {
