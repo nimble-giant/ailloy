@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.32](https://github.com/nimble-giant/ailloy/compare/v0.6.31...v0.6.32) (2026-05-14)
+
+
+### Features
+
+* support top-level output: in mold.yaml for flux parity ([177cfc7](https://github.com/nimble-giant/ailloy/commit/177cfc74164b921a7f95c2b2f7300cd3bb773731))
+
 ## [0.6.31](https://github.com/nimble-giant/ailloy/compare/v0.6.30...v0.6.31) (2026-05-13)
 
 
