@@ -1752,3 +1752,218 @@ func TestContextUsageRule_RollupThresholds(t *testing.T) {
 		t.Errorf("expected rollup threshold warning for plugin, got none; diags: %v", diags)
 	}
 }
+
+func TestLineCountRule_SkillMdExcluded(t *testing.T) {
+	longBody := strings.Repeat("line\n", 501)
+	ctx := &RuleContext{
+		Files: []DetectedFile{
+			{Path: ".claude/skills/big/SKILL.md", Platform: PlatformClaude, Content: []byte(longBody)},
+			{Path: "AGENTS.md", Platform: PlatformGeneric, Content: []byte(longBody)},
+		},
+		Config: DefaultConfig(),
+	}
+	diags := (&lineCountRule{}).Check(ctx)
+
+	for _, d := range diags {
+		if filepath.Base(d.File) == "SKILL.md" {
+			t.Errorf("line-count should skip SKILL.md, got: %v", d)
+		}
+	}
+	// AGENTS.md should still trigger
+	agentsFlagged := false
+	for _, d := range diags {
+		if d.File == "AGENTS.md" {
+			agentsFlagged = true
+		}
+	}
+	if !agentsFlagged {
+		t.Errorf("expected line-count to flag AGENTS.md, diags: %v", diags)
+	}
+}
+
+func TestReferenceFileTOCRule(t *testing.T) {
+	shortBody := strings.Repeat("line\n", 50)
+	longBody := strings.Repeat("line\n", 150)
+	longBodyWithTOC := "## Contents\n\n- foo\n- bar\n\n" + longBody
+
+	tests := []struct {
+		name     string
+		path     string
+		content  string
+		wantDiag bool
+	}{
+		{"short ref file no TOC", ".claude/skills/foo/REFERENCE.md", shortBody, false},
+		{"long ref file no TOC", ".claude/skills/foo/REFERENCE.md", longBody, true},
+		{"long ref file with TOC", ".claude/skills/foo/REFERENCE.md", longBodyWithTOC, false},
+		{"SKILL.md excluded", ".claude/skills/foo/SKILL.md", longBody, false},
+		{"non-skill file ignored", "docs/guide.md", longBody, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:     tt.path,
+					Platform: PlatformClaude,
+					Content:  []byte(tt.content),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&referenceFileTOCRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestReferenceDepthRule(t *testing.T) {
+	dir := t.TempDir()
+	skillDir := filepath.Join(dir, ".claude", "skills", "foo")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite := func(rel, content string) {
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// SKILL.md → advanced.md → details.md  (depth 2 — should warn)
+	mustWrite(".claude/skills/foo/advanced.md", "See [details](details.md) for more.\n")
+	mustWrite(".claude/skills/foo/details.md", "Actual details here.\n")
+	mustWrite(".claude/skills/foo/leaf.md", "No further refs.\n")
+
+	tests := []struct {
+		name      string
+		skillBody string
+		wantDiag  bool
+		wantInMsg string
+	}{
+		{
+			"one-level deep is fine",
+			"See [leaf](leaf.md).\n",
+			false, "",
+		},
+		{
+			"two-level deep warns",
+			"See [advanced](advanced.md).\n",
+			true, "advanced.md",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &RuleContext{
+				RootDir: dir,
+				Files: []DetectedFile{{
+					Path:     ".claude/skills/foo/SKILL.md",
+					Platform: PlatformClaude,
+					Content:  []byte(tt.skillBody),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&referenceDepthRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+			if tt.wantInMsg != "" && len(diags) > 0 && !strings.Contains(diags[0].Message, tt.wantInMsg) {
+				t.Errorf("expected message to mention %q, got: %s", tt.wantInMsg, diags[0].Message)
+			}
+		})
+	}
+}
+
+func TestWindowsPathsRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		wantDiag bool
+	}{
+		{"forward slashes ok", "Use `scripts/helper.py` for processing.\n", false},
+		{"backslash path warns", "Run scripts\\helper.py to start.\n", true},
+		{"backslash in code fence ignored", "```\nC:\\Users\\foo\\bar.py\n```\n", false},
+		{"nested backslash path", "See reference\\subdir\\guide.md.\n", true},
+		{"no paths", "Just words here.\n", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &RuleContext{
+				Files:  []DetectedFile{{Path: "AGENTS.md", Content: []byte(tt.content)}},
+				Config: DefaultConfig(),
+			}
+			diags := (&windowsPathsRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestNameGerundFormRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		skillNm  string
+		wantDiag bool
+	}{
+		{"gerund form", "processing-pdfs", false},
+		{"noun phrase with -ing", "pdf-processing", false},
+		{"action verb first", "process-pdfs", false},
+		{"another action verb", "analyze-spreadsheets", false},
+		{"pure noun warns", "pdf-extractor", true},
+		{"compound noun warns", "database-schema", true},
+		{"vague name skipped (covered by vague-name)", "helper", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := "---\nname: " + tt.skillNm + "\ndescription: test\n---\n# x\n"
+			ctx := &RuleContext{
+				Files: []DetectedFile{{
+					Path:     ".claude/skills/" + tt.skillNm + "/SKILL.md",
+					Platform: PlatformClaude,
+					Content:  []byte(content),
+				}},
+				Config: DefaultConfig(),
+			}
+			diags := (&nameGerundFormRule{}).Check(ctx)
+			if tt.wantDiag && len(diags) == 0 {
+				t.Error("expected diagnostic, got none")
+			}
+			if !tt.wantDiag && len(diags) > 0 {
+				t.Errorf("expected no diagnostic, got: %v", diags)
+			}
+		})
+	}
+}
+
+func TestNameGerundFormRule_PluginManifestSkipped(t *testing.T) {
+	manifest := `{"name":"my-plugin","version":"1.0","description":"x"}`
+	ctx := &RuleContext{
+		Files: []DetectedFile{{
+			Path:      "plugins/my-plugin/.claude-plugin/plugin.json",
+			Platform:  PlatformClaude,
+			PluginDir: "plugins/my-plugin",
+			Content:   []byte(manifest),
+		}},
+		Config: DefaultConfig(),
+	}
+	diags := (&nameGerundFormRule{}).Check(ctx)
+	if len(diags) > 0 {
+		t.Errorf("expected plugin manifest to be skipped, got: %v", diags)
+	}
+}

@@ -26,6 +26,7 @@ func init() {
 	Register(&emptyFileRule{})
 	Register(&duplicateTopicsRule{})
 	Register(&contextUsageRule{})
+	Register(&windowsPathsRule{})
 }
 
 // lineCountRule warns when an instruction file exceeds a line threshold.
@@ -52,6 +53,12 @@ func (r *lineCountRule) Check(ctx *RuleContext) []mold.Diagnostic {
 
 	var diags []mold.Diagnostic
 	for _, f := range ctx.Files {
+		// SKILL.md is governed by skill-body-length (500-line cap per
+		// Anthropic's progressive-disclosure spec). Skip it here so the two
+		// rules don't contradict each other.
+		if filepath.Base(f.Path) == "SKILL.md" {
+			continue
+		}
 		lines := bytes.Count(f.Content, []byte("\n"))
 		if len(f.Content) > 0 && f.Content[len(f.Content)-1] != '\n' {
 			lines++ // count last line without trailing newline
