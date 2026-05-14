@@ -82,6 +82,7 @@ func loadForgeFlux(reader *blanks.MoldReader, resolver *EphemeralOreResolver) (m
 	if err := mergo.Merge(&flux, fluxDefaults, mergo.WithOverride); err != nil {
 		return nil, fmt.Errorf("merging mold defaults over ore defaults: %w", err)
 	}
+	mold.ApplyManifestOutputDefault(flux, manifest)
 
 	// Layer 3: Layer -f files left-to-right (each overrides previous)
 	if len(forgeValFiles) > 0 {

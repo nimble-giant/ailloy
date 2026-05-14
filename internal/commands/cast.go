@@ -190,7 +190,8 @@ func loadCastFlux(reader *blanks.MoldReader, source string) (map[string]any, []m
 	// Merge mold.yaml's in-line flux: schema in. LoadMoldFluxWithOres only
 	// reads the standalone flux.schema.yaml file; molds that declare their
 	// schema inline (no flux.schema.yaml on disk) still need their defaults.
-	if manifest, _ := reader.LoadManifest(); manifest != nil && len(manifest.Flux) > 0 {
+	manifest, _ := reader.LoadManifest()
+	if manifest != nil && len(manifest.Flux) > 0 {
 		fluxDefaults = mold.ApplyFluxDefaults(manifest.Flux, fluxDefaults)
 		if len(mergedSchema) == 0 {
 			mergedSchema = manifest.Flux
@@ -201,6 +202,7 @@ func loadCastFlux(reader *blanks.MoldReader, source string) (map[string]any, []m
 	for k, v := range fluxDefaults {
 		flux[k] = v
 	}
+	mold.ApplyManifestOutputDefault(flux, manifest)
 
 	// Layer 3: persisted flux files written by the foundries TUI (global, then
 	// project — project wins on conflict). Layered before user-supplied -f so

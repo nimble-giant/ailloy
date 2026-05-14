@@ -421,6 +421,7 @@ func loadTemperFlux(reader *blanks.MoldReader) (map[string]any, error) {
 	for k, v := range fluxDefaults {
 		flux[k] = v
 	}
+	mold.ApplyManifestOutputDefault(flux, manifest)
 
 	// Layer 3: Layer -f files left-to-right
 	if len(temperValFiles) > 0 {
