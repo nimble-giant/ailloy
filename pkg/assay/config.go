@@ -238,6 +238,16 @@ assay:
         # error-tokens: 46000    # optional: override with absolute token count
     ore-shadowing:
       enabled: true              # warn when a mold has both ./ores/<n>/ and ore.<n>.* entries in flux.schema.yaml
+    reference-file-toc:
+      enabled: true
+      options:
+        max-lines: 100           # require a Table of Contents heading when a skill reference file exceeds this many lines
+    reference-depth:
+      enabled: true              # warn when SKILL.md references files that themselves reference other markdown files
+    windows-paths:
+      enabled: true              # warn on backslash-style paths (e.g. scripts\helper.py) in markdown content
+    name-gerund-form:
+      enabled: true              # suggest gerund-form skill names (verb + -ing) over pure-noun names
   ignore: []
     # - "vendor/**"
     # - ".claude/rules/generated-*.md"

@@ -33,6 +33,9 @@ func init() {
 	Register(&compatibilityLengthRule{})
 	Register(&skillTokenBudgetRule{})
 	Register(&descriptionImperativeRule{})
+	Register(&referenceFileTOCRule{})
+	Register(&referenceDepthRule{})
+	Register(&nameGerundFormRule{})
 }
 
 // isUnderPluginSubdir returns true if path is at any depth under
