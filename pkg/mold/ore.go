@@ -30,6 +30,7 @@ type Ore struct {
 	Namespace   string   `yaml:"namespace,omitempty"`
 	Version     string   `yaml:"version"`
 	Description string   `yaml:"description,omitempty"`
+	License     string   `yaml:"license,omitempty"`
 	Author      Author   `yaml:"author,omitempty"`
 	Requires    Requires `yaml:"requires,omitempty"`
 }

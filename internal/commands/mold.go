@@ -354,6 +354,11 @@ func runGetMold(_ *cobra.Command, args []string) error {
 	if manifest.Description != "" {
 		fmt.Println(styles.SubtleStyle.Render("  " + manifest.Description))
 	}
+	license := manifest.License
+	if license == "" {
+		license = "not specified"
+	}
+	fmt.Println(styles.InfoStyle.Render("License:    ") + styles.CodeStyle.Render(license))
 	fmt.Println(styles.InfoStyle.Render("Cache path: ") + styles.CodeStyle.Render(cachePath))
 
 	return nil

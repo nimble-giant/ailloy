@@ -580,3 +580,175 @@ func TestTemperResult_NoErrors(t *testing.T) {
 		t.Error("expected HasErrors to return false with only warnings")
 	}
 }
+
+// diagWithRule returns the first diagnostic with the given rule name, or nil
+// when no such diagnostic exists. Used by the license-related temper tests
+// below to avoid brittle message-string matching.
+func diagWithRule(diags []Diagnostic, rule string) *Diagnostic {
+	for i := range diags {
+		if diags[i].Rule == rule {
+			return &diags[i]
+		}
+	}
+	return nil
+}
+
+func TestTemper_License_OmittedSuggestsAddingOne(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+`)},
+	}
+
+	result := Temper(fsys)
+
+	if result.HasErrors() {
+		t.Fatalf("expected no errors, got: %v", result.Errors())
+	}
+	d := diagWithRule(result.Suggestions(), "license-missing")
+	if d == nil {
+		t.Fatalf("expected license-missing suggestion, got: %+v", result.Diagnostics)
+	}
+	if d.Severity != SeveritySuggestion {
+		t.Errorf("expected SeveritySuggestion, got %v", d.Severity)
+	}
+}
+
+func TestTemper_License_KnownSPDXNoWarning(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+license: Apache-2.0
+`)},
+		"LICENSE": &fstest.MapFile{Data: []byte("Apache License 2.0...")},
+	}
+
+	result := Temper(fsys)
+
+	if d := diagWithRule(result.Diagnostics, "license-spdx"); d != nil {
+		t.Errorf("did not expect license-spdx diagnostic, got: %+v", d)
+	}
+	if d := diagWithRule(result.Diagnostics, "license-file-missing"); d != nil {
+		t.Errorf("did not expect license-file-missing diagnostic, got: %+v", d)
+	}
+	if d := diagWithRule(result.Diagnostics, "license-missing"); d != nil {
+		t.Errorf("did not expect license-missing diagnostic when license is set, got: %+v", d)
+	}
+}
+
+func TestTemper_License_UnknownSPDXWarnsWithSuggestion(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+license: Apache2.0
+`)},
+		"LICENSE": &fstest.MapFile{Data: []byte("...")},
+	}
+
+	result := Temper(fsys)
+
+	d := diagWithRule(result.Warnings(), "license-spdx")
+	if d == nil {
+		t.Fatalf("expected license-spdx warning, got diagnostics: %+v", result.Diagnostics)
+	}
+	if !strings.Contains(d.Tip, "Apache-2.0") {
+		t.Errorf("expected tip to suggest Apache-2.0, got: %q", d.Tip)
+	}
+}
+
+func TestTemper_License_LicenseRefAccepted(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+license: LicenseRef-Internal-1
+`)},
+		"LICENSE": &fstest.MapFile{Data: []byte("...")},
+	}
+
+	result := Temper(fsys)
+
+	if d := diagWithRule(result.Diagnostics, "license-spdx"); d != nil {
+		t.Errorf("did not expect license-spdx diagnostic for LicenseRef, got: %+v", d)
+	}
+}
+
+func TestTemper_License_SetButLICENSEFileMissing(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: test-mold
+version: 1.0.0
+license: MIT
+`)},
+	}
+
+	result := Temper(fsys)
+
+	d := diagWithRule(result.Warnings(), "license-file-missing")
+	if d == nil {
+		t.Fatalf("expected license-file-missing warning, got: %+v", result.Diagnostics)
+	}
+}
+
+func TestTemper_License_IngotPath(t *testing.T) {
+	fsys := fstest.MapFS{
+		"ingot.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: ingot
+name: test-ingot
+version: 1.0.0
+license: MIT
+`)},
+	}
+
+	result := Temper(fsys)
+
+	d := diagWithRule(result.Warnings(), "license-file-missing")
+	if d == nil {
+		t.Fatalf("expected license-file-missing warning for ingot, got: %+v", result.Diagnostics)
+	}
+	if d.File != "ingot.yaml" {
+		t.Errorf("expected File=ingot.yaml, got %q", d.File)
+	}
+}
+
+func TestTemper_License_OrePath(t *testing.T) {
+	fsys := fstest.MapFS{
+		"ore.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: ore
+name: test_ore
+version: 1.0.0
+license: bogus
+`)},
+		"LICENSE": &fstest.MapFile{Data: []byte("...")},
+		"flux.schema.yaml": &fstest.MapFile{Data: []byte(`- name: enabled
+  type: bool
+`)},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`enabled: false
+`)},
+	}
+
+	result := Temper(fsys)
+
+	d := diagWithRule(result.Warnings(), "license-spdx")
+	if d == nil {
+		t.Fatalf("expected license-spdx warning for ore, got: %+v", result.Diagnostics)
+	}
+	if d.File != "ore.yaml" {
+		t.Errorf("expected File=ore.yaml, got %q", d.File)
+	}
+}

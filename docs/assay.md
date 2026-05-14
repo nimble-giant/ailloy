@@ -64,6 +64,7 @@ These rules lint a mold's source tree (rather than rendered AI instruction files
 | Rule | Severity | Description |
 |------|----------|-------------|
 | `ore-shadowing` | Warning | A mold has both a packaged ore at `./ores/<n>/` and hand-rolled `ore.<n>.*` entries in `flux.schema.yaml`; the hand-rolled entries silently shadow the package and almost always indicate a missed cleanup after migrating from the in-tree convention |
+| `license-missing` | Suggestion | The package manifest (`mold.yaml`, `ingot.yaml`, or `ore.yaml`) has no `license` field; consumers can't tell how the package may be used. Declare an [SPDX identifier](https://spdx.org/licenses/) such as `Apache-2.0`, `MIT`, or `BSD-3-Clause`, or `LicenseRef-<id>` for custom licenses |
 
 ## Claude Plugin Directory Support
 

@@ -138,6 +138,7 @@ type Mold struct {
 	Name         string       `yaml:"name"`
 	Version      string       `yaml:"version"`
 	Description  string       `yaml:"description,omitempty"`
+	License      string       `yaml:"license,omitempty"`
 	Author       Author       `yaml:"author,omitempty"`
 	Requires     Requires     `yaml:"requires,omitempty"`
 	Flux         []FluxVar    `yaml:"flux,omitempty"`

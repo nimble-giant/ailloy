@@ -13,6 +13,7 @@ kind: mold
 name: test-mold
 version: 1.0.0
 description: "A test mold"
+license: Apache-2.0
 author:
   name: Test Author
   url: https://example.com
@@ -52,6 +53,9 @@ dependencies:
 	}
 	if m.Description != "A test mold" {
 		t.Errorf("expected description 'A test mold', got %s", m.Description)
+	}
+	if m.License != "Apache-2.0" {
+		t.Errorf("expected license Apache-2.0, got %s", m.License)
 	}
 	if m.Author.Name != "Test Author" {
 		t.Errorf("expected author name Test Author, got %s", m.Author.Name)
