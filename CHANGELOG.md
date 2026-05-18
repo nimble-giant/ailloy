@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.34](https://github.com/nimble-giant/ailloy/compare/v0.6.33...v0.6.34) (2026-05-18)
+
+
+### Bug Fixes
+
+* enforce requires.ailloy version constraint at cast time ([87d15ca](https://github.com/nimble-giant/ailloy/commit/87d15ca7b9fc7c283aa0775736071e39c64a9137)), closes [#229](https://github.com/nimble-giant/ailloy/issues/229)
+* resolve mold dep constraints against dependency mold.yaml version ([bddc54f](https://github.com/nimble-giant/ailloy/commit/bddc54f880a99d3c3e2344557dcbe99c5851b0c1)), closes [#228](https://github.com/nimble-giant/ailloy/issues/228)
+
 ## [0.6.33](https://github.com/nimble-giant/ailloy/compare/v0.6.32...v0.6.33) (2026-05-18)
 
 
