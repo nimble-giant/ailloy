@@ -58,6 +58,30 @@ func TestLockedSatisfies(t *testing.T) {
 			want:  false,
 		},
 		{
+			name:  "constraint checked against mold version when recorded",
+			ref:   &Reference{Type: Constraint, Version: "^0.2.0"},
+			entry: &LockEntry{Version: "launch-v0.7.1", MoldVersion: "0.2.1"},
+			want:  true,
+		},
+		{
+			name:  "old lock without mold version re-resolves (prefixed tag unparseable)",
+			ref:   &Reference{Type: Constraint, Version: "^0.2.0"},
+			entry: &LockEntry{Version: "launch-v0.7.1"},
+			want:  false,
+		},
+		{
+			name:  "exact matched against mold version",
+			ref:   &Reference{Type: Exact, Version: "0.2.1"},
+			entry: &LockEntry{Version: "launch-v0.7.1", MoldVersion: "0.2.1"},
+			want:  true,
+		},
+		{
+			name:  "exact mismatched against mold version",
+			ref:   &Reference{Type: Exact, Version: "0.3.0"},
+			entry: &LockEntry{Version: "launch-v0.7.1", MoldVersion: "0.2.1"},
+			want:  false,
+		},
+		{
 			name:  "branch never satisfies",
 			ref:   &Reference{Type: Branch, Version: "main"},
 			entry: &LockEntry{Version: "main"},

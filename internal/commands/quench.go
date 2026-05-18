@@ -105,6 +105,7 @@ func runQuench(_ *cobra.Command, args []string) error {
 
 	// Resolve current versions and write a fresh lock.
 	git := foundry.DefaultGitRunner()
+	fetcher, fetcherErr := foundry.NewFetcher(git)
 	newLock := &foundry.LockFile{APIVersion: "v1"}
 	for _, entry := range entries {
 		ref, err := referenceFromInstalledEntry(&entry)
@@ -112,18 +113,31 @@ func runQuench(_ *cobra.Command, args []string) error {
 			fmt.Printf("  %s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, err)
 			continue
 		}
-		resolved, err := foundry.ResolveVersion(ref, git)
+		// Rank against the mold's declared version so release-train monorepo
+		// pins record the correct moldVersion. Fall back to plain resolution
+		// if the bare clone can't be prepared.
+		var resolved *foundry.ResolvedVersion
+		if fetcherErr == nil {
+			if reader, rerr := fetcher.MoldVersionReaderFor(ref); rerr == nil {
+				resolved, err = foundry.ResolveVersionWithMoldReader(ref, git, reader)
+			} else {
+				resolved, err = foundry.ResolveVersion(ref, git)
+			}
+		} else {
+			resolved, err = foundry.ResolveVersion(ref, git)
+		}
 		if err != nil {
 			fmt.Printf("  %s skipping %s: %v\n", styles.WarningStyle.Render("!"), entry.Name, err)
 			continue
 		}
 		newLock.UpsertEntry(foundry.LockEntry{
-			Name:      entry.Name,
-			Source:    entry.Source,
-			Version:   resolved.Tag,
-			Commit:    resolved.Commit,
-			Subpath:   entry.Subpath,
-			Timestamp: time.Now().UTC(),
+			Name:        entry.Name,
+			Source:      entry.Source,
+			Version:     resolved.Tag,
+			Commit:      resolved.Commit,
+			MoldVersion: resolved.MoldVersion,
+			Subpath:     entry.Subpath,
+			Timestamp:   time.Now().UTC(),
 		})
 		fmt.Printf("  %s  %s @ %s\n",
 			styles.FoxBullet(entry.Name),

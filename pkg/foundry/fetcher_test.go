@@ -238,3 +238,54 @@ func TestFetcher_Fetch_CacheHit(t *testing.T) {
 		t.Errorf("expected cached content, got %q", got)
 	}
 }
+
+func TestMoldVersionReaderFor(t *testing.T) {
+	cacheDir := t.TempDir()
+	ref := &Reference{Host: "github.com", Owner: "o", Repo: "foundry", Subpath: "molds/launch"}
+
+	shows := 0
+	git := func(args ...string) ([]byte, error) {
+		// clone --bare <url> <bareDir>
+		if len(args) >= 4 && args[0] == "clone" && args[1] == "--bare" {
+			if err := os.MkdirAll(args[3], 0750); err != nil {
+				return nil, err
+			}
+			return nil, os.WriteFile(filepath.Join(args[3], "HEAD"), []byte("ref: refs/heads/main"), 0644)
+		}
+		// -C <bareDir> show <tag>:molds/launch/mold.yaml
+		if len(args) == 4 && args[0] == "-C" && args[2] == "show" {
+			shows++
+			switch args[3] {
+			case "launch-v0.7.1:molds/launch/mold.yaml":
+				return []byte("name: replicated-launch\nversion: 0.2.1\n"), nil
+			case "launch-v0.6.0:molds/launch/mold.yaml":
+				return []byte("name: replicated-launch\n"), nil // manifest present, no version
+			default:
+				return nil, fmt.Errorf("fatal: path does not exist")
+			}
+		}
+		return nil, fmt.Errorf("unexpected git call: %v", args)
+	}
+
+	reader, err := NewFetcherWithCacheDir(git, cacheDir).MoldVersionReaderFor(ref)
+	if err != nil {
+		t.Fatalf("MoldVersionReaderFor: %v", err)
+	}
+
+	if v, found := reader("launch-v0.7.1"); !found || v != "0.2.1" {
+		t.Errorf("launch-v0.7.1 = (%q, %v), want (0.2.1, true)", v, found)
+	}
+	if v, found := reader("launch-v0.6.0"); !found || v != "" {
+		t.Errorf("launch-v0.6.0 = (%q, %v), want (\"\", true) — manifest present, no version", v, found)
+	}
+	if v, found := reader("launch-v0.5.0"); found || v != "" {
+		t.Errorf("launch-v0.5.0 = (%q, %v), want (\"\", false) — manifest absent", v, found)
+	}
+
+	// Results are memoised per tag: a repeat lookup issues no new git show.
+	before := shows
+	reader("launch-v0.7.1")
+	if shows != before {
+		t.Errorf("repeat lookup issued %d extra git show calls, want 0", shows-before)
+	}
+}

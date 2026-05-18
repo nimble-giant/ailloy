@@ -27,7 +27,24 @@ func DefaultGitRunner() GitRunner {
 type ResolvedVersion struct {
 	Tag    string // semver tag (e.g. "v1.2.3"), or branch name for branch pins
 	Commit string // full commit SHA
+	// MoldVersion is the version declared in the mold's mold.yaml at Tag.
+	// Empty when no MoldVersionReader was supplied or the mold declared no
+	// parseable version (in which case the constraint was matched against
+	// the tag-embedded semver).
+	MoldVersion string
 }
+
+// MoldVersionReader reports the version declared in a mold's mold.yaml at a
+// given git tag. found=false means no mold manifest exists at that tag (the
+// candidate tag is then excluded). found=true with an empty version means the
+// manifest exists but declares no parseable version, so callers fall back to
+// the tag-embedded semver.
+//
+// Release-train monorepos tag every mold with a shared train version
+// (`launch-v0.7.1`, `ce-v0.7.1`, ...) while each mold carries its own semver
+// in mold.yaml. A reader lets the resolver rank candidates by the mold's own
+// version rather than the train version baked into the tag name.
+type MoldVersionReader func(tag string) (version string, found bool)
 
 // tagRef matches a line from git ls-remote --tags, e.g.:
 // abc123\trefs/tags/v1.0.0
@@ -55,16 +72,49 @@ func parseSemverTag(tag string) (prefix, normalized string, ok bool) {
 	return "", "", false
 }
 
+// RankVersion returns the semver used to rank a candidate tag against a
+// version constraint. When moldVersion is non-empty it is authoritative — the
+// mold declares its own version in mold.yaml, which on a release-train
+// monorepo differs from the version baked into the tag name. Otherwise the
+// version embedded in the tag name is used as a fallback (single-mold repos,
+// or molds with no parseable version field).
+func RankVersion(tag, moldVersion string) (*semver.Version, bool) {
+	if moldVersion != "" {
+		if v, err := semver.NewVersion(moldVersion); err == nil {
+			return v, true
+		}
+	}
+	_, normalized, ok := parseSemverTag(tag)
+	if !ok {
+		return nil, false
+	}
+	v, err := semver.NewVersion(normalized)
+	if err != nil {
+		return nil, false
+	}
+	return v, true
+}
+
 // ResolveVersion resolves a Reference to a concrete tag + commit SHA using
-// git ls-remote. It does not require a local clone.
+// git ls-remote. It does not require a local clone, and ranks candidate tags
+// by their tag-embedded semver. For release-train monorepos use
+// ResolveVersionWithMoldReader.
 func ResolveVersion(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
+	return ResolveVersionWithMoldReader(ref, git, nil)
+}
+
+// ResolveVersionWithMoldReader is like ResolveVersion but ranks candidate
+// tags by the dependency mold's declared mold.yaml version (supplied by
+// reader) instead of the tag-embedded semver. A nil reader behaves exactly
+// like ResolveVersion.
+func ResolveVersionWithMoldReader(ref *Reference, git GitRunner, reader MoldVersionReader) (*ResolvedVersion, error) {
 	switch ref.Type {
 	case Latest:
-		return resolveLatest(ref, git)
+		return resolveLatest(ref, git, reader)
 	case Exact:
-		return resolveExact(ref, git)
+		return resolveExact(ref, git, reader)
 	case Constraint:
-		return resolveConstraint(ref, git)
+		return resolveConstraint(ref, git, reader)
 	case Branch:
 		return resolveBranch(ref, git)
 	case SHA:
@@ -176,25 +226,29 @@ func selectTagsForPrefix(all map[string]string, prefix string) map[string]string
 	return plain
 }
 
-// resolveLatest picks the highest semver tag, preferring monorepo-prefixed
-// tags (`<subpath>-v*`) when the reference has a Subpath.
-func resolveLatest(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
+// resolveLatest picks the highest-versioned tag, preferring monorepo-prefixed
+// tags (`<subpath>-v*`) when the reference has a Subpath. With a reader,
+// candidates are ranked by their mold.yaml version.
+func resolveLatest(ref *Reference, git GitRunner, reader MoldVersionReader) (*ResolvedVersion, error) {
 	all, err := remoteTags(ref.CloneURL(), git)
 	if err != nil {
 		return nil, err
 	}
 	tags := selectTagsForPrefix(all, ref.ReleasePrefix())
-	tag, sha, err := highestVersion(tags, nil)
+	tag, sha, moldVersion, err := highestVersion(tags, nil, reader)
 	if err != nil {
 		return nil, fmt.Errorf("no semver tags found for %s", ref.CacheKey())
 	}
-	return &ResolvedVersion{Tag: tag, Commit: sha}, nil
+	return &ResolvedVersion{Tag: tag, Commit: sha, MoldVersion: moldVersion}, nil
 }
 
 // resolveExact finds the exact tag matching the specified version. When the
 // reference has a Subpath, prefixed candidates (`<prefix>-v1.2.3`) are tried
-// before plain ones.
-func resolveExact(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
+// before plain ones. With a reader, an exact version that matches no literal
+// tag name is matched against the declared mold.yaml versions instead — on a
+// release-train monorepo `@0.2.1` is the mold's own version, which lives at a
+// differently-named tag (e.g. `launch-v0.7.1`).
+func resolveExact(ref *Reference, git GitRunner, reader MoldVersionReader) (*ResolvedVersion, error) {
 	tags, err := remoteTags(ref.CloneURL(), git)
 	if err != nil {
 		return nil, err
@@ -217,13 +271,49 @@ func resolveExact(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
 			return &ResolvedVersion{Tag: tag, Commit: sha}, nil
 		}
 	}
+
+	if reader != nil {
+		if rv, ok := resolveExactByMoldVersion(ref, tags, reader); ok {
+			return rv, nil
+		}
+	}
 	return nil, fmt.Errorf("tag %q not found in %s", ref.Version, ref.CacheKey())
+}
+
+// resolveExactByMoldVersion finds the tag whose mold.yaml version equals the
+// reference's exact version. When several tags carry the same mold version
+// (the mold was unchanged across release-train releases) the one with the
+// highest tag-embedded semver wins, so the newest checkout pointer is used.
+func resolveExactByMoldVersion(ref *Reference, all map[string]string, reader MoldVersionReader) (*ResolvedVersion, bool) {
+	want, err := semver.NewVersion(strings.TrimPrefix(ref.Version, "v"))
+	if err != nil {
+		return nil, false
+	}
+	tags := selectTagsForPrefix(all, ref.ReleasePrefix())
+	var best *ResolvedVersion
+	var bestRank *semver.Version
+	for tag, sha := range tags {
+		mv, found := reader(tag)
+		if !found || mv == "" {
+			continue
+		}
+		v, err := semver.NewVersion(mv)
+		if err != nil || !v.Equal(want) {
+			continue
+		}
+		rank, ok := RankVersion(tag, "")
+		if best == nil || (ok && bestRank != nil && bestRank.LessThan(rank)) {
+			best = &ResolvedVersion{Tag: tag, Commit: sha, MoldVersion: mv}
+			bestRank = rank
+		}
+	}
+	return best, best != nil
 }
 
 // resolveConstraint matches a semver constraint against available tags. When
 // the reference has a Subpath, the constraint is evaluated against the
 // monorepo-prefixed tags for that subpath when any exist.
-func resolveConstraint(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
+func resolveConstraint(ref *Reference, git GitRunner, reader MoldVersionReader) (*ResolvedVersion, error) {
 	c, err := semver.NewConstraint(ref.Version)
 	if err != nil {
 		return nil, fmt.Errorf("invalid semver constraint %q: %w", ref.Version, err)
@@ -235,11 +325,11 @@ func resolveConstraint(ref *Reference, git GitRunner) (*ResolvedVersion, error) 
 	}
 	tags := selectTagsForPrefix(all, ref.ReleasePrefix())
 
-	tag, sha, err := highestVersion(tags, c)
+	tag, sha, moldVersion, err := highestVersion(tags, c, reader)
 	if err != nil {
 		return nil, fmt.Errorf("no tag matching %q for %s", ref.Version, ref.CacheKey())
 	}
-	return &ResolvedVersion{Tag: tag, Commit: sha}, nil
+	return &ResolvedVersion{Tag: tag, Commit: sha, MoldVersion: moldVersion}, nil
 }
 
 // resolveBranch resolves a branch pin to its HEAD commit.
@@ -264,39 +354,65 @@ func resolveBranch(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
 	return nil, fmt.Errorf("branch %q not found in %s", ref.Version, ref.CacheKey())
 }
 
-// highestVersion picks the highest semver version from a tag map, optionally
-// filtered by a constraint. Returns the tag name, SHA, and nil error on success.
-func highestVersion(tags map[string]string, c *semver.Constraints) (string, string, error) {
+// highestVersion picks the highest-versioned tag from a tag map, optionally
+// filtered by a constraint. Candidates are ranked by their mold.yaml version
+// when reader is non-nil; tags whose mold manifest is absent (reader reports
+// found=false) are excluded. Returns the tag name, SHA, the mold version used
+// for ranking (empty when ranked by the tag-embedded semver), and a nil error
+// on success.
+func highestVersion(tags map[string]string, c *semver.Constraints, reader MoldVersionReader) (string, string, string, error) {
 	type entry struct {
-		tag string
-		ver *semver.Version
-		sha string
+		tag         string
+		ver         *semver.Version // rank version (mold version when known)
+		tagVer      *semver.Version // tag-embedded version, for tie-breaking
+		sha         string
+		moldVersion string
 	}
 
 	var entries []entry
 	for tag, sha := range tags {
-		_, normalized, ok := parseSemverTag(tag)
-		if !ok {
-			continue
+		var moldVersion string
+		if reader != nil {
+			v, found := reader(tag)
+			if !found {
+				continue // mold manifest absent at this tag
+			}
+			moldVersion = v
 		}
-		v, err := semver.NewVersion(normalized)
-		if err != nil {
+		v, ok := RankVersion(tag, moldVersion)
+		if !ok {
 			continue
 		}
 		if c != nil && !c.Check(v) {
 			continue
 		}
-		entries = append(entries, entry{tag: tag, ver: v, sha: sha})
+		tagVer, _ := RankVersion(tag, "")
+		entries = append(entries, entry{tag: tag, ver: v, tagVer: tagVer, sha: sha, moldVersion: moldVersion})
 	}
 
 	if len(entries) == 0 {
-		return "", "", fmt.Errorf("no matching versions")
+		return "", "", "", fmt.Errorf("no matching versions")
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].ver.LessThan(entries[j].ver)
+		return lessEntry(entries[i].ver, entries[i].tagVer, entries[i].tag,
+			entries[j].ver, entries[j].tagVer, entries[j].tag)
 	})
 
 	best := entries[len(entries)-1]
-	return best.tag, best.sha, nil
+	return best.tag, best.sha, best.moldVersion, nil
+}
+
+// lessEntry orders candidates by rank version, then by the tag-embedded
+// version as a tie-breaker (release-train monorepos share one mold version
+// across many tags — the newest tag is the right checkout pointer), then by
+// tag name for total determinism.
+func lessEntry(vi, ti *semver.Version, tagI string, vj, tj *semver.Version, tagJ string) bool {
+	if !vi.Equal(vj) {
+		return vi.LessThan(vj)
+	}
+	if ti != nil && tj != nil && !ti.Equal(tj) {
+		return ti.LessThan(tj)
+	}
+	return tagI < tagJ
 }

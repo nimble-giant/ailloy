@@ -64,7 +64,10 @@ func Temper(path string, opts TemperOptions) (*TemperResult, error) {
 //  2. Schema validation via Index.Validate(). Failures here short-circuit
 //     remaining checks (returning a TemperResult with one finding).
 //  3. (network) Per direct mold: parse the source ref and resolve it on the
-//     remote via git ls-remote. Each failure is reported as a finding.
+//     remote via git ls-remote (no clone). Each failure is reported as a
+//     finding. Constraint checks here use the tag-embedded semver — temper
+//     stays clone-free, so for release-train monorepos (where constraints
+//     match the mold.yaml version) this is a conservative existence check.
 //  4. (network, unless NoRecurse) Per nested foundry: fetch the child index,
 //     run the same checks recursively. Cycles are silently broken via a
 //     visited-set keyed on canonical source URL.

@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+
+	"github.com/goccy/go-yaml"
 )
 
 // Fetcher clones and checks out mold versions from git repositories.
@@ -44,6 +47,54 @@ func (f *Fetcher) Fetch(ref *Reference, resolved *ResolvedVersion) (fs.FS, strin
 	}
 
 	return f.navigateSubpath(ref, resolved)
+}
+
+// MoldVersionReaderFor returns a MoldVersionReader that reads the `version:`
+// field of the reference's mold.yaml at any given git tag. It ensures the
+// bare clone exists once, then serves each lookup with `git show <tag>:<path>`
+// against the local clone — cheap and offline. Results are memoised per tag.
+//
+// The reader reports found=false when no mold manifest exists at a tag (the
+// caller excludes that candidate), and found=true with an empty version when
+// the manifest exists but declares no version (the caller falls back to the
+// tag-embedded semver).
+func (f *Fetcher) MoldVersionReaderFor(ref *Reference) (MoldVersionReader, error) {
+	if err := f.ensureBareClone(ref); err != nil {
+		return nil, fmt.Errorf("ensuring bare clone: %w", err)
+	}
+	bareDir := BareCloneDir(f.cacheDir, ref)
+
+	manifestPath := "mold.yaml"
+	if sp := strings.Trim(ref.Subpath, "/"); sp != "" {
+		manifestPath = sp + "/mold.yaml" // git object paths are always forward-slash
+	}
+
+	type result struct {
+		version string
+		found   bool
+	}
+	var mu sync.Mutex
+	cache := map[string]result{}
+
+	return func(tag string) (string, bool) {
+		mu.Lock()
+		defer mu.Unlock()
+		if r, ok := cache[tag]; ok {
+			return r.version, r.found
+		}
+		out, err := f.git("-C", bareDir, "show", tag+":"+manifestPath)
+		r := result{found: err == nil}
+		if r.found {
+			var m struct {
+				Version string `yaml:"version"`
+			}
+			if yaml.Unmarshal(out, &m) == nil {
+				r.version = m.Version
+			}
+		}
+		cache[tag] = r
+		return r.version, r.found
+	}, nil
 }
 
 // ensureBareClone creates or updates the bare clone for the reference.

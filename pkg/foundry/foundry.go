@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -168,6 +169,20 @@ func ResolveWithMetadata(rawRef string, opts ...ResolveOption) (fs.FS, *ResolveR
 	return fsys, result, nil
 }
 
+// ResolveReferenceWithMetadata is like ResolveWithMetadata but takes an
+// already-parsed *Reference. Use this when the caller has set Type explicitly
+// (e.g. pinning an exact tag): round-tripping through a raw string would
+// re-run classifyVersion and could misclassify a monorepo-prefixed tag name
+// such as `launch-v0.7.1` as a branch.
+func ResolveReferenceWithMetadata(ref *Reference, opts ...ResolveOption) (fs.FS, *ResolveResult, error) {
+	git := DefaultGitRunner()
+	fsys, result, err := resolveWithMeta(ref, git, opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+	return fsys, result, nil
+}
+
 // resolveWithMeta is the internal implementation; mirrors ResolveWith but also
 // returns the ResolvedVersion alongside the fs.FS.
 func resolveWithMeta(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.FS, *ResolveResult, error) {
@@ -193,18 +208,27 @@ func resolveWithMeta(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.F
 		}
 	}
 
+	fetcher, err := NewFetcher(git)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating fetcher: %w", err)
+	}
+
 	if resolved == nil {
-		v, resolveErr := ResolveVersion(ref, git)
+		// Rank candidate tags by the dependency mold's declared mold.yaml
+		// version (release-train monorepos tag every mold with a shared
+		// train version). The reader is backed by the same bare clone the
+		// fetch below uses, so this adds no extra network round-trip.
+		reader, rerr := fetcher.MoldVersionReaderFor(ref)
+		if rerr != nil {
+			return nil, nil, fmt.Errorf("resolving version: %w", rerr)
+		}
+		v, resolveErr := ResolveVersionWithMoldReader(ref, git, reader)
 		if resolveErr != nil {
 			return nil, nil, fmt.Errorf("resolving version: %w", resolveErr)
 		}
 		resolved = v
 	}
 
-	fetcher, err := NewFetcher(git)
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating fetcher: %w", err)
-	}
 	fsys, root, err := fetcher.Fetch(ref, resolved)
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetching mold: %w", err)
@@ -230,16 +254,41 @@ func lockedSatisfies(ref *Reference, entry *LockEntry) bool {
 		if err != nil {
 			return false
 		}
-		v, err := semver.NewVersion(entry.Version)
-		if err != nil {
+		v := lockEntryVersion(entry)
+		if v == nil {
 			return false
 		}
 		return c.Check(v)
 	case Exact:
+		// On a release-train monorepo the exact version is the mold's own
+		// version; match it against the recorded mold version when present.
+		if entry.MoldVersion != "" {
+			want, e1 := semver.NewVersion(strings.TrimPrefix(ref.Version, "v"))
+			got, e2 := semver.NewVersion(entry.MoldVersion)
+			if e1 == nil && e2 == nil {
+				return want.Equal(got)
+			}
+		}
 		return entry.Version == ref.Version || entry.Version == "v"+ref.Version
 	default:
 		return false
 	}
+}
+
+// lockEntryVersion returns the semver a constraint should be checked against:
+// the recorded mold.yaml version when present (release-train monorepos), else
+// the tag-embedded version. Returns nil when neither parses (old locks with a
+// prefixed tag and no mold version simply re-resolve once).
+func lockEntryVersion(entry *LockEntry) *semver.Version {
+	if entry.MoldVersion != "" {
+		if v, err := semver.NewVersion(entry.MoldVersion); err == nil {
+			return v
+		}
+	}
+	if v, err := semver.NewVersion(entry.Version); err == nil {
+		return v
+	}
+	return nil
 }
 
 // updateLockAt reads, upserts, and writes the lock at the given path.
@@ -252,12 +301,13 @@ func updateLockAt(path string, ref *Reference, resolved *ResolvedVersion) error 
 		lock = &LockFile{APIVersion: "v1"}
 	}
 	lock.UpsertEntry(LockEntry{
-		Name:      ref.Repo,
-		Source:    ref.CacheKey(),
-		Version:   resolved.Tag,
-		Commit:    resolved.Commit,
-		Subpath:   ref.Subpath,
-		Timestamp: time.Now().UTC(),
+		Name:        ref.Repo,
+		Source:      ref.CacheKey(),
+		Version:     resolved.Tag,
+		Commit:      resolved.Commit,
+		MoldVersion: resolved.MoldVersion,
+		Subpath:     ref.Subpath,
+		Timestamp:   time.Now().UTC(),
 	})
 	return WriteLockFile(path, lock)
 }

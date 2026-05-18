@@ -17,13 +17,18 @@ const LockFileName = "ailloy.lock"
 // on InstalledEntry, not here — that keeps uninstall working when the lock
 // is not opted into.
 type LockEntry struct {
-	Name      string    `yaml:"name"`
-	Source    string    `yaml:"source"`
-	Version   string    `yaml:"version"`
-	Commit    string    `yaml:"commit"`
-	Subpath   string    `yaml:"subpath,omitempty"`
-	Alias     string    `yaml:"alias,omitempty"` // populated when ore was installed --as <alias>
-	Timestamp time.Time `yaml:"timestamp"`
+	Name    string `yaml:"name"`
+	Source  string `yaml:"source"`
+	Version string `yaml:"version"`
+	Commit  string `yaml:"commit"`
+	// MoldVersion is the version declared in the mold's mold.yaml at Version.
+	// It differs from Version on release-train monorepos, where the git tag
+	// carries a shared train version. Constraint checks against the lock use
+	// this when present. Omitted for single-mold repos (tag == mold version).
+	MoldVersion string    `yaml:"moldVersion,omitempty"`
+	Subpath     string    `yaml:"subpath,omitempty"`
+	Alias       string    `yaml:"alias,omitempty"` // populated when ore was installed --as <alias>
+	Timestamp   time.Time `yaml:"timestamp"`
 }
 
 // LockFile is the on-disk lock file format.

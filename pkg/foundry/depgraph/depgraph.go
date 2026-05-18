@@ -83,6 +83,13 @@ type FetchResult struct {
 	Commit  string // commit SHA
 }
 
+// TagInfo is one entry from a Fetcher.Tags listing: where the tag points and
+// the version the mold declared at that tag.
+type TagInfo struct {
+	SHA         string // commit SHA the tag points at
+	MoldVersion string // version declared in the mold's mold.yaml at the tag
+}
+
 // Fetcher abstracts the I/O the builder needs: resolving + loading a mold
 // at a given reference, and listing the available semver tags for a source.
 // Tests inject a fake; production wires this to foundry.ResolveWithMetadata
@@ -91,10 +98,12 @@ type Fetcher interface {
 	// Fetch resolves the reference (which may be a constraint, exact, branch,
 	// or SHA) to a concrete version and returns the parsed mold.yaml.
 	Fetch(ref *foundry.Reference) (FetchResult, error)
-	// Tags returns the available semver tags (tag → SHA) for the source. Used
-	// by the constraint solver to pick the highest version satisfying every
-	// accumulated constraint when more than one was encountered.
-	Tags(source, subpath string) (map[string]string, error)
+	// Tags returns the available semver tags for the source. Used by the
+	// constraint solver to pick the highest version satisfying every
+	// accumulated constraint when more than one was encountered. Each tag
+	// carries its mold.yaml version so constraints resolve correctly on
+	// release-train monorepos.
+	Tags(source, subpath string) (map[string]TagInfo, error)
 }
 
 // Builder builds dep graphs.
@@ -494,26 +503,23 @@ func isHex(s string) bool {
 	return true
 }
 
-// highestSatisfying picks the highest semver tag that satisfies every supplied
-// constraint. Returns (tag, sha, true) on success.
-func highestSatisfying(tags map[string]string, constraints []*semver.Constraints) (string, string, bool) {
+// highestSatisfying picks the highest-versioned tag that satisfies every
+// supplied constraint. Candidates are ranked by their mold.yaml version when
+// known, falling back to the tag-embedded semver. Returns (tag, sha, true) on
+// success.
+func highestSatisfying(tags map[string]TagInfo, constraints []*semver.Constraints) (string, string, bool) {
 	type entry struct {
-		tag string
-		sha string
-		ver *semver.Version
+		tag    string
+		sha    string
+		ver    *semver.Version // rank version (mold version when known)
+		tagVer *semver.Version // tag-embedded version, for tie-breaking
 	}
 	var candidates []entry
-	for tag, sha := range tags {
-		raw := strings.TrimPrefix(tag, "v")
-		// Allow prefixed tags like "wiki-v1.2.3" by trimming up to the last 'v'.
-		if i := strings.LastIndex(tag, "-v"); i >= 0 {
-			raw = tag[i+2:]
-		}
-		v, err := semver.NewVersion(raw)
-		if err != nil {
+	for tag, info := range tags {
+		v, ok := foundry.RankVersion(tag, info.MoldVersion)
+		if !ok {
 			continue
 		}
-		ok := true
 		for _, c := range constraints {
 			if !c.Check(v) {
 				ok = false
@@ -523,13 +529,24 @@ func highestSatisfying(tags map[string]string, constraints []*semver.Constraints
 		if !ok {
 			continue
 		}
-		candidates = append(candidates, entry{tag: tag, sha: sha, ver: v})
+		tagVer, _ := foundry.RankVersion(tag, "")
+		candidates = append(candidates, entry{tag: tag, sha: info.SHA, ver: v, tagVer: tagVer})
 	}
 	if len(candidates) == 0 {
 		return "", "", false
 	}
+	// Order by rank version, then by tag-embedded version as a tie-breaker:
+	// release-train monorepos share one mold version across many tags, so the
+	// newest tag is the right checkout pointer.
 	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].ver.LessThan(candidates[j].ver)
+		a, b := candidates[i], candidates[j]
+		if !a.ver.Equal(b.ver) {
+			return a.ver.LessThan(b.ver)
+		}
+		if a.tagVer != nil && b.tagVer != nil && !a.tagVer.Equal(b.tagVer) {
+			return a.tagVer.LessThan(b.tagVer)
+		}
+		return a.tag < b.tag
 	})
 	best := candidates[len(candidates)-1]
 	return best.tag, best.sha, true
