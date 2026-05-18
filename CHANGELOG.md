@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.33](https://github.com/nimble-giant/ailloy/compare/v0.6.32...v0.6.33) (2026-05-18)
+
+
+### Bug Fixes
+
+* route mold: dependencies through the mold resolver in temper/forge ([0a13a92](https://github.com/nimble-giant/ailloy/commit/0a13a9236e93eefc24bc38d4e08cc9e4d3a38057)), closes [#225](https://github.com/nimble-giant/ailloy/issues/225)
+
 ## [0.6.32](https://github.com/nimble-giant/ailloy/compare/v0.6.31...v0.6.32) (2026-05-14)
 
 
