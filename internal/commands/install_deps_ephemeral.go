@@ -38,9 +38,9 @@ func (r *EphemeralOreResolver) Defaults() map[string]any {
 }
 
 // ResolveDepsEphemeral walks manifest.Dependencies and resolves each ore
-// without copying into .ailloy/. Ingot deps are validated for parseability
-// but contribute nothing to the schema/defaults merge. Returns an empty
-// resolver for nil/empty deps.
+// without copying into .ailloy/. Ingot and mold deps are validated for
+// parseability but contribute nothing to the schema/defaults merge. Returns
+// an empty resolver for nil/empty deps.
 //
 // allowLocalDeps mirrors the security rule from installDeclaredDeps: when
 // the parent mold itself was resolved from a remote source, local-path deps
@@ -73,6 +73,16 @@ func ResolveDepsEphemeral(manifest *mold.Mold, allowLocalDeps bool) (*EphemeralO
 			// overlays — ingots don't contribute to flux schema/defaults.
 			if _, err := mold.LoadIngotFromFS(fsys, "ingot.yaml"); err != nil {
 				return nil, fmt.Errorf("invalid ingot manifest at %s: %w", ref, err)
+			}
+			continue
+		}
+
+		if kind == "mold" {
+			// Validate the mold manifest parses, but don't add anything to
+			// overlays — mold-on-mold deps are resolved transitively by the
+			// cast pipeline, not through the ore schema/defaults merge.
+			if _, err := mold.LoadMoldFromFS(fsys, "mold.yaml"); err != nil {
+				return nil, fmt.Errorf("invalid mold manifest at %s: %w", ref, err)
 			}
 			continue
 		}

@@ -306,7 +306,7 @@ func appendOreDiagnostics(fsys fs.FS, result *mold.TemperResult) {
 	if rerr != nil {
 		result.Diagnostics = append(result.Diagnostics, mold.Diagnostic{
 			Severity: mold.SeverityError,
-			Message:  fmt.Sprintf("resolving ore dependencies: %v", rerr),
+			Message:  fmt.Sprintf("resolving dependencies: %v", rerr),
 			File:     "mold.yaml",
 		})
 		return

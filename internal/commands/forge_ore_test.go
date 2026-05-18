@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -104,6 +105,85 @@ func TestResolveDepsEphemeral_RejectsLocalDepFromRemoteMold(t *testing.T) {
 	}
 	if _, err := ResolveDepsEphemeral(manifest, false); err == nil {
 		t.Fatal("expected error for local-path dep when allowLocalDeps=false")
+	}
+}
+
+// TestResolveDepsEphemeral_MoldDep verifies that a `mold:` dependency is
+// resolved through the mold loader (validating mold.yaml) rather than the ore
+// loader — a `mold:` dep must not produce an "ore.yaml not found" failure.
+func TestResolveDepsEphemeral_MoldDep(t *testing.T) {
+	tmp := t.TempDir()
+
+	depMold := filepath.Join(tmp, "dep-mold")
+	if err := os.MkdirAll(depMold, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(depMold, "mold.yaml"),
+		[]byte("apiVersion: v1\nkind: mold\nname: launch\nversion: 0.2.0\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	moldDir := filepath.Join(tmp, "mold")
+	if err := os.MkdirAll(moldDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if err := os.Chdir(moldDir); err != nil {
+		t.Fatal(err)
+	}
+
+	manifest := &mold.Mold{
+		Name:    "support-sandbox",
+		Version: "0.1.0",
+		Dependencies: []mold.Dependency{
+			{Mold: depMold, Version: "^0.2.0"},
+		},
+	}
+
+	resolver, err := ResolveDepsEphemeral(manifest, true)
+	if err != nil {
+		t.Fatalf("ResolveDepsEphemeral with mold dep: %v", err)
+	}
+	if resolver == nil {
+		t.Fatal("nil resolver")
+	}
+	// Mold deps contribute nothing to the schema/defaults merge.
+	if len(resolver.Overlays()) != 0 {
+		t.Errorf("mold dep should produce no overlays, got %+v", resolver.Overlays())
+	}
+}
+
+// TestResolveDepsEphemeral_MoldDepInvalidManifest verifies that a `mold:` dep
+// pointing at a directory without a valid mold.yaml fails with a mold-manifest
+// error, not an ore-manifest error.
+func TestResolveDepsEphemeral_MoldDepInvalidManifest(t *testing.T) {
+	tmp := t.TempDir()
+
+	depMold := filepath.Join(tmp, "dep-mold")
+	if err := os.MkdirAll(depMold, 0750); err != nil {
+		t.Fatal(err)
+	}
+
+	moldDir := filepath.Join(tmp, "mold")
+	if err := os.MkdirAll(moldDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if err := os.Chdir(moldDir); err != nil {
+		t.Fatal(err)
+	}
+
+	manifest := &mold.Mold{
+		Dependencies: []mold.Dependency{{Mold: depMold, Version: "^0.2.0"}},
+	}
+	_, err := ResolveDepsEphemeral(manifest, true)
+	if err == nil {
+		t.Fatal("expected error for mold dep without mold.yaml")
+	}
+	if !strings.Contains(err.Error(), "invalid mold manifest") {
+		t.Errorf("expected mold-manifest error, got: %v", err)
 	}
 }
 
