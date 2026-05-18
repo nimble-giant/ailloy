@@ -207,7 +207,7 @@ func TestHighestVersion(t *testing.T) {
 		"v0.9.0": "sha4",
 	}
 
-	tag, sha, err := highestVersion(tags, nil)
+	tag, sha, _, err := highestVersion(tags, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestHighestVersion(t *testing.T) {
 }
 
 func TestHighestVersion_Empty(t *testing.T) {
-	_, _, err := highestVersion(map[string]string{}, nil)
+	_, _, _, err := highestVersion(map[string]string{}, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for empty tags")
 	}
@@ -370,5 +370,124 @@ func TestReference_ReleasePrefix(t *testing.T) {
 		if got := ref.ReleasePrefix(); got != tc.want {
 			t.Errorf("ReleasePrefix(subpath=%q) = %q, want %q", tc.subpath, got, tc.want)
 		}
+	}
+}
+
+// trainTagsOutput models a release-train monorepo: every mold is tagged with
+// the foundry's shared train version on each release, so `launch-v*` tags do
+// not encode the launch mold's own version (which lives in mold.yaml).
+const trainTagsOutput = `1111111111111111111111111111111111111111	refs/tags/launch-v0.5.0
+2222222222222222222222222222222222222222	refs/tags/launch-v0.6.0
+3333333333333333333333333333333333333333	refs/tags/launch-v0.7.0
+4444444444444444444444444444444444444444	refs/tags/launch-v0.7.1
+5555555555555555555555555555555555555555	refs/tags/ce-v0.7.1
+`
+
+// launchMoldVersions is a MoldVersionReader for the launch mold: it exists
+// from launch-v0.6.0 onward, always declaring version 0.2.1. launch-v0.5.0
+// predates the mold and ce-v0.7.1 carries a different mold entirely.
+func launchMoldVersions(tag string) (string, bool) {
+	switch tag {
+	case "launch-v0.6.0", "launch-v0.7.0", "launch-v0.7.1":
+		return "0.2.1", true
+	default:
+		return "", false // mold manifest absent at this tag
+	}
+}
+
+func trainGit(t *testing.T) GitRunner {
+	t.Helper()
+	return mockGitRunner(map[string]string{
+		"[ls-remote --tags https://github.com/replicated-collab/foundry.git]": trainTagsOutput,
+	})
+}
+
+func launchRef(version string, typ RefType) *Reference {
+	return &Reference{
+		Host: "github.com", Owner: "replicated-collab", Repo: "foundry",
+		Subpath: "molds/launch", Version: version, Type: typ,
+	}
+}
+
+// TestResolveConstraint_MoldVersion is the issue #228 scenario: `^0.2.0` is
+// matched against the launch mold's declared version (0.2.1), not the version
+// in the tag name. Three tags carry mold version 0.2.1 — the newest train tag
+// wins the tie-break.
+func TestResolveConstraint_MoldVersion(t *testing.T) {
+	ref := launchRef("^0.2.0", Constraint)
+	resolved, err := ResolveVersionWithMoldReader(ref, trainGit(t), launchMoldVersions)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Tag != "launch-v0.7.1" {
+		t.Errorf("Tag = %q, want launch-v0.7.1", resolved.Tag)
+	}
+	if resolved.MoldVersion != "0.2.1" {
+		t.Errorf("MoldVersion = %q, want 0.2.1", resolved.MoldVersion)
+	}
+}
+
+func TestResolveConstraint_MoldVersion_NoMatch(t *testing.T) {
+	ref := launchRef("^0.3.0", Constraint)
+	if _, err := ResolveVersionWithMoldReader(ref, trainGit(t), launchMoldVersions); err == nil {
+		t.Fatal("expected error: no mold version satisfies ^0.3.0")
+	}
+}
+
+func TestResolveLatest_MoldVersion(t *testing.T) {
+	ref := launchRef("", Latest)
+	resolved, err := ResolveVersionWithMoldReader(ref, trainGit(t), launchMoldVersions)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// All present tags share mold version 0.2.1; the newest train tag wins.
+	if resolved.Tag != "launch-v0.7.1" {
+		t.Errorf("Tag = %q, want launch-v0.7.1", resolved.Tag)
+	}
+}
+
+func TestResolveExact_ByMoldVersion(t *testing.T) {
+	ref := launchRef("0.2.1", Exact)
+	resolved, err := ResolveVersionWithMoldReader(ref, trainGit(t), launchMoldVersions)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Tag != "launch-v0.7.1" {
+		t.Errorf("Tag = %q, want launch-v0.7.1 (mold version 0.2.1)", resolved.Tag)
+	}
+	if resolved.MoldVersion != "0.2.1" {
+		t.Errorf("MoldVersion = %q, want 0.2.1", resolved.MoldVersion)
+	}
+}
+
+func TestResolveExact_ByMoldVersion_NoMatch(t *testing.T) {
+	ref := launchRef("9.9.9", Exact)
+	if _, err := ResolveVersionWithMoldReader(ref, trainGit(t), launchMoldVersions); err == nil {
+		t.Fatal("expected error: no tag declares mold version 9.9.9")
+	}
+}
+
+// TestResolveConstraint_FallbackEmptyMoldVersion verifies that when a mold
+// manifest exists but declares no version, the resolver falls back to ranking
+// by the tag-embedded semver.
+func TestResolveConstraint_FallbackEmptyMoldVersion(t *testing.T) {
+	emptyReader := func(tag string) (string, bool) { return "", true }
+	ref := launchRef(">=0.6.0", Constraint)
+	resolved, err := ResolveVersionWithMoldReader(ref, trainGit(t), emptyReader)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Tag != "launch-v0.7.1" {
+		t.Errorf("Tag = %q, want launch-v0.7.1 (ranked by tag-embedded version)", resolved.Tag)
+	}
+}
+
+// TestResolveConstraint_NilReaderUsesTagVersion confirms the nil-reader path
+// (plain ResolveVersion) is unchanged: constraints match the tag-embedded
+// version, so a mold-version constraint like ^0.2.0 finds nothing here.
+func TestResolveConstraint_NilReaderUsesTagVersion(t *testing.T) {
+	ref := launchRef("^0.2.0", Constraint)
+	if _, err := ResolveVersion(ref, trainGit(t)); err == nil {
+		t.Fatal("expected error: tag-embedded versions are 0.5-0.7, not ^0.2.0")
 	}
 }

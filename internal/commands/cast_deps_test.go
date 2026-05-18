@@ -139,7 +139,7 @@ func (f *fakeDepFetcher) Fetch(ref *foundry.Reference) (depgraph.FetchResult, er
 	}, nil
 }
 
-func (f *fakeDepFetcher) Tags(source, subpath string) (map[string]string, error) {
+func (f *fakeDepFetcher) Tags(source, subpath string) (map[string]depgraph.TagInfo, error) {
 	key := source
 	if subpath != "" {
 		key = source + "//" + subpath
@@ -148,9 +148,9 @@ func (f *fakeDepFetcher) Tags(source, subpath string) (map[string]string, error)
 	if tags == nil {
 		return nil, &fakeNotFoundErr{key}
 	}
-	out := make(map[string]string, len(tags))
+	out := make(map[string]depgraph.TagInfo, len(tags))
 	for k, v := range tags {
-		out[k] = v
+		out[k] = depgraph.TagInfo{SHA: v}
 	}
 	return out, nil
 }

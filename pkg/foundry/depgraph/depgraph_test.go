@@ -13,14 +13,16 @@ import (
 // fakeFetcher is an in-memory Fetcher used by tests. It lets us assemble a
 // foundry of fake molds with declared tag lists without touching git.
 type fakeFetcher struct {
-	molds map[string]map[string]*mold.Mold // sourceKey -> version -> mold
-	tags  map[string]map[string]string     // sourceKey -> tag -> sha
+	molds       map[string]map[string]*mold.Mold // sourceKey -> version -> mold
+	tags        map[string]map[string]string     // sourceKey -> tag -> sha
+	moldVersion map[string]map[string]string     // sourceKey -> tag -> mold.yaml version
 }
 
 func newFakeFetcher() *fakeFetcher {
 	return &fakeFetcher{
-		molds: map[string]map[string]*mold.Mold{},
-		tags:  map[string]map[string]string{},
+		molds:       map[string]map[string]*mold.Mold{},
+		tags:        map[string]map[string]string{},
+		moldVersion: map[string]map[string]string{},
 	}
 }
 
@@ -99,7 +101,7 @@ func highestSatisfyingFromRaw(tags map[string]string, raw string) (string, strin
 	return best.tag, best.sha, true
 }
 
-func (f *fakeFetcher) Tags(source, subpath string) (map[string]string, error) {
+func (f *fakeFetcher) Tags(source, subpath string) (map[string]TagInfo, error) {
 	key := source
 	if subpath != "" {
 		key = source + "//" + subpath
@@ -108,9 +110,9 @@ func (f *fakeFetcher) Tags(source, subpath string) (map[string]string, error) {
 	if tags == nil {
 		return nil, errNotFound(key)
 	}
-	out := make(map[string]string, len(tags))
+	out := make(map[string]TagInfo, len(tags))
 	for k, v := range tags {
-		out[k] = v
+		out[k] = TagInfo{SHA: v, MoldVersion: f.moldVersion[key][k]}
 	}
 	return out, nil
 }
@@ -393,5 +395,53 @@ func TestBuild_SubpathDistinctIdentity(t *testing.T) {
 	}
 	if len(graph.Nodes) != 3 {
 		t.Errorf("expected 3 nodes (root + leaf-a + leaf-b), got %d", len(graph.Nodes))
+	}
+}
+
+func mustConstraint(t *testing.T, s string) *semver.Constraints {
+	t.Helper()
+	c, err := semver.NewConstraint(s)
+	if err != nil {
+		t.Fatalf("bad constraint %q: %v", s, err)
+	}
+	return c
+}
+
+// TestHighestSatisfying_MoldVersion exercises the release-train case: several
+// tags share one mold version, so the intersected constraints match them all
+// and the newest tag wins the tie-break.
+func TestHighestSatisfying_MoldVersion(t *testing.T) {
+	tags := map[string]TagInfo{
+		"launch-v0.6.0": {SHA: "sha60", MoldVersion: "0.2.1"},
+		"launch-v0.7.0": {SHA: "sha70", MoldVersion: "0.2.1"},
+		"launch-v0.7.1": {SHA: "sha71", MoldVersion: "0.2.1"},
+	}
+	constraints := []*semver.Constraints{
+		mustConstraint(t, "^0.2.0"),
+		mustConstraint(t, ">=0.2.1"),
+	}
+	tag, sha, ok := highestSatisfying(tags, constraints)
+	if !ok {
+		t.Fatal("expected a satisfying tag")
+	}
+	if tag != "launch-v0.7.1" {
+		t.Errorf("tag = %q, want launch-v0.7.1 (newest train tag)", tag)
+	}
+	if sha != "sha71" {
+		t.Errorf("sha = %q, want sha71", sha)
+	}
+}
+
+// TestHighestSatisfying_FallbackToTag confirms tags with no mold version are
+// ranked by their tag-embedded semver.
+func TestHighestSatisfying_FallbackToTag(t *testing.T) {
+	tags := map[string]TagInfo{
+		"v1.0.0": {SHA: "a"},
+		"v1.2.0": {SHA: "b"},
+		"v0.9.0": {SHA: "c"},
+	}
+	tag, sha, ok := highestSatisfying(tags, []*semver.Constraints{mustConstraint(t, "^1.0.0")})
+	if !ok || tag != "v1.2.0" || sha != "b" {
+		t.Errorf("got (%q, %q, %v), want (v1.2.0, b, true)", tag, sha, ok)
 	}
 }
