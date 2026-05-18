@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-yaml"
 	"github.com/nimble-giant/ailloy/internal/tui/ceremony"
@@ -107,6 +108,9 @@ func runCast(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := checkAilloyRequirement(reader); err != nil {
+		return err
+	}
 	if castClaudePluginFlag {
 		return castClaudePlugin(reader, source)
 	}
@@ -125,6 +129,53 @@ func validatePluginFlags() error {
 		}
 	}
 	return nil
+}
+
+// checkAilloyRequirement enforces a mold's `requires.ailloy` constraint before
+// any casting work begins. Without this gate an old binary silently ignores
+// the constraint and proceeds with a degraded cast (e.g. skipping transitive
+// dependency installation), leaving the user with a partially installed mold
+// and no explanation (#229).
+//
+// Manifest load failures are swallowed here: the cast pipeline reloads the
+// manifest downstream and reports those errors with better context.
+func checkAilloyRequirement(reader *blanks.MoldReader) error {
+	manifest, err := reader.LoadManifest()
+	if err != nil || manifest == nil {
+		return nil
+	}
+	return enforceAilloyVersion(manifest.Requires.Ailloy)
+}
+
+// enforceAilloyVersion checks the running ailloy build against a mold's
+// requires.ailloy constraint, returning an actionable error when it is not
+// satisfied. It passes (returns nil) when there is no constraint, when the
+// constraint is unparseable (`temper` flags malformed constraints — a cast
+// should not double as a linter), or when the running binary has no release
+// version to compare (dev builds, where evolveCurrentVersion is empty/"dev").
+func enforceAilloyVersion(requires string) error {
+	requires = strings.TrimSpace(requires)
+	if requires == "" {
+		return nil
+	}
+	current := strings.TrimSpace(evolveCurrentVersion)
+	if current == "" || current == "dev" {
+		return nil
+	}
+	constraint, err := semver.NewConstraint(requires)
+	if err != nil {
+		return nil
+	}
+	v, err := semver.NewVersion(strings.TrimPrefix(current, "v"))
+	if err != nil {
+		return nil
+	}
+	if constraint.Check(v) {
+		return nil
+	}
+	return fmt.Errorf(
+		"this mold requires ailloy %s, but you are running v%s\nRun `brew upgrade ailloy` to update",
+		requires, strings.TrimPrefix(current, "v"))
 }
 
 // resolvedRemote holds metadata about the most recently resolved remote mold.
