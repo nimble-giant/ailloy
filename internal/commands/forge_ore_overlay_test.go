@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"strings"
 	"testing"
-	"testing/fstest"
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
@@ -33,6 +32,3 @@ func TestPrintForgeDebugProvenance_FormatsRowsByOrigin(t *testing.T) {
 	}
 }
 
-// Sanity import; ensures fstest stays linked if future tests need it without
-// triggering goimports purge.
-var _ = fstest.MapFS{}

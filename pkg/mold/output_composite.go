@@ -21,7 +21,8 @@ type OreSource struct {
 // ResolveFiles. It walks the consumer mold's `output` mapping (resolving
 // `from: ore/<ns>/...` selectors against the matching OreSource.FS) and
 // also walks each ore source's own Output mapping against its own FS.
-// Results are merged, deterministically sorted by DestPath, and every
+// Results are merged via MergeFluxOutput (consumer-wins / ore-ore-conflict
+// semantics), deterministically sorted by DestPath, deduplicated, and every
 // ResolvedFile carries its SrcFS and Origin so callers can read the right
 // bytes downstream.
 //
@@ -43,20 +44,111 @@ func ResolveFilesWithOreSources(output any, moldFS fs.FS, oreSources []OreSource
 		return nil, err
 	}
 
-	// Resolve consumer mold entries (without `from:` entries) against moldFS.
-	primary, err := ResolveFiles(moldOutput, moldFS, opts...)
-	if err != nil {
-		return nil, err
+	// Build ore overlays for MergeFluxOutput: consumer-wins semantics and
+	// ore-ore source-path conflict detection.
+	oreOverlays := make([]OreOutputOverlay, 0, len(oreSources))
+	for _, src := range oreSources {
+		if len(src.Output) > 0 {
+			oreOverlays = append(oreOverlays, OreOutputOverlay{
+				Source:  "ore:" + src.Namespace,
+				Entries: src.Output,
+			})
+		}
 	}
 
-	resolved := make([]ResolvedFile, 0, len(primary)+len(fromEntries))
+	var resolved []ResolvedFile
 
-	// Annotate primary entries with their moldFS source.
-	for _, r := range primary {
-		if r.SrcFS == nil {
-			r.SrcFS = moldFS
+	// Distinguish explicit output map (consumer-wins merge path) from nil
+	// output (auto-discovery path).
+	consumerBaseMap, hasExplicitOutput := moldOutput.(map[string]any)
+
+	if hasExplicitOutput {
+		// Consumer has an explicit output: map. Merge with ore overlays so
+		// consumer keys suppress matching ore keys and ore-ore conflicts error.
+		mergedMap, report, merr := MergeFluxOutput(consumerBaseMap, oreOverlays)
+		if merr != nil {
+			return nil, merr
 		}
-		resolved = append(resolved, r)
+
+		// Partition merged map by origin for per-FS resolution.
+		consumerSub := make(map[string]any)
+		oreSubMaps := make(map[string]map[string]any)
+		for k, v := range mergedMap {
+			srcID := report.OutputSources[k]
+			if srcID == "" {
+				consumerSub[k] = v
+			} else {
+				ns := strings.TrimPrefix(srcID, "ore:")
+				if oreSubMaps[ns] == nil {
+					oreSubMaps[ns] = make(map[string]any)
+				}
+				oreSubMaps[ns][k] = v
+			}
+		}
+
+		primary, rerr := ResolveFiles(consumerSub, moldFS, opts...)
+		if rerr != nil {
+			return nil, rerr
+		}
+		for _, r := range primary {
+			if r.SrcFS == nil {
+				r.SrcFS = moldFS
+			}
+			resolved = append(resolved, r)
+		}
+
+		for ns, subMap := range oreSubMaps {
+			ore := oreByNS[ns]
+			oreResolved, rerr := ResolveFiles(subMap, ore.FS, opts...)
+			if rerr != nil {
+				return nil, fmt.Errorf("resolving ore %q output: %w", ns, rerr)
+			}
+			for _, r := range oreResolved {
+				r.SrcFS = ore.FS
+				r.Origin = ns
+				resolved = append(resolved, r)
+			}
+		}
+	} else {
+		// Consumer has no explicit output: use mold auto-discovery.
+		primary, rerr := ResolveFiles(moldOutput, moldFS, opts...)
+		if rerr != nil {
+			return nil, rerr
+		}
+		for _, r := range primary {
+			if r.SrcFS == nil {
+				r.SrcFS = moldFS
+			}
+			resolved = append(resolved, r)
+		}
+
+		// Ore overlays still need ore-ore source-path conflict detection.
+		if len(oreOverlays) > 0 {
+			mergedOreMap, report, merr := MergeFluxOutput(nil, oreOverlays)
+			if merr != nil {
+				return nil, merr
+			}
+			oreSubMaps := make(map[string]map[string]any)
+			for k, srcID := range report.OutputSources {
+				ns := strings.TrimPrefix(srcID, "ore:")
+				if oreSubMaps[ns] == nil {
+					oreSubMaps[ns] = make(map[string]any)
+				}
+				oreSubMaps[ns][k] = mergedOreMap[k]
+			}
+			for ns, subMap := range oreSubMaps {
+				ore := oreByNS[ns]
+				oreResolved, rerr := ResolveFiles(subMap, ore.FS, opts...)
+				if rerr != nil {
+					return nil, fmt.Errorf("resolving ore %q output: %w", ns, rerr)
+				}
+				for _, r := range oreResolved {
+					r.SrcFS = ore.FS
+					r.Origin = ns
+					resolved = append(resolved, r)
+				}
+			}
+		}
 	}
 
 	// Resolve `from: ore/<ns>/<path>` consumer entries against ore filesystems.
@@ -87,29 +179,65 @@ func ResolveFilesWithOreSources(output any, moldFS fs.FS, oreSources []OreSource
 		})
 	}
 
-	// Resolve each ore's own output mapping against its own FS.
-	for _, src := range oreSources {
-		if len(src.Output) == 0 {
-			continue
-		}
-		oreResolved, err := ResolveFiles(src.Output, src.FS, opts...)
-		if err != nil {
-			return nil, fmt.Errorf("resolving ore %q output: %w", src.Namespace, err)
-		}
-		for _, r := range oreResolved {
-			r.SrcFS = src.FS
-			r.Origin = src.Namespace
-			resolved = append(resolved, r)
-		}
-	}
-
 	sort.Slice(resolved, func(i, j int) bool {
 		if resolved[i].DestPath != resolved[j].DestPath {
 			return resolved[i].DestPath < resolved[j].DestPath
 		}
 		return resolved[i].SrcPath < resolved[j].SrcPath
 	})
+
+	// Deduplicate by DestPath: consumer-origin (Origin == "") beats ore-origin;
+	// two ore-origin entries mapping to the same DestPath is a conflict error.
+	resolved, err = deduplicateByDestPath(resolved)
+	if err != nil {
+		return nil, err
+	}
+
 	return resolved, nil
+}
+
+// deduplicateByDestPath removes duplicate DestPath entries from a sorted slice.
+// Consumer-origin (Origin == "") beats ore-origin. Multiple ore-origin entries
+// with the same DestPath return an error naming the conflicting sources.
+func deduplicateByDestPath(resolved []ResolvedFile) ([]ResolvedFile, error) {
+	if len(resolved) <= 1 {
+		return resolved, nil
+	}
+	out := make([]ResolvedFile, 0, len(resolved))
+	i := 0
+	for i < len(resolved) {
+		j := i + 1
+		for j < len(resolved) && resolved[j].DestPath == resolved[i].DestPath {
+			j++
+		}
+		group := resolved[i:j]
+		if len(group) == 1 {
+			out = append(out, group[0])
+			i = j
+			continue
+		}
+		// Multiple entries with the same DestPath: consumer-origin wins.
+		var winner *ResolvedFile
+		oreOrigins := make([]string, 0, len(group))
+		for idx := range group {
+			if group[idx].Origin == "" {
+				winner = &group[idx]
+				break
+			}
+			oreOrigins = append(oreOrigins, group[idx].Origin)
+		}
+		if winner != nil {
+			out = append(out, *winner)
+		} else {
+			sort.Strings(oreOrigins)
+			return nil, fmt.Errorf(
+				"ore output dest-path conflict: %q mapped by multiple ore sources (%s); override in consumer mold output",
+				group[0].DestPath, strings.Join(oreOrigins, ", "),
+			)
+		}
+		i = j
+	}
+	return out, nil
 }
 
 // fromEntry holds a parsed `from: ore/<ns>/<path>` consumer output entry.
@@ -229,6 +357,9 @@ func parseOreFromSelector(s string) (namespace string, relpath string, err error
 	p = path.Clean(p)
 	if ns == "" || p == "" || p == "." {
 		return "", "", fmt.Errorf("from selector %q has empty namespace or path", s)
+	}
+	if strings.HasPrefix(p, "..") {
+		return "", "", fmt.Errorf("from selector %q contains a path traversal (..)", s)
 	}
 	return ns, p, nil
 }

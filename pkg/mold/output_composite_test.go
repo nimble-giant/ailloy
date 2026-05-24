@@ -166,6 +166,105 @@ func TestResolveFilesWithOreSources_AllFromConsumerDoesNotAutoDiscoverMold(t *te
 	}
 }
 
+// Consumer explicit output key that matches an ore output key: consumer wins
+// and the ore entry is suppressed (not duplicated).
+func TestResolveFilesWithOreSources_ConsumerWinsOverOreOnSourcePathKey(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("name: c\n")},
+		"AGENTS.md": &fstest.MapFile{Data: []byte("# consumer\n")},
+	}
+	oreFS := fstest.MapFS{
+		"AGENTS.md": &fstest.MapFile{Data: []byte("# ore\n")},
+	}
+	output := map[string]any{"AGENTS.md": "AGENTS.md"}
+	sources := []OreSource{{
+		Namespace: "myore",
+		FS:        oreFS,
+		Output:    map[string]any{"AGENTS.md": "AGENTS.md"},
+	}}
+	resolved, err := ResolveFilesWithOreSources(output, moldFS, sources)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resolved) != 1 {
+		t.Fatalf("expected 1 resolved file (consumer wins, ore suppressed), got %d: %+v", len(resolved), resolved)
+	}
+	if resolved[0].Origin != "" {
+		t.Errorf("expected consumer origin (empty string), got %q", resolved[0].Origin)
+	}
+	if resolved[0].SrcFS == nil {
+		t.Errorf("expected non-nil SrcFS for consumer entry")
+	}
+}
+
+// Two ores map different source-path keys to the same DestPath: this is a
+// DestPath conflict and must return an error.
+func TestResolveFilesWithOreSources_DestPathDedup_OreOreConflictErrors(t *testing.T) {
+	moldFS := fstest.MapFS{"mold.yaml": &fstest.MapFile{Data: []byte("name: c\n")}}
+	oreAFS := fstest.MapFS{"a.md": &fstest.MapFile{Data: []byte("a")}}
+	oreBFS := fstest.MapFS{"b.md": &fstest.MapFile{Data: []byte("b")}}
+	sources := []OreSource{
+		{Namespace: "ore_a", FS: oreAFS, Output: map[string]any{"a.md": "out.md"}},
+		{Namespace: "ore_b", FS: oreBFS, Output: map[string]any{"b.md": "out.md"}},
+	}
+	_, err := ResolveFilesWithOreSources(nil, moldFS, sources)
+	if err == nil {
+		t.Fatal("expected error for ore-ore dest-path conflict, got nil")
+	}
+	if !strings.Contains(err.Error(), "ore_a") || !strings.Contains(err.Error(), "ore_b") {
+		t.Errorf("error should name both ore sources, got: %v", err)
+	}
+}
+
+// Consumer explicit output entry and ore entry map different source-path keys
+// to the same DestPath: consumer-origin wins via DestPath deduplication.
+func TestResolveFilesWithOreSources_DestPathDedup_ConsumerWins(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"mold.yaml":    &fstest.MapFile{Data: []byte("name: c\n")},
+		"consumer.md":  &fstest.MapFile{Data: []byte("# consumer\n")},
+	}
+	oreFS := fstest.MapFS{"ore.md": &fstest.MapFile{Data: []byte("# ore\n")}}
+	output := map[string]any{"consumer.md": "out.md"}
+	sources := []OreSource{{
+		Namespace: "myore",
+		FS:        oreFS,
+		Output:    map[string]any{"ore.md": "out.md"},
+	}}
+	resolved, err := ResolveFilesWithOreSources(output, moldFS, sources)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resolved) != 1 {
+		t.Fatalf("expected 1 resolved file after dedup, got %d: %+v", len(resolved), resolved)
+	}
+	if resolved[0].Origin != "" {
+		t.Errorf("expected consumer origin, got %q", resolved[0].Origin)
+	}
+	if resolved[0].SrcPath != "consumer.md" {
+		t.Errorf("expected consumer.md, got %q", resolved[0].SrcPath)
+	}
+}
+
+// `from:` selector with a path traversal (..) must be rejected.
+func TestResolveFilesWithOreSources_FromSelectorRejectsPathTraversal(t *testing.T) {
+	moldFS := fstest.MapFS{"mold.yaml": &fstest.MapFile{Data: []byte("name: c\n")}}
+	oreFS := fstest.MapFS{"file.md": &fstest.MapFile{Data: []byte("x")}}
+	output := map[string]any{
+		"file": map[string]any{
+			"from": "ore/ns/../file.md",
+			"dest": "file.md",
+		},
+	}
+	sources := []OreSource{{Namespace: "ns", FS: oreFS}}
+	_, err := ResolveFilesWithOreSources(output, moldFS, sources)
+	if err == nil {
+		t.Fatal("expected error for path traversal, got nil")
+	}
+	if !strings.Contains(err.Error(), "..") {
+		t.Errorf("error should mention path traversal, got: %v", err)
+	}
+}
+
 // Regression: a `from:` selector pointing at a directory used to pass
 // fs.Stat (directories exist) and then fail later with an obscure
 // "is a directory" error when cast/forge tried to ReadFile. The fix
