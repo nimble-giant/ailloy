@@ -12,6 +12,7 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/blanks"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
+	"github.com/nimble-giant/ailloy/pkg/smelt"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 )
 
@@ -270,6 +271,14 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 // the recorded version for local refs (they have no resolved tag).
 func resolveDepFS(ref, declaredVersion string, global bool) (fs.FS, string, string, string, string, error) {
 	if foundry.IsRemoteReference(ref) {
+		// Check the smelted binary's embedded dep store first so offline casts
+		// can serve ore/ingot deps without any network access.
+		if parsed, perr := foundry.ParseReference(ref); perr == nil {
+			if fsys, version, commit, ok := smelt.LookupEmbeddedArtifact(parsed.CacheKey(), parsed.Subpath); ok {
+				return fsys, parsed.CacheKey(), parsed.Subpath, version, commit, nil
+			}
+		}
+
 		var resolveOpts []foundry.ResolveOption
 		if global {
 			resolveOpts = append(resolveOpts, foundry.WithLockPath(globalLockPath()))
