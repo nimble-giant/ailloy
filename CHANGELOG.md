@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.6.35](https://github.com/nimble-giant/ailloy/compare/v0.6.34...v0.6.35) (2026-06-23)
+
+
+### Features
+
+* add OreOutputOverlay type and MergeFluxOutput (refs [#215](https://github.com/nimble-giant/ailloy/issues/215)) ([a7a723d](https://github.com/nimble-giant/ailloy/commit/a7a723ded3107db1fcfba217360f7fbec9fb7010))
+* composite-fs ResolveFilesWithOreSources for ore overlays (refs [#215](https://github.com/nimble-giant/ailloy/issues/215)) ([370d16f](https://github.com/nimble-giant/ailloy/commit/370d16f2370914095c61fd740cffdf292ba22ebf))
+* expose ore output overlays and source FS via EphemeralOreResolver ([81d5de6](https://github.com/nimble-giant/ailloy/commit/81d5de655ca6ffce12d66dfd6a564b25b25e4c04)), closes [#215](https://github.com/nimble-giant/ailloy/issues/215)
+* forge ore overlays + --debug source provenance (refs [#215](https://github.com/nimble-giant/ailloy/issues/215)) ([5088ea2](https://github.com/nimble-giant/ailloy/commit/5088ea2b45434db64da1606da034bd63c5a76614))
+* reserve ore output: and blanks/ keywords (refs [#215](https://github.com/nimble-giant/ailloy/issues/215)) ([3bfa858](https://github.com/nimble-giant/ailloy/commit/3bfa858e5a6789d6f00261d3087fea4cb882f0e1))
+* temper validates ore output: and blanks/ (refs [#215](https://github.com/nimble-giant/ailloy/issues/215)) ([3d010b8](https://github.com/nimble-giant/ailloy/commit/3d010b8d6e542c2b6f2e424f946d95b2de1e26a5))
+* wire ore output overlays + blanks into cast (refs [#215](https://github.com/nimble-giant/ailloy/issues/215)) ([dc35df1](https://github.com/nimble-giant/ailloy/commit/dc35df1e4e523662e55fce42727806888086703d))
+
+
+### Bug Fixes
+
+* bump go toolchain to 1.26.4 and golang.org/x/net to v0.55.0 ([3d6aa12](https://github.com/nimble-giant/ailloy/commit/3d6aa123ec8058484047c7a4911c5ec90d5fb39e))
+* **cast:** resolve transitive mold deps for local-dir casts (refs ai-lce) ([1f97d28](https://github.com/nimble-giant/ailloy/commit/1f97d284490b9f467f504ece7254b0bb0ae50b72))
+* errcheck on Fprintln/Fprintf in forge debug printer (refs [#215](https://github.com/nimble-giant/ailloy/issues/215)) ([6da30a5](https://github.com/nimble-giant/ailloy/commit/6da30a583890b6080a2cf5794027f99b2f938acf))
+* gofmt two test files broken by ai-lce merge (ai-xlm) ([a982126](https://github.com/nimble-giant/ailloy/commit/a982126a358321afac4b169ec20201b5e075b0a6))
+* ore from: edge cases caught by code review (refs [#215](https://github.com/nimble-giant/ailloy/issues/215)) ([c7aaa46](https://github.com/nimble-giant/ailloy/commit/c7aaa46623925e13c3f8e987a1c5bc8ca1740440))
+* **pr-217:** wire MergeFluxOutput into ResolveFilesWithOreSources + DestPath deduplication (refs ai-9xw) ([27c1ad7](https://github.com/nimble-giant/ailloy/commit/27c1ad79edf4f963946d92675d75b265f315014d))
+
 ## [0.6.34](https://github.com/nimble-giant/ailloy/compare/v0.6.33...v0.6.34) (2026-05-18)
 
 
