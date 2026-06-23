@@ -172,6 +172,102 @@ func TestLookupEmbeddedArtifact_NotSmelted(t *testing.T) {
 	}
 }
 
+// TestLookupArtifactInFS_Mold verifies that lookupArtifactInFS finds an
+// embedded mold dep by (source, subpath). This exercises the cast-side fix
+// that allows ResolveDepsEphemeral to serve a mold: dep from the smelted
+// binary's embedded tree without a network round-trip.
+func TestLookupArtifactInFS_Mold(t *testing.T) {
+	source := "github.com/acme/release-train"
+	subpath := "molds/leaf"
+	embFS := fstest.MapFS{
+		"deps/manifest.json": &fstest.MapFile{
+			Data: makeManifestJSON(t, DepManifest{
+				Molds: []DepEntry{{
+					Source:      source,
+					Subpath:     subpath,
+					Version:     "leaf-v1.2.3",
+					Commit:      "deadbeef",
+					MoldVersion: "0.1.0",
+				}},
+			}),
+		},
+		"deps/molds/" + source + "/" + subpath + "/mold.yaml": &fstest.MapFile{
+			Data: []byte("apiVersion: v1\nkind: mold\nname: leaf\nversion: 0.1.0\n"),
+		},
+	}
+
+	var manifest DepManifest
+	if data, err := fs.ReadFile(embFS, "deps/manifest.json"); err == nil {
+		if jerr := json.Unmarshal(data, &manifest); jerr != nil {
+			t.Fatalf("parse manifest: %v", jerr)
+		}
+	}
+
+	fsys, version, commit, ok := lookupArtifactInFS(embFS, &manifest, source, subpath)
+	if !ok {
+		t.Fatal("expected ok=true for embedded mold dep")
+	}
+	if version != "leaf-v1.2.3" {
+		t.Errorf("version = %q, want leaf-v1.2.3", version)
+	}
+	if commit != "deadbeef" {
+		t.Errorf("commit = %q, want deadbeef", commit)
+	}
+	if _, err := fs.Stat(fsys, "mold.yaml"); err != nil {
+		t.Errorf("mold.yaml not accessible from returned FS: %v", err)
+	}
+}
+
+// TestLookupArtifactInFS_MoldBeforeOre verifies that a mold entry is found
+// even when the manifest also contains an ore entry with the same source/subpath
+// key — molds are checked first.
+func TestLookupArtifactInFS_MoldBeforeOre(t *testing.T) {
+	source := "github.com/acme/repo"
+	subpath := ""
+	embFS := fstest.MapFS{
+		"deps/manifest.json": &fstest.MapFile{
+			Data: makeManifestJSON(t, DepManifest{
+				Molds: []DepEntry{{Source: source, Version: "v1.0.0", Commit: "cafe0001"}},
+				Ores:  []DepEntry{{Source: source, Version: "v2.0.0", Commit: "cafe0002"}},
+			}),
+		},
+		"deps/molds/" + source + "/mold.yaml": &fstest.MapFile{
+			Data: []byte("apiVersion: v1\nkind: mold\nname: repo\nversion: 1.0.0\n"),
+		},
+		"deps/ores/" + source + "/ore.yaml": &fstest.MapFile{
+			Data: []byte("apiVersion: v1\nkind: ore\nname: repo\n"),
+		},
+	}
+
+	var manifest DepManifest
+	if data, err := fs.ReadFile(embFS, "deps/manifest.json"); err == nil {
+		_ = json.Unmarshal(data, &manifest)
+	}
+
+	_, version, _, ok := lookupArtifactInFS(embFS, &manifest, source, subpath)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if version != "v1.0.0" {
+		t.Errorf("version = %q, want v1.0.0 (mold wins over ore)", version)
+	}
+}
+
+// TestLookupArtifactInFS_NotFound verifies that a lookup for an absent
+// (source, subpath) returns ok=false without panicking.
+func TestLookupArtifactInFS_NotFound(t *testing.T) {
+	embFS := fstest.MapFS{
+		"deps/manifest.json": &fstest.MapFile{
+			Data: makeManifestJSON(t, DepManifest{}),
+		},
+	}
+	manifest := DepManifest{}
+	_, _, _, ok := lookupArtifactInFS(embFS, &manifest, "github.com/missing/repo", "")
+	if ok {
+		t.Error("expected ok=false for absent dep")
+	}
+}
+
 // TestEmbeddedDepFetcher_CacheEntry_missingKey verifies CacheEntry returns nil
 // for an unknown key without panicking.
 func TestEmbeddedDepFetcher_CacheEntry_missingKey(t *testing.T) {
