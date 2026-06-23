@@ -121,10 +121,10 @@ func (e *EmbeddedDepFetcher) CacheEntry(key depgraph.NodeKey) *depgraph.ProdFetc
 	return e.cache[key]
 }
 
-// LookupEmbeddedArtifact checks whether the current binary has an ore or
-// ingot dep embedded that matches (source, subpath). Returns (fs.FS, version,
-// commit, true) when found. The returned FS is rooted at the artifact
-// directory so ore.yaml / ingot.yaml is at the root.
+// LookupEmbeddedArtifact checks whether the current binary has a mold, ore,
+// or ingot dep embedded that matches (source, subpath). Returns (fs.FS,
+// version, commit, true) when found. The returned FS is rooted at the
+// artifact directory so mold.yaml / ore.yaml / ingot.yaml is at the root.
 func LookupEmbeddedArtifact(source, subpath string) (fsys fs.FS, version, commit string, ok bool) {
 	if !HasEmbeddedMold() {
 		return nil, "", "", false
@@ -141,7 +141,14 @@ func LookupEmbeddedArtifact(source, subpath string) (fsys fs.FS, version, commit
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return nil, "", "", false
 	}
+	return lookupArtifactInFS(embFS, &manifest, source, subpath)
+}
 
+// lookupArtifactInFS searches embFS for a mold/ore/ingot matching (source,
+// subpath). Molds are checked before ores so that a mold dep in the consumer's
+// dependency list is served from the embedded tree rather than falling through
+// to a network fetch.
+func lookupArtifactInFS(embFS fs.FS, manifest *DepManifest, source, subpath string) (fsys fs.FS, version, commit string, ok bool) {
 	lookup := func(entries []DepEntry, kind string) (fs.FS, string, string, bool) {
 		for _, e := range entries {
 			if e.Source == source && e.Subpath == subpath {
@@ -156,6 +163,9 @@ func LookupEmbeddedArtifact(source, subpath string) (fsys fs.FS, version, commit
 		return nil, "", "", false
 	}
 
+	if f, v, c, found := lookup(manifest.Molds, "molds"); found {
+		return f, v, c, true
+	}
 	if f, v, c, found := lookup(manifest.Ores, "ores"); found {
 		return f, v, c, true
 	}
