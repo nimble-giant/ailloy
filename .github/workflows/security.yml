@@ -40,7 +40,7 @@ jobs:
         env:
           # Allow the Go binary to download a newer toolchain than the runner
           # image carries. setup-go pins GOTOOLCHAIN=local, which prevents
-          # picking up stdlib security fixes (e.g. 1.26.3) until
+          # picking up stdlib security fixes (e.g. 1.26.4) until
           # actions/go-versions publishes them.
-          GOTOOLCHAIN: go1.26.3+auto
+          GOTOOLCHAIN: go1.26.4+auto
         run: govulncheck ./...
