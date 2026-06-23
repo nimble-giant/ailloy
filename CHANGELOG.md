@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.40](https://github.com/nimble-giant/ailloy/compare/v0.6.39...v0.6.40) (2026-06-23)
+
+
+### Bug Fixes
+
+* **assay:** stage embedded dep ingots/ to disk for offline IngotResolver ([dca85b5](https://github.com/nimble-giant/ailloy/commit/dca85b5bfb61922a17d0dc8b5e6697b4a9e4bb3c)), closes [#255](https://github.com/nimble-giant/ailloy/issues/255)
+
 ## [0.6.39](https://github.com/nimble-giant/ailloy/compare/v0.6.38...v0.6.39) (2026-06-23)
 
 
