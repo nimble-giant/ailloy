@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.36](https://github.com/nimble-giant/ailloy/compare/v0.6.35...v0.6.36) (2026-06-23)
+
+
+### Features
+
+* add --offline flag for air-gapped / no-egress builds ([#245](https://github.com/nimble-giant/ailloy/issues/245)) ([02df359](https://github.com/nimble-giant/ailloy/commit/02df359ad8bfbff88894a57ada876f067b7f7cc4))
+* add optional license field to mold, ingot, and ore manifests ([79270f0](https://github.com/nimble-giant/ailloy/commit/79270f0082f3f00bc25400eb70e8389022c6aadc)), closes [#218](https://github.com/nimble-giant/ailloy/issues/218)
+* **assay:** align skill lint rules with Anthropic's updated authoring best practices ([b5d2908](https://github.com/nimble-giant/ailloy/commit/b5d29086e06c8eb08a43fa92b695ddc649a64911))
+* auto-enable offline mode for smelted binaries ([5baf220](https://github.com/nimble-giant/ailloy/commit/5baf220cb913c54e228e8c48d715a13e8f0b35db))
+* prompt for HEAD when no semver tags (ai-h87) ([602f580](https://github.com/nimble-giant/ailloy/commit/602f580fca8756a50550a24fee241d6306552114))
+
 ## [0.6.35](https://github.com/nimble-giant/ailloy/compare/v0.6.34...v0.6.35) (2026-06-23)
 
 
