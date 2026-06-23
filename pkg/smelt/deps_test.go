@@ -14,19 +14,34 @@ import (
 )
 
 // fakeSmeltFetcher is a test double for smeltDepFetcher.
-// Fetch populates an in-memory cache keyed on ref.CacheKey(); CacheEntry reads
-// it back so collectDepsWith can retrieve the FS after Build.
+// Fetch populates an in-memory cache keyed on (source, subpath); CacheEntry
+// reads it back so collectDepsWith can retrieve the FS after Build.
+//
+// Subdir deps (source//subpath) are registered via addSubpathDep and take
+// priority over source-only entries registered via addDep.
 type fakeSmeltFetcher struct {
-	molds map[string]*mold.Mold // CacheKey -> mold
-	fss   map[string]fs.FS      // CacheKey -> mold FS
+	molds map[string]*mold.Mold // CacheKey -> mold (no subpath)
+	fss   map[string]fs.FS      // CacheKey -> mold FS (no subpath)
+
+	// subDeps supports (source, subpath) keyed deps for monorepo / subdir molds.
+	// Key format: "source//subpath"
+	subDeps map[string]*mold.Mold
+	subFss  map[string]fs.FS
+	// subTags holds the tag→TagInfo map for each (source, subpath).
+	// When set, Tags returns exactly these entries instead of the default v1.0.0.
+	subTags map[string]map[string]depgraph.TagInfo
+
 	cache map[depgraph.NodeKey]*depgraph.ProdFetchCacheEntry
 }
 
 func newFakeSmeltFetcher() *fakeSmeltFetcher {
 	return &fakeSmeltFetcher{
-		molds: map[string]*mold.Mold{},
-		fss:   map[string]fs.FS{},
-		cache: map[depgraph.NodeKey]*depgraph.ProdFetchCacheEntry{},
+		molds:   map[string]*mold.Mold{},
+		fss:     map[string]fs.FS{},
+		subDeps: map[string]*mold.Mold{},
+		subFss:  map[string]fs.FS{},
+		subTags: map[string]map[string]depgraph.TagInfo{},
+		cache:   map[depgraph.NodeKey]*depgraph.ProdFetchCacheEntry{},
 	}
 }
 
@@ -35,21 +50,58 @@ func (f *fakeSmeltFetcher) addDep(source string, m *mold.Mold, fsys fs.FS) {
 	f.fss[source] = fsys
 }
 
+// addSubpathDep registers a (source, subpath) mold with its own tag map.
+// tags maps git tag names to TagInfo (SHA + MoldVersion). The Fetch call for
+// this dep will return the highest tag from the map as the resolved version.
+func (f *fakeSmeltFetcher) addSubpathDep(source, subpath string, m *mold.Mold, fsys fs.FS, tags map[string]depgraph.TagInfo) {
+	k := source + "//" + subpath
+	f.subDeps[k] = m
+	f.subFss[k] = fsys
+	f.subTags[k] = tags
+}
+
 func (f *fakeSmeltFetcher) Fetch(ref *foundry.Reference) (depgraph.FetchResult, error) {
-	key := ref.CacheKey()
-	m, ok := f.molds[key]
-	if !ok {
-		return depgraph.FetchResult{}, fmt.Errorf("fake: no mold for %s", key)
+	cacheKey := ref.CacheKey()
+	nk := depgraph.NodeKey{Source: cacheKey, Subpath: ref.Subpath}
+
+	// Prefer (source, subpath) specific entry.
+	if ref.Subpath != "" {
+		subKey := cacheKey + "//" + ref.Subpath
+		if m, ok := f.subDeps[subKey]; ok {
+			// Pick the first (and usually only) tag from the registered map.
+			version, sha := "v0.1.0", "abc123"
+			for t, info := range f.subTags[subKey] {
+				version = t
+				sha = info.SHA
+				break
+			}
+			f.cache[nk] = &depgraph.ProdFetchCacheEntry{
+				FS:   f.subFss[subKey],
+				Mold: m,
+			}
+			return depgraph.FetchResult{Mold: m, Version: version, Commit: sha}, nil
+		}
 	}
-	nk := depgraph.NodeKey{Source: key, Subpath: ref.Subpath}
+
+	m, ok := f.molds[cacheKey]
+	if !ok {
+		return depgraph.FetchResult{}, fmt.Errorf("fake: no mold for %s", cacheKey)
+	}
 	f.cache[nk] = &depgraph.ProdFetchCacheEntry{
-		FS:   f.fss[key],
+		FS:   f.fss[cacheKey],
 		Mold: m,
 	}
 	return depgraph.FetchResult{Mold: m, Version: "v1.0.0", Commit: "abc123"}, nil
 }
 
-func (f *fakeSmeltFetcher) Tags(source, _ string) (map[string]depgraph.TagInfo, error) {
+func (f *fakeSmeltFetcher) Tags(source, subpath string) (map[string]depgraph.TagInfo, error) {
+	// Prefer (source, subpath) specific tags.
+	if subpath != "" {
+		subKey := source + "//" + subpath
+		if tags, ok := f.subTags[subKey]; ok {
+			return tags, nil
+		}
+	}
 	if _, ok := f.molds[source]; ok {
 		return map[string]depgraph.TagInfo{"v1.0.0": {SHA: "abc123"}}, nil
 	}
@@ -406,6 +458,143 @@ func TestDepManifestJSON(t *testing.T) {
 	}
 	if len(got.Ingots) != 1 || got.Ingots[0].Subpath != "pkg" {
 		t.Errorf("ingots round-trip failed: %+v", got.Ingots)
+	}
+}
+
+// TestCollectDepsWith_SubdirMoldDepsWithPrefixedTags mirrors issue #255:
+// a monorepo with molds under molds/<name>, each released under per-mold tag
+// prefixes (e.g. vendor-ops-v1.1.6) where the tag version differs from the
+// mold's internal version: field. The aggregator uses ^ constraints that must
+// be resolved against the internal mold version, not the tag-embedded version.
+func TestCollectDepsWith_SubdirMoldDepsWithPrefixedTags(t *testing.T) {
+	source := "github.com/org/repo"
+
+	type subDep struct {
+		subpath    string
+		tag        string // e.g. "vendor-ops-v1.1.6"
+		moldVer    string // internal mold.yaml version: e.g. "0.1.0"
+		sha        string
+		constraint string // aggregator's version: constraint
+	}
+	deps := []subDep{
+		{"molds/vendor-ops", "vendor-ops-v1.1.6", "0.1.0", "cafe0001", "^0.1.0"},
+		{"molds/replicated-cli", "replicated-cli-v0.3.6", "0.1.0", "cafe0002", "^0.1.0"},
+		{"molds/launch", "launch-v0.9.0", "0.2.1", "cafe0003", "^0.2.0"},
+	}
+
+	fetcher := newFakeSmeltFetcher()
+
+	for _, d := range deps {
+		name := d.subpath[len("molds/"):]
+		m := &mold.Mold{Name: name, Version: d.moldVer, Kind: "mold", APIVersion: "v1"}
+		fsys := fakeDepFS(name)
+		tags := map[string]depgraph.TagInfo{
+			d.tag: {SHA: d.sha, MoldVersion: d.moldVer},
+		}
+		fetcher.addSubpathDep(source, d.subpath, m, fsys, tags)
+	}
+
+	var moldDeps []mold.Dependency
+	for _, d := range deps {
+		moldDeps = append(moldDeps, mold.Dependency{
+			Mold:    source + "//" + d.subpath,
+			Version: d.constraint,
+		})
+	}
+	root := &mold.Mold{
+		Name: "aggregator", Version: "0.1.0", Kind: "mold", APIVersion: "v1",
+		Dependencies: moldDeps,
+	}
+
+	files, manifest, err := collectDepsWith(root, nil, fetcher, noopArtifactResolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(manifest.Molds) != 3 {
+		t.Fatalf("expected 3 molds in manifest, got %d: %+v", len(manifest.Molds), manifest.Molds)
+	}
+
+	// Build a manifest index keyed on subpath for easy lookup.
+	bySubpath := map[string]DepEntry{}
+	for _, me := range manifest.Molds {
+		bySubpath[me.Subpath] = me
+	}
+
+	for _, d := range deps {
+		me, ok := bySubpath[d.subpath]
+		if !ok {
+			t.Errorf("manifest missing entry for subpath %q", d.subpath)
+			continue
+		}
+		if me.Source != source {
+			t.Errorf("[%s] Source = %q, want %q", d.subpath, me.Source, source)
+		}
+		if me.Version != d.tag {
+			t.Errorf("[%s] Version = %q, want %q", d.subpath, me.Version, d.tag)
+		}
+		if me.Commit != d.sha {
+			t.Errorf("[%s] Commit = %q, want %q", d.subpath, me.Commit, d.sha)
+		}
+		if me.MoldVersion != d.moldVer {
+			t.Errorf("[%s] MoldVersion = %q, want %q", d.subpath, me.MoldVersion, d.moldVer)
+		}
+
+		// Files must be embedded under deps/molds/<source>/<subpath>/.
+		wantPrefix := "deps/molds/" + source + "/" + d.subpath + "/"
+		var found []string
+		for _, f := range files {
+			if strings.HasPrefix(f.path, wantPrefix) {
+				found = append(found, f.path)
+			}
+		}
+		if len(found) == 0 {
+			t.Errorf("[%s] no files embedded under %q; all paths: %v",
+				d.subpath, wantPrefix, fileNames(files))
+		}
+	}
+}
+
+// TestEmbeddedDepFetcher_Tags_MoldVersion verifies that Tags returns the
+// MoldVersion from the manifest for embedded subdir deps with prefixed tags.
+// This is critical for release-train monorepos where constraints like ^0.1.0
+// must be checked against the mold's own version (0.1.0), not the tag-embedded
+// version (1.1.6 from "vendor-ops-v1.1.6").
+func TestEmbeddedDepFetcher_Tags_MoldVersion(t *testing.T) {
+	source := "github.com/org/repo"
+	subpath := "molds/vendor-ops"
+	embFS := fstest.MapFS{
+		"deps/manifest.json": &fstest.MapFile{
+			Data: makeManifestJSON(t, DepManifest{
+				Molds: []DepEntry{{
+					Source:      source,
+					Subpath:     subpath,
+					Version:     "vendor-ops-v1.1.6",
+					Commit:      "deadbeef",
+					MoldVersion: "0.1.0",
+				}},
+			}),
+		},
+		"deps/molds/" + source + "/" + subpath + "/mold.yaml": &fstest.MapFile{
+			Data: []byte("apiVersion: v1\nkind: mold\nname: vendor-ops\nversion: 0.1.0\n"),
+		},
+	}
+
+	fetcher := buildEmbeddedFetcher(t, embFS)
+	tags, err := fetcher.Tags(source, subpath)
+	if err != nil {
+		t.Fatalf("Tags: %v", err)
+	}
+
+	info, ok := tags["vendor-ops-v1.1.6"]
+	if !ok {
+		t.Fatalf("expected tag vendor-ops-v1.1.6 in %v", tags)
+	}
+	if info.MoldVersion != "0.1.0" {
+		t.Errorf("MoldVersion = %q, want 0.1.0", info.MoldVersion)
+	}
+	if info.SHA != "deadbeef" {
+		t.Errorf("SHA = %q, want deadbeef", info.SHA)
 	}
 }
 

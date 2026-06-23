@@ -15,10 +15,11 @@ import (
 
 // DepEntry is one record in the embedded dep manifest.
 type DepEntry struct {
-	Source  string `json:"source"`
-	Subpath string `json:"subpath,omitempty"`
-	Version string `json:"version"`
-	Commit  string `json:"commit,omitempty"`
+	Source      string `json:"source"`
+	Subpath     string `json:"subpath,omitempty"`
+	Version     string `json:"version"`
+	Commit      string `json:"commit,omitempty"`
+	MoldVersion string `json:"mold_version,omitempty"`
 }
 
 // DepManifest is written to /deps/manifest.json in the smelted binary so the
@@ -117,11 +118,16 @@ func collectDepsWith(
 			return nil, nil, fmt.Errorf("dep graph node %s missing cached fs", node.Key)
 		}
 
+		moldVersion := ""
+		if entry.Mold != nil {
+			moldVersion = entry.Mold.Version
+		}
 		manifest.Molds = append(manifest.Molds, DepEntry{
-			Source:  node.Key.Source,
-			Subpath: node.Key.Subpath,
-			Version: node.Version,
-			Commit:  node.Commit,
+			Source:      node.Key.Source,
+			Subpath:     node.Key.Subpath,
+			Version:     node.Version,
+			Commit:      node.Commit,
+			MoldVersion: moldVersion,
 		})
 
 		base := depFSPath("molds", node.Key.Source, node.Key.Subpath)
