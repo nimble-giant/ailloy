@@ -120,6 +120,12 @@ func runCast(_ *cobra.Command, args []string) error {
 	if err := validatePluginFlags(); err != nil {
 		return err
 	}
+	// A smelted binary carries its mold embedded; network resolution of
+	// transitive deps is unnecessary and breaks air-gapped environments.
+	// Auto-enable offline mode so the binary works without --offline.
+	if len(args) == 0 && smelt.HasEmbeddedMold() {
+		castOffline = true
+	}
 	reader, source, err := resolveMoldReader(args)
 	if err != nil {
 		return err
