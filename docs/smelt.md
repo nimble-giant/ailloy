@@ -321,7 +321,15 @@ You can still pass an explicit mold-dir to override the embedded mold:
 
 ### What goes in the binary
 
-The binary includes the same files as the tarball (see above). The output is named `{name}-{version}` (no extension) and is made executable.
+The binary includes everything from the tarball (see above), **plus the full transitive dependency tree** so the binary can cast entirely offline:
+
+- All mold-kind transitive dependencies (resolved at smelt time) under `deps/molds/`
+- All ore and ingot dependencies declared by the root mold and its transitives under `deps/ores/` and `deps/ingots/`
+- `deps/manifest.json` — a pinned inventory of every bundled dep (source, version, commit)
+
+The output is named `{name}-{version}` (no extension) and is made executable.
+
+> **Air-gap delivery.** A smelted binary carries everything needed to `cast` without any network access. No `--offline` flag is required — the binary detects its embedded dep tree automatically and serves deps from it. The cache does not need to be pre-warmed.
 
 ## CLI Reference
 

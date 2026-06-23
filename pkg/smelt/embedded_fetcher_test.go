@@ -30,24 +30,6 @@ func buildEmbeddedFetcher(t *testing.T, embFS fs.FS) *EmbeddedDepFetcher {
 	}
 }
 
-// buildEmbeddedFetcherWithFallback is like buildEmbeddedFetcher but accepts a
-// custom fallback so tests can observe fallback invocations.
-func buildEmbeddedFetcherWithFallback(t *testing.T, embFS fs.FS, fb *depgraph.ProdFetcher) *EmbeddedDepFetcher {
-	t.Helper()
-	var manifest DepManifest
-	if data, err := fs.ReadFile(embFS, "deps/manifest.json"); err == nil {
-		if jerr := json.Unmarshal(data, &manifest); jerr != nil {
-			t.Fatalf("parse manifest: %v", jerr)
-		}
-	}
-	return &EmbeddedDepFetcher{
-		embFS:    embFS,
-		manifest: &manifest,
-		fallback: fb,
-		cache:    map[depgraph.NodeKey]*depgraph.ProdFetchCacheEntry{},
-	}
-}
-
 // makeManifestJSON serialises a DepManifest for use in fstest.MapFS.
 func makeManifestJSON(t *testing.T, m DepManifest) []byte {
 	t.Helper()

@@ -12,6 +12,7 @@ import (
 // when output is absent or uses the string (parent) form.
 var reservedDirs = map[string]bool{
 	"ingots": true,
+	"deps":   true, // smelt-embedded dep tree; internal to the binary, not mold content
 }
 
 // reservedRootFiles are root-level files excluded from auto-discovery
