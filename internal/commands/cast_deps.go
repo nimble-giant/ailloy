@@ -13,6 +13,7 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/foundry/depgraph"
 	"github.com/nimble-giant/ailloy/pkg/mold"
+	"github.com/nimble-giant/ailloy/pkg/smelt"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 )
 
@@ -74,11 +75,20 @@ func castTransitiveDeps(rootResult *foundry.ResolveResult, root *mold.Mold, root
 		}
 	}
 
-	fetcher := depgraph.NewProdFetcher()
+	prodFetcher := depgraph.NewProdFetcher()
 	if castGlobal {
-		fetcher.LockPath = globalLockPath()
+		prodFetcher.LockPath = globalLockPath()
 	}
-	fetcher.Offline = castOffline
+	prodFetcher.Offline = castOffline
+
+	// When running as a smelted binary with embedded deps, prefer the
+	// embedded dep store over the network so offline casts work end-to-end.
+	var fetcher depFetcher = prodFetcher
+	if smelt.HasEmbeddedMold() {
+		if embFetcher, err := smelt.NewEmbeddedDepFetcher(prodFetcher); err == nil {
+			fetcher = embFetcher
+		}
+	}
 	return castTransitiveDepsWith(fetcher, rootResult, root, rootFlux, destPrefix)
 }
 
