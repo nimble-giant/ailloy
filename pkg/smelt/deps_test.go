@@ -17,8 +17,8 @@ import (
 // Fetch populates an in-memory cache keyed on ref.CacheKey(); CacheEntry reads
 // it back so collectDepsWith can retrieve the FS after Build.
 type fakeSmeltFetcher struct {
-	molds map[string]*mold.Mold    // CacheKey -> mold
-	fss   map[string]fs.FS         // CacheKey -> mold FS
+	molds map[string]*mold.Mold // CacheKey -> mold
+	fss   map[string]fs.FS      // CacheKey -> mold FS
 	cache map[depgraph.NodeKey]*depgraph.ProdFetchCacheEntry
 }
 
