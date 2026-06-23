@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.38](https://github.com/nimble-giant/ailloy/compare/v0.6.37...v0.6.38) (2026-06-23)
+
+
+### Bug Fixes
+
+* preserve mold version in embedded manifest for offline resolution ([7829595](https://github.com/nimble-giant/ailloy/commit/7829595ceae3d22fa2e816fe548d01cca045b7c0))
+
 ## [0.6.37](https://github.com/nimble-giant/ailloy/compare/v0.6.36...v0.6.37) (2026-06-23)
 
 
