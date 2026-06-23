@@ -50,6 +50,16 @@ func PackageBinary(moldDir, outputDir string) (string, int64, error) {
 		}
 	}
 
+	// Resolve and embed the full transitive dep tree (molds + ores + ingots).
+	depFiles, depManifest, err := collectDeps(cleanDir, m)
+	if err != nil {
+		return "", 0, fmt.Errorf("collecting deps: %w", err)
+	}
+	files = append(files, depFiles...)
+	if manifestData := marshalDepManifest(depManifest); manifestData != nil {
+		files = append(files, archiveFile{path: "deps/manifest.json", data: manifestData})
+	}
+
 	// Write collected files to a temp staging directory in parallel.
 	stagingDir, err := os.MkdirTemp("", "ailloy-smelt-*")
 	if err != nil {
