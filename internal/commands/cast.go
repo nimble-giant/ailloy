@@ -54,6 +54,10 @@ var (
 	// at cast time. Missing deps surface as errors instead of being fetched
 	// silently. Intended for CI; see --frozen flag.
 	castFrozen bool
+	// castLatestOnNoTags, when true, automatically casts from the default
+	// branch HEAD when the foundry has no semver tags. Skips the interactive
+	// prompt; intended for CI contexts.
+	castLatestOnNoTags bool
 )
 
 // copyOpts configures copyResolvedFiles. Centralising these as a struct lets
@@ -98,6 +102,10 @@ func init() {
 		"frozen",
 		false,
 		"fail (do not auto-install) when a declared ingot/ore dep is missing from .ailloy/; intended for CI")
+	castCmd.Flags().BoolVar(&castLatestOnNoTags,
+		"latest-on-no-tags",
+		false,
+		"cast from default branch HEAD when the foundry has no semver tags (skips interactive prompt; intended for CI)")
 }
 
 func runCast(_ *cobra.Command, args []string) error {
@@ -195,6 +203,9 @@ func resolveMoldReader(args []string) (*blanks.MoldReader, string, error) {
 			}
 			fsys, result, err := foundry.ResolveWithMetadata(args[0], resolveOpts...)
 			if err != nil {
+				if errors.Is(err, foundry.ErrNoSemverTags) {
+					return resolveMoldReaderWithDefaultBranch(args[0])
+				}
 				return nil, "", fmt.Errorf("resolving remote mold: %w", err)
 			}
 			resolvedRemote = result
@@ -211,6 +222,59 @@ func resolveMoldReader(args []string) (*blanks.MoldReader, string, error) {
 		return blanks.NewMoldReader(fsys), "", nil
 	}
 	return nil, "", fmt.Errorf("mold directory is required: ailloy cast <mold-dir>")
+}
+
+// resolveMoldReaderWithDefaultBranch handles the fallback path when a foundry
+// has no semver tags. It prompts the user interactively (or auto-accepts when
+// --latest-on-no-tags is set) then resolves the default branch HEAD commit and
+// fetches the mold from it.
+func resolveMoldReaderWithDefaultBranch(rawRef string) (*blanks.MoldReader, string, error) {
+	ref, err := foundry.ParseReference(rawRef)
+	if err != nil {
+		return nil, "", fmt.Errorf("parsing reference: %w", err)
+	}
+
+	if !castLatestOnNoTags {
+		var confirm bool
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewConfirm().
+					Title(fmt.Sprintf("No semver tags found for %s.", ref.CacheKey())).
+					Description("Cast from latest commit on default branch instead?").
+					Affirmative("Yes").
+					Negative("No").
+					Value(&confirm),
+			),
+		).WithTheme(ailloyTheme())
+		if err := form.Run(); err != nil {
+			return nil, "", fmt.Errorf("prompt failed: %w", err)
+		}
+		if !confirm {
+			return nil, "", fmt.Errorf(
+				"cast aborted: %s has no semver tags\n"+
+					"Add a version tag to the foundry, or use --latest-on-no-tags to cast from HEAD",
+				ref.CacheKey())
+		}
+	}
+
+	git := foundry.DefaultGitRunner()
+	resolved, err := foundry.ResolveDefaultBranchHead(ref, git)
+	if err != nil {
+		return nil, "", fmt.Errorf("resolving default branch HEAD: %w", err)
+	}
+
+	fetcher, err := foundry.NewFetcher(git)
+	if err != nil {
+		return nil, "", fmt.Errorf("creating fetcher: %w", err)
+	}
+	fsys, root, err := fetcher.Fetch(ref, resolved)
+	if err != nil {
+		return nil, "", fmt.Errorf("fetching mold: %w", err)
+	}
+
+	result := &foundry.ResolveResult{Ref: ref, Resolved: *resolved, Root: root}
+	resolvedRemote = result
+	return blanks.NewMoldReaderFromFS(fsys, root), ref.OverrideKey(), nil
 }
 
 // loadCastFlux loads layered flux values using Helm-style precedence:

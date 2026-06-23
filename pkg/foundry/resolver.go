@@ -1,6 +1,7 @@
 package foundry
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os/exec"
@@ -10,6 +11,11 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 )
+
+// ErrNoSemverTags is returned by resolveLatest when the foundry has no semver
+// tags. Callers can detect this with errors.Is to offer a fallback (e.g. cast
+// from the default branch HEAD).
+var ErrNoSemverTags = errors.New("no semver tags found")
 
 // GitRunner executes a git command and returns its combined output.
 // It is injectable for testing.
@@ -237,7 +243,7 @@ func resolveLatest(ref *Reference, git GitRunner, reader MoldVersionReader) (*Re
 	tags := selectTagsForPrefix(all, ref.ReleasePrefix())
 	tag, sha, moldVersion, err := highestVersion(tags, nil, reader)
 	if err != nil {
-		return nil, fmt.Errorf("no semver tags found for %s", ref.CacheKey())
+		return nil, fmt.Errorf("%w for %s", ErrNoSemverTags, ref.CacheKey())
 	}
 	return &ResolvedVersion{Tag: tag, Commit: sha, MoldVersion: moldVersion}, nil
 }
@@ -352,6 +358,28 @@ func resolveBranch(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
 		}
 	}
 	return nil, fmt.Errorf("branch %q not found in %s", ref.Version, ref.CacheKey())
+}
+
+// ResolveDefaultBranchHead resolves the HEAD commit on the default branch of a
+// foundry. It is used as a fallback when no semver tags are found. The
+// ResolvedVersion.Tag is set to the full commit SHA so the fetcher caches it
+// under a stable, content-addressed path.
+func ResolveDefaultBranchHead(ref *Reference, git GitRunner) (*ResolvedVersion, error) {
+	out, err := git("ls-remote", ref.CloneURL(), "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("git ls-remote %s HEAD: %w\n%s", ref.CloneURL(), err, out)
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) >= 2 && parts[1] == "HEAD" {
+			return &ResolvedVersion{Tag: parts[0], Commit: parts[0]}, nil
+		}
+	}
+	return nil, fmt.Errorf("could not resolve HEAD for %s", ref.CacheKey())
 }
 
 // highestVersion picks the highest-versioned tag from a tag map, optionally

@@ -1,6 +1,7 @@
 package foundry
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 )
@@ -489,5 +490,48 @@ func TestResolveConstraint_NilReaderUsesTagVersion(t *testing.T) {
 	ref := launchRef("^0.2.0", Constraint)
 	if _, err := ResolveVersion(ref, trainGit(t)); err == nil {
 		t.Fatal("expected error: tag-embedded versions are 0.5-0.7, not ^0.2.0")
+	}
+}
+
+func TestResolveLatest_NoTagsReturnsErrNoSemverTags(t *testing.T) {
+	git := mockGitRunner(map[string]string{
+		"[ls-remote --tags https://github.com/owner/repo.git]": "",
+	})
+	ref := &Reference{Host: "github.com", Owner: "owner", Repo: "repo", Type: Latest}
+	_, err := ResolveVersion(ref, git)
+	if err == nil {
+		t.Fatal("expected error when no semver tags exist")
+	}
+	if !errors.Is(err, ErrNoSemverTags) {
+		t.Errorf("errors.Is(err, ErrNoSemverTags) = false; err = %v", err)
+	}
+}
+
+func TestResolveDefaultBranchHead(t *testing.T) {
+	const headSHA = "deadbeef1234567890abcdef1234567890abcdef"
+	git := mockGitRunner(map[string]string{
+		"[ls-remote https://github.com/owner/repo.git HEAD]": headSHA + "\tHEAD\n",
+	})
+	ref := &Reference{Host: "github.com", Owner: "owner", Repo: "repo", Type: Latest}
+	resolved, err := ResolveDefaultBranchHead(ref, git)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Commit != headSHA {
+		t.Errorf("Commit = %q, want %q", resolved.Commit, headSHA)
+	}
+	if resolved.Tag != headSHA {
+		t.Errorf("Tag = %q, want SHA (used as cache key)", resolved.Tag)
+	}
+}
+
+func TestResolveDefaultBranchHead_NoHEAD(t *testing.T) {
+	git := mockGitRunner(map[string]string{
+		"[ls-remote https://github.com/owner/repo.git HEAD]": "",
+	})
+	ref := &Reference{Host: "github.com", Owner: "owner", Repo: "repo", Type: Latest}
+	_, err := ResolveDefaultBranchHead(ref, git)
+	if err == nil {
+		t.Fatal("expected error when HEAD is not resolvable")
 	}
 }
