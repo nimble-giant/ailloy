@@ -110,7 +110,7 @@ func (e *EmbeddedDepFetcher) Fetch(ref *foundry.Reference) (depgraph.FetchResult
 func (e *EmbeddedDepFetcher) Tags(source, subpath string) (map[string]depgraph.TagInfo, error) {
 	if entry := e.moldEntry(source, subpath); entry != nil {
 		return map[string]depgraph.TagInfo{
-			entry.Version: {SHA: entry.Commit},
+			entry.Version: {SHA: entry.Commit, MoldVersion: entry.MoldVersion},
 		}, nil
 	}
 	return e.fallback.Tags(source, subpath)
