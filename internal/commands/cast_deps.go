@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -121,7 +122,18 @@ func castTransitiveDepsWith(fetcher depFetcher, rootResult *foundry.ResolveResul
 		// foundry.Fetch already returns a per-mold fs rooted at the mold dir
 		// (subpath included), and entry.Root points at that dir on disk —
 		// mirror what runCast does for the root mold.
-		reader := blanks.NewMoldReaderFromFS(entry.FS, entry.Root)
+		//
+		// For embedded deps entry.Root is empty (no on-disk path). Stage the
+		// dep's ingots/ subtree to a temp dir so the disk-based IngotResolver
+		// used during template rendering can find them.
+		moldRoot := entry.Root
+		if moldRoot == "" {
+			if tmpDir, serr := stageIngotsFromFS(entry.FS); serr == nil && tmpDir != "" {
+				defer func() { _ = os.RemoveAll(tmpDir) }()
+				moldRoot = tmpDir
+			}
+		}
+		reader := blanks.NewMoldReaderFromFS(entry.FS, moldRoot)
 
 		manifest, err := reader.LoadManifest()
 		if err != nil {
@@ -296,6 +308,43 @@ func depAlias(node *depgraph.Node, manifest *mold.Mold) string {
 		return manifest.Name
 	}
 	return ""
+}
+
+// stageIngotsFromFS extracts the ingots/ subtree from fsys into a temporary
+// directory, returning the temp dir path. Used when casting a transitive dep
+// served from the embedded binary FS (entry.Root == "") so the disk-based
+// IngotResolver can locate ingots via the temp dir. Returns ("", nil) when
+// fsys has no ingots/ directory.
+func stageIngotsFromFS(fsys fs.FS) (string, error) {
+	if _, err := fs.Stat(fsys, "ingots"); err != nil {
+		return "", nil
+	}
+	tmpDir, err := os.MkdirTemp("", "ailloy-dep-ingots-*")
+	if err != nil {
+		return "", err
+	}
+	werr := fs.WalkDir(fsys, "ingots", func(path string, d fs.DirEntry, werr error) error {
+		if werr != nil {
+			return werr
+		}
+		dest := filepath.Join(tmpDir, path)
+		if d.IsDir() {
+			return os.MkdirAll(dest, 0750) // #nosec G301
+		}
+		if merr := os.MkdirAll(filepath.Dir(dest), 0750); merr != nil { // #nosec G301
+			return merr
+		}
+		data, rerr := fs.ReadFile(fsys, path)
+		if rerr != nil {
+			return rerr
+		}
+		return os.WriteFile(dest, data, 0644) // #nosec G306
+	})
+	if werr != nil {
+		_ = os.RemoveAll(tmpDir)
+		return "", werr
+	}
+	return tmpDir, nil
 }
 
 // hashFileForDeps duplicates cast.go's hashFile to avoid an import cycle on

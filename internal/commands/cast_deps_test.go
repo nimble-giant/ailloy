@@ -258,6 +258,123 @@ func TestCastTransitiveDeps_InstallsLeafAsTransitive(t *testing.T) {
 	}
 }
 
+// TestStageIngotsFromFS_NoIngotsDir verifies that stageIngotsFromFS is a no-op
+// when the FS has no ingots/ directory: it returns ("", nil) without creating
+// any temp directory.
+func TestStageIngotsFromFS_NoIngotsDir(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("kind: mold\n")},
+	}
+	dir, err := stageIngotsFromFS(fsys)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dir != "" {
+		t.Errorf("expected empty string for FS without ingots/, got %q", dir)
+	}
+}
+
+// TestStageIngotsFromFS_StagesToDisk verifies that a FS with an ingots/
+// subtree is correctly extracted to a temp directory so the disk-based
+// IngotResolver can find it.
+func TestStageIngotsFromFS_StagesToDisk(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml":                  &fstest.MapFile{Data: []byte("kind: mold\n")},
+		"ingots/my-ingot/ingot.yaml": &fstest.MapFile{Data: []byte("name: my-ingot\n")},
+		"ingots/my-ingot/content.md": &fstest.MapFile{Data: []byte("# ingot content\n")},
+	}
+	dir, err := stageIngotsFromFS(fsys)
+	if err != nil {
+		t.Fatalf("stageIngotsFromFS: %v", err)
+	}
+	if dir == "" {
+		t.Fatal("expected non-empty temp dir path")
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	// Ingot files must be accessible on disk under the staged temp dir.
+	if _, err := os.Stat(filepath.Join(dir, "ingots", "my-ingot", "ingot.yaml")); err != nil {
+		t.Errorf("ingot.yaml not staged: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "ingots", "my-ingot", "content.md")); err != nil {
+		t.Errorf("content.md not staged: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "ingots", "my-ingot", "ingot.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "name: my-ingot\n" {
+		t.Errorf("staged ingot.yaml content = %q; want \"name: my-ingot\\n\"", string(data))
+	}
+}
+
+// TestCastTransitiveDeps_EmbeddedDepWithIngots verifies that a transitive dep
+// served from the embedded binary FS (entry.Root == "") can resolve its
+// ingots/ subtree at cast time. stageIngotsFromFS must extract the ingots
+// to a temp dir so the disk-based IngotResolver finds them.
+func TestCastTransitiveDeps_EmbeddedDepWithIngots(t *testing.T) {
+	tmp := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	// Leaf FS with an ingots/ subtree — no on-disk root (mimics embedded dep).
+	leafFS := fstest.MapFS{
+		"mold.yaml":                &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: mold\nname: leaf\nversion: 1.0.0\n")},
+		"flux.yaml":                &fstest.MapFile{Data: []byte("output:\n  readme.md: README.md\n")},
+		"readme.md":                &fstest.MapFile{Data: []byte("# leaf readme\n")},
+		"ingots/helper/ingot.yaml": &fstest.MapFile{Data: []byte("name: helper\n")},
+		"ingots/helper/body.md":    &fstest.MapFile{Data: []byte("helper body\n")},
+	}
+	leafMold := &mold.Mold{APIVersion: "v1", Kind: "mold", Name: "leaf", Version: "1.0.0"}
+
+	fetcher := newFakeDepFetcher()
+	// root = "" signals embedded dep (no on-disk path).
+	fetcher.addMold("github.com/x/leaf-with-ingots", "1.0.0", &moldFixture{
+		mold: leafMold,
+		fs:   leafFS,
+		root: "",
+	})
+
+	root := &mold.Mold{
+		APIVersion: "v1", Kind: "mold", Name: "root", Version: "1.0.0",
+		Dependencies: []mold.Dependency{
+			{Mold: "github.com/x/leaf-with-ingots", Version: "^1.0.0"},
+		},
+	}
+	rootRef := &foundry.Reference{Host: "local", Owner: "dir", Repo: "root"}
+	rootResult := &foundry.ResolveResult{Ref: rootRef}
+
+	manifest := &foundry.InstalledManifest{APIVersion: "v1", Molds: []foundry.InstalledEntry{}}
+	if err := foundry.WriteInstalledManifest(filepath.Join(tmp, ".ailloy", "installed.yaml"), manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := castTransitiveDepsWith(fetcher, rootResult, root, map[string]any{}, ""); err != nil {
+		t.Fatalf("castTransitiveDepsWith: %v", err)
+	}
+
+	// Leaf's plain readme.md output should land on disk.
+	if _, err := os.Stat(filepath.Join(tmp, "README.md")); err != nil {
+		t.Errorf("leaf README.md missing: %v", err)
+	}
+
+	// Ingot files should have been staged (and cleaned up by defer in impl,
+	// but the cast itself must not fail — if stageIngotsFromFS had not worked,
+	// the IngotResolver would have found no search path for "ingots" and any
+	// template that references an ingot would blow up during copyResolvedFiles).
+	got, err := foundry.ReadInstalledManifest(filepath.Join(tmp, ".ailloy", "installed.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.FindBySource("github.com/x/leaf-with-ingots", "") == nil {
+		t.Errorf("leaf-with-ingots not recorded in installed.yaml")
+	}
+}
+
 // TestCastTransitiveDeps_LocalDirSentinel verifies that a local-dir (or
 // embedded) cast with mold-kind dependencies resolves them correctly when
 // rootResult is synthesised from the local mold name (the behaviour added by
