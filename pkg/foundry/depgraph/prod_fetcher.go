@@ -18,6 +18,9 @@ type ProdFetcher struct {
 	// LockPath is forwarded to ResolveWithMetadata so transitive fetches
 	// participate in the same lockfile as the root cast.
 	LockPath string
+	// Offline disables all network operations; tag listing and bare-clone
+	// fetches are served from the local cache. Set by --offline on cast.
+	Offline bool
 
 	cache map[NodeKey]*ProdFetchCacheEntry
 }
@@ -62,6 +65,9 @@ func (p *ProdFetcher) Fetch(ref *foundry.Reference) (FetchResult, error) {
 	if p.LockPath != "" {
 		opts = append(opts, foundry.WithLockPath(p.LockPath))
 	}
+	if p.Offline {
+		opts = append(opts, foundry.WithOffline())
+	}
 	// Resolve from the *Reference directly so an explicitly-set Type (e.g. an
 	// exact pin to a monorepo-prefixed tag during constraint re-fetch) is not
 	// lost to a raw-string round-trip.
@@ -93,14 +99,19 @@ func (p *ProdFetcher) Fetch(ref *foundry.Reference) (FetchResult, error) {
 	}, nil
 }
 
-// Tags lists the semver tags for the given source+subpath via git ls-remote.
-// For monorepo subpath molds it also reads each tag's mold.yaml version so the
-// constraint solver ranks by the mold's own version rather than the shared
-// release-train version baked into the tag name. Tags whose mold manifest is
-// absent are dropped.
+// Tags lists the semver tags for the given source+subpath. When p.Offline is
+// true the listing is served from the local bare-clone cache instead of
+// git ls-remote. For monorepo subpath molds it also reads each tag's mold.yaml
+// version so the constraint solver ranks by the mold's own version rather than
+// the shared release-train version baked into the tag name. Tags whose mold
+// manifest is absent are dropped.
 func (p *ProdFetcher) Tags(source, subpath string) (map[string]TagInfo, error) {
+	git, err := p.effectiveGitRunner()
+	if err != nil {
+		return nil, err
+	}
 	url := "https://" + source + ".git"
-	tags, err := foundry.RemoteTags(url, subpath, p.GitRunner)
+	tags, err := foundry.RemoteTags(url, subpath, git)
 	if err != nil {
 		return nil, err
 	}
@@ -135,11 +146,30 @@ func (p *ProdFetcher) moldVersionReader(source, subpath string) (foundry.MoldVer
 		return nil, err
 	}
 	ref.Subpath = subpath
-	fetcher, err := foundry.NewFetcher(p.GitRunner)
+	git, err := p.effectiveGitRunner()
+	if err != nil {
+		return nil, err
+	}
+	fetcher, err := foundry.NewFetcher(git)
 	if err != nil {
 		return nil, err
 	}
 	return fetcher.MoldVersionReaderFor(ref)
+}
+
+// effectiveGitRunner returns the GitRunner to use for this fetch. When
+// p.Offline is true it wraps the real runner with the offline interceptor so
+// that network-requiring commands are served from (or blocked by) the local
+// cache.
+func (p *ProdFetcher) effectiveGitRunner() (foundry.GitRunner, error) {
+	if !p.Offline {
+		return p.GitRunner, nil
+	}
+	cacheDir, err := foundry.CacheDir()
+	if err != nil {
+		return nil, fmt.Errorf("offline mode: %w", err)
+	}
+	return foundry.NewOfflineGitRunner(p.GitRunner, cacheDir), nil
 }
 
 // refToRaw renders a Reference back to a raw string suitable for

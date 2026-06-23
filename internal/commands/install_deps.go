@@ -274,6 +274,9 @@ func resolveDepFS(ref, declaredVersion string, global bool) (fs.FS, string, stri
 		if global {
 			resolveOpts = append(resolveOpts, foundry.WithLockPath(globalLockPath()))
 		}
+		if castOffline {
+			resolveOpts = append(resolveOpts, foundry.WithOffline())
+		}
 		fsys, result, err := foundry.ResolveWithMetadata(ref, resolveOpts...)
 		if err != nil {
 			return nil, "", "", "", "", err

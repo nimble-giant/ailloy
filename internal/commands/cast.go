@@ -58,6 +58,10 @@ var (
 	// branch HEAD when the foundry has no semver tags. Skips the interactive
 	// prompt; intended for CI contexts.
 	castLatestOnNoTags bool
+	// castOffline, when true, disables all network operations. Tag resolution
+	// and bare-clone fetches are served from the local cache; fails with an
+	// actionable error if the cache is cold. Intended for air-gapped builds.
+	castOffline bool
 )
 
 // copyOpts configures copyResolvedFiles. Centralising these as a struct lets
@@ -106,6 +110,10 @@ func init() {
 		"latest-on-no-tags",
 		false,
 		"cast from default branch HEAD when the foundry has no semver tags (skips interactive prompt; intended for CI)")
+	castCmd.Flags().BoolVar(&castOffline,
+		"offline",
+		false,
+		"resolve all dependencies from the local cache only; fails if the cache is cold (run without --offline first to warm it)")
 }
 
 func runCast(_ *cobra.Command, args []string) error {
@@ -200,6 +208,9 @@ func resolveMoldReader(args []string) (*blanks.MoldReader, string, error) {
 			var resolveOpts []foundry.ResolveOption
 			if castGlobal {
 				resolveOpts = append(resolveOpts, foundry.WithLockPath(globalLockPath()))
+			}
+			if castOffline {
+				resolveOpts = append(resolveOpts, foundry.WithOffline())
 			}
 			fsys, result, err := foundry.ResolveWithMetadata(args[0], resolveOpts...)
 			if err != nil {
