@@ -78,6 +78,7 @@ func castTransitiveDeps(rootResult *foundry.ResolveResult, root *mold.Mold, root
 	if castGlobal {
 		fetcher.LockPath = globalLockPath()
 	}
+	fetcher.Offline = castOffline
 	return castTransitiveDepsWith(fetcher, rootResult, root, rootFlux, destPrefix)
 }
 

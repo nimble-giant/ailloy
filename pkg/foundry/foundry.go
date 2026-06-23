@@ -76,6 +76,10 @@ type resolveConfig struct {
 	// "using locked version" notices). Defaults to log.Default(). Callers
 	// running inside a TUI should pass a logger writing to io.Discard.
 	logger *log.Logger
+	// offline disables all network operations. Tag resolution and bare-clone
+	// fetches are served from the local cache; the cast fails if the cache is
+	// cold. Enabled by --offline on the cast command.
+	offline bool
 }
 
 // applyResolveDefaults sets the default lockPath. Exposed for tests.
@@ -102,6 +106,16 @@ func WithLockPath(path string) ResolveOption {
 func WithLogger(logger *log.Logger) ResolveOption {
 	return func(c *resolveConfig) {
 		c.logger = logger
+	}
+}
+
+// WithOffline disables all network operations during resolution. Tag listing
+// and bare-clone fetches are served from the local cache; resolution fails
+// with an actionable error if the cache is cold. Use for air-gapped or
+// no-egress builds once the cache has been warmed by a prior online cast.
+func WithOffline() ResolveOption {
+	return func(c *resolveConfig) {
+		c.offline = true
 	}
 }
 
@@ -206,6 +220,14 @@ func resolveWithMeta(ref *Reference, git GitRunner, opts ...ResolveOption) (fs.F
 				cfg.logger.Printf("using locked version %s@%s", ref.CacheKey(), entry.Version)
 			}
 		}
+	}
+
+	if cfg.offline {
+		cacheDir, cErr := CacheDir()
+		if cErr != nil {
+			return nil, nil, fmt.Errorf("offline mode: %w", cErr)
+		}
+		git = NewOfflineGitRunner(git, cacheDir)
 	}
 
 	fetcher, err := NewFetcher(git)
