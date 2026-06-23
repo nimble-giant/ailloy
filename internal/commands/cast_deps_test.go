@@ -257,3 +257,78 @@ func TestCastTransitiveDeps_InstallsLeafAsTransitive(t *testing.T) {
 		t.Errorf("root entry: %+v", rootEntry)
 	}
 }
+
+// TestCastTransitiveDeps_LocalDirSentinel verifies that a local-dir (or
+// embedded) cast with mold-kind dependencies resolves them correctly when
+// rootResult is synthesised from the local mold name (the behaviour added by
+// the fix for GH#238). The sentinel reference uses host="local" so it can never
+// collide with a real remote dep key.
+func TestCastTransitiveDeps_LocalDirSentinel(t *testing.T) {
+	tmp := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	leafFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: mold\nname: leaf\nversion: 1.0.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte("output:\n  readme.md: README.md\n")},
+		"readme.md": &fstest.MapFile{Data: []byte("# from leaf\n")},
+	}
+	leafMold := &mold.Mold{APIVersion: "v1", Kind: "mold", Name: "leaf", Version: "1.0.0"}
+
+	fetcher := newFakeDepFetcher()
+	fetcher.addMold("github.com/x/leaf", "1.0.0", &moldFixture{mold: leafMold, fs: leafFS})
+
+	// Aggregator: local mold that only declares a dependency, no own output.
+	root := &mold.Mold{
+		APIVersion: "v1", Kind: "mold", Name: "aggregator", Version: "0.1.0",
+		Dependencies: []mold.Dependency{
+			{Mold: "github.com/x/leaf", Version: "^1.0.0"},
+		},
+	}
+
+	// Simulate what castTransitiveDeps now does for a local-dir cast
+	// (rootResult nil → synthesise sentinel).
+	localRef := &foundry.Reference{
+		Host:  "local",
+		Owner: "dir",
+		Repo:  root.Name,
+	}
+	rootResult := &foundry.ResolveResult{
+		Ref:  localRef,
+		Root: filepath.Join(tmp, "_local"),
+	}
+
+	// Pre-create installed.yaml so recordInstalled has somewhere to upsert.
+	manifest := &foundry.InstalledManifest{
+		APIVersion: "v1",
+		Molds:      []foundry.InstalledEntry{},
+	}
+	if err := foundry.WriteInstalledManifest(filepath.Join(tmp, ".ailloy", "installed.yaml"), manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := castTransitiveDepsWith(fetcher, rootResult, root, map[string]any{}, ""); err != nil {
+		t.Fatalf("castTransitiveDepsWith: %v", err)
+	}
+
+	// Leaf's readme.md should have been rendered to README.md.
+	if _, err := os.Stat(filepath.Join(tmp, "README.md")); err != nil {
+		t.Errorf("leaf output README.md missing: %v", err)
+	}
+
+	// installed.yaml should record the leaf as transitive.
+	got, err := foundry.ReadInstalledManifest(filepath.Join(tmp, ".ailloy", "installed.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafEntry := got.FindBySource("github.com/x/leaf", "")
+	if leafEntry == nil {
+		t.Fatalf("leaf not in installed.yaml; entries: %+v", got.Molds)
+	}
+	if leafEntry.InstalledAs != "transitive" {
+		t.Errorf("InstalledAs = %q; want transitive", leafEntry.InstalledAs)
+	}
+}

@@ -460,10 +460,10 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	// Cast transitive mold deps (mold-on-mold dependencies). No-op when the
 	// root has no mold-kind deps. Runs after the root is recorded so cycles
 	// or conflicts surface alongside the root cast result.
-	if resolvedRemote != nil {
-		if err := castTransitiveDeps(resolvedRemote, manifest, flux, destPrefix); err != nil {
-			return fmt.Errorf("casting transitive dependencies: %w", err)
-		}
+	// resolvedRemote is nil for local-dir and embedded casts; castTransitiveDeps
+	// handles that by synthesizing a local sentinel reference.
+	if err := castTransitiveDeps(resolvedRemote, manifest, flux, destPrefix); err != nil {
+		return fmt.Errorf("casting transitive dependencies: %w", err)
 	}
 
 	// Success celebration

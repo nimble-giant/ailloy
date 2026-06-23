@@ -53,8 +53,25 @@ type depFetcher interface {
 // the cast as a whole is reported as failed (rather than silently leaving a
 // half-installed graph).
 func castTransitiveDeps(rootResult *foundry.ResolveResult, root *mold.Mold, rootFlux map[string]any, destPrefix string) error {
-	if rootResult == nil || root == nil || !hasMoldDeps(root) {
+	if root == nil || !hasMoldDeps(root) {
 		return nil
+	}
+	// For local-dir and embedded casts resolvedRemote is nil, but the mold may
+	// still declare mold-kind dependencies. Synthesize a local sentinel reference
+	// so the dep graph has a stable root key; the transitive nodes are all remote
+	// and will be fetched normally.
+	if rootResult == nil {
+		name := root.Name
+		if name == "" {
+			name = "local"
+		}
+		rootResult = &foundry.ResolveResult{
+			Ref: &foundry.Reference{
+				Host:  "local",
+				Owner: "dir",
+				Repo:  name,
+			},
+		}
 	}
 
 	fetcher := depgraph.NewProdFetcher()
