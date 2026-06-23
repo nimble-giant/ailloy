@@ -134,9 +134,24 @@ ailloy forge <mold>     # dry-run renders without writing to disk
 `mold:` and `ingot:`). The `forge --show-graph` flag (where available)
 prints the resolved tree with the chosen versions.
 
+## Air-gap delivery with `smelt`
+
+Running `ailloy smelt -o binary` on a mold that has dependencies bundles the entire transitive dep tree into the binary at smelt time. The resulting binary can `cast` fully offline — no `--offline` flag, no warm cache required.
+
+```bash
+# Smelt once (needs network to resolve deps):
+ailloy smelt -o binary ./my-aggregator-mold
+
+# Ship the binary anywhere; cast with no network:
+./my-aggregator-mold-1.0.0 cast
+```
+
+See [`docs/smelt.md`](smelt.md) for details.
+
 ## See also
 
 - [`docs/foundry.md`](foundry.md) — publishing molds, monorepos, version
   tagging.
 - [`docs/ingots.md`](ingots.md) — non-mold (ingot) dependencies.
 - [`docs/ore.md`](ore.md) — flux-overlay (ore) dependencies.
+- [`docs/smelt.md`](smelt.md) — binary packaging and air-gap delivery.
