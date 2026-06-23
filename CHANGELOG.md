@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.37](https://github.com/nimble-giant/ailloy/compare/v0.6.36...v0.6.37) (2026-06-23)
+
+
+### Features
+
+* embed full dep tree into smelted binary (ai-gnd) ([8c624f5](https://github.com/nimble-giant/ailloy/commit/8c624f52f7dc34b911b537b0bf0dfca9b4dcfbfa))
+* serve embedded dep tree from smelted binary (ai-cs8) ([37c6df5](https://github.com/nimble-giant/ailloy/commit/37c6df57b3410e3ec65b2623ca737a548e1668b5))
+
+
+### Bug Fixes
+
+* exclude smelt dep tree from mold auto-discovery and update docs ([555c030](https://github.com/nimble-giant/ailloy/commit/555c030f046798f5da019a833fb46e188462d35f))
+* gofmt pkg/smelt/deps_test.go ([b316f53](https://github.com/nimble-giant/ailloy/commit/b316f53be6920cf1f90adcd999db4d8125ae2b6f))
+* remove component from release-please title pattern ([0b2d8bd](https://github.com/nimble-giant/ailloy/commit/0b2d8bd1f79279cc9089e41dc721f11d07253522))
+
 ## [0.6.36](https://github.com/nimble-giant/ailloy/compare/v0.6.35...v0.6.36) (2026-06-23)
 
 
