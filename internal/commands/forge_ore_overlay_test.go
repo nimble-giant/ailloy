@@ -31,4 +31,3 @@ func TestPrintForgeDebugProvenance_FormatsRowsByOrigin(t *testing.T) {
 		t.Errorf("missing dest/src paths: %s", out)
 	}
 }
-

@@ -220,8 +220,8 @@ func TestResolveFilesWithOreSources_DestPathDedup_OreOreConflictErrors(t *testin
 // to the same DestPath: consumer-origin wins via DestPath deduplication.
 func TestResolveFilesWithOreSources_DestPathDedup_ConsumerWins(t *testing.T) {
 	moldFS := fstest.MapFS{
-		"mold.yaml":    &fstest.MapFile{Data: []byte("name: c\n")},
-		"consumer.md":  &fstest.MapFile{Data: []byte("# consumer\n")},
+		"mold.yaml":   &fstest.MapFile{Data: []byte("name: c\n")},
+		"consumer.md": &fstest.MapFile{Data: []byte("# consumer\n")},
 	}
 	oreFS := fstest.MapFS{"ore.md": &fstest.MapFile{Data: []byte("# ore\n")}}
 	output := map[string]any{"consumer.md": "out.md"}
