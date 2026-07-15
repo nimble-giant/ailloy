@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.41](https://github.com/nimble-giant/ailloy/compare/v0.6.40...v0.6.41) (2026-07-15)
+
+
+### Bug Fixes
+
+* resolve ore and ingot dependency versions on prefixed-tag monorepos ([8b90ce3](https://github.com/nimble-giant/ailloy/commit/8b90ce386607fa7469479fb4ca463be3140566ab)), closes [#263](https://github.com/nimble-giant/ailloy/issues/263)
+
 ## [0.6.40](https://github.com/nimble-giant/ailloy/compare/v0.6.39...v0.6.40) (2026-06-23)
 
 
