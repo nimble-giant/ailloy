@@ -289,3 +289,53 @@ func TestMoldVersionReaderFor(t *testing.T) {
 		t.Errorf("repeat lookup issued %d extra git show calls, want 0", shows-before)
 	}
 }
+
+// TestMoldVersionReaderFor_IngotAndOreManifests verifies the reader also finds
+// ingot.yaml and ore.yaml (not just mold.yaml). Ingot/ore deps live at their
+// own subpaths; before this the reader probed only mold.yaml, reported
+// found=false for every tag of an ingot/ore subpath, and the resolver then
+// excluded all candidates — surfacing as "no semver tags found". See ailloy#263.
+func TestMoldVersionReaderFor_IngotAndOreManifests(t *testing.T) {
+	cases := []struct {
+		name     string
+		subpath  string
+		manifest string // the git object path that exists
+		body     string
+		wantVer  string
+	}{
+		{"ingot", "ingots/pilot-facilitator-core", "ingots/pilot-facilitator-core/ingot.yaml", "kind: ingot\nname: pilot-facilitator-core\nversion: 0.1.0\n", "0.1.0"},
+		{"ore", "ores/pilot", "ores/pilot/ore.yaml", "kind: ore\nname: pilot\nversion: 0.3.0\n", "0.3.0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cacheDir := t.TempDir()
+			ref := &Reference{Host: "github.com", Owner: "o", Repo: "foundry", Subpath: tc.subpath}
+			tag := tc.name + "-v" + tc.wantVer
+
+			git := func(args ...string) ([]byte, error) {
+				if len(args) >= 4 && args[0] == "clone" && args[1] == "--bare" {
+					if err := os.MkdirAll(args[3], 0750); err != nil {
+						return nil, err
+					}
+					return nil, os.WriteFile(filepath.Join(args[3], "HEAD"), []byte("ref: refs/heads/main"), 0644)
+				}
+				if len(args) == 4 && args[0] == "-C" && args[2] == "show" {
+					if args[3] == tag+":"+tc.manifest {
+						return []byte(tc.body), nil
+					}
+					// mold.yaml (probed first) is absent for an ingot/ore subpath.
+					return nil, fmt.Errorf("fatal: path does not exist")
+				}
+				return nil, fmt.Errorf("unexpected git call: %v", args)
+			}
+
+			reader, err := NewFetcherWithCacheDir(git, cacheDir).MoldVersionReaderFor(ref)
+			if err != nil {
+				t.Fatalf("MoldVersionReaderFor: %v", err)
+			}
+			if v, found := reader(tag); !found || v != tc.wantVer {
+				t.Errorf("%s = (%q, %v), want (%q, true)", tag, v, found, tc.wantVer)
+			}
+		})
+	}
+}

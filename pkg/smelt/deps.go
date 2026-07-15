@@ -183,9 +183,17 @@ func collectArtifactDeps(
 			continue
 		}
 
-		ref, err := foundry.ParseReference(raw)
+		// Fold the dependency's `version:` field into the reference. Unlike mold
+		// deps, an ore/ingot's source string carries no @version, so without this
+		// the reference resolves as Latest — and on a release-train monorepo that
+		// means "no semver tags found" whenever the subpath's component-prefixed
+		// tags don't happen to be the plain-tag latest. Embedding the constraint
+		// makes it resolve against the `<component>-vX.Y.Z` tags for the subpath.
+		refStr := withVersion(raw, dep.Version)
+
+		ref, err := foundry.ParseReference(refStr)
 		if err != nil {
-			return nil, fmt.Errorf("parsing %s ref %q: %w", kind, raw, err)
+			return nil, fmt.Errorf("parsing %s ref %q: %w", kind, refStr, err)
 		}
 		dedupeKey := ref.CacheKey() + "//" + ref.Subpath
 		if seen[dedupeKey] {
@@ -193,9 +201,9 @@ func collectArtifactDeps(
 		}
 		seen[dedupeKey] = true
 
-		fsys, result, err := resolveArtifact(raw, resolveOpts...)
+		fsys, result, err := resolveArtifact(refStr, resolveOpts...)
 		if err != nil {
-			return nil, fmt.Errorf("resolving %s %q: %w", kind, raw, err)
+			return nil, fmt.Errorf("resolving %s %q: %w", kind, refStr, err)
 		}
 
 		base := depFSPath(kind+"s", result.Ref.CacheKey(), result.Ref.Subpath)
@@ -232,6 +240,23 @@ func hasMoldDeps(m *mold.Mold) bool {
 		}
 	}
 	return false
+}
+
+// withVersion folds a dependency's `version:` field into a foundry reference
+// string. An ore/ingot source carries no @version (the constraint lives in a
+// separate YAML field), so it must be embedded before the reference is parsed.
+//
+// ParseReference splits the //subpath before the @version, so the version is
+// inserted just before the //subpath (if any): the result is
+// `<host>/<owner>/<repo>@<version>//<subpath>`. An empty version is a no-op.
+func withVersion(raw, version string) string {
+	if version == "" {
+		return raw
+	}
+	if i := strings.Index(raw, "//"); i != -1 {
+		return raw[:i] + "@" + version + raw[i:]
+	}
+	return raw + "@" + version
 }
 
 // depFSPath constructs the embedded FS path for a bundled dep artifact:
