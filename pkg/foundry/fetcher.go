@@ -50,11 +50,17 @@ func (f *Fetcher) Fetch(ref *Reference, resolved *ResolvedVersion) (fs.FS, strin
 }
 
 // MoldVersionReaderFor returns a MoldVersionReader that reads the `version:`
-// field of the reference's mold.yaml at any given git tag. It ensures the
-// bare clone exists once, then serves each lookup with `git show <tag>:<path>`
+// field of the reference's package manifest at any given git tag. It ensures
+// the bare clone exists once, then serves each lookup with `git show <tag>:<path>`
 // against the local clone — cheap and offline. Results are memoised per tag.
 //
-// The reader reports found=false when no mold manifest exists at a tag (the
+// The package manifest may be a mold (`mold.yaml`), an ingot (`ingot.yaml`), or
+// an ore (`ore.yaml`) — all three declare a top-level `version:`. Ingot/ore
+// dependencies live at their own subpaths and must be ranked the same way as
+// mold deps; probing only `mold.yaml` would report found=false for every tag
+// of an ingot/ore subpath, excluding all candidates. See ailloy#263.
+//
+// The reader reports found=false when no package manifest exists at a tag (the
 // caller excludes that candidate), and found=true with an empty version when
 // the manifest exists but declares no version (the caller falls back to the
 // tag-embedded semver).
@@ -64,9 +70,16 @@ func (f *Fetcher) MoldVersionReaderFor(ref *Reference) (MoldVersionReader, error
 	}
 	bareDir := BareCloneDir(f.cacheDir, ref)
 
-	manifestPath := "mold.yaml"
-	if sp := strings.Trim(ref.Subpath, "/"); sp != "" {
-		manifestPath = sp + "/mold.yaml" // git object paths are always forward-slash
+	// Candidate manifest filenames, in precedence order. Git object paths are
+	// always forward-slash and prefixed with the subpath when present.
+	dir := strings.Trim(ref.Subpath, "/")
+	manifestPaths := make([]string, 0, 3)
+	for _, name := range []string{"mold.yaml", "ingot.yaml", "ore.yaml"} {
+		if dir != "" {
+			manifestPaths = append(manifestPaths, dir+"/"+name)
+		} else {
+			manifestPaths = append(manifestPaths, name)
+		}
 	}
 
 	type result struct {
@@ -82,15 +95,20 @@ func (f *Fetcher) MoldVersionReaderFor(ref *Reference) (MoldVersionReader, error
 		if r, ok := cache[tag]; ok {
 			return r.version, r.found
 		}
-		out, err := f.git("-C", bareDir, "show", tag+":"+manifestPath)
-		r := result{found: err == nil}
-		if r.found {
+		var r result
+		for _, manifestPath := range manifestPaths {
+			out, err := f.git("-C", bareDir, "show", tag+":"+manifestPath)
+			if err != nil {
+				continue
+			}
+			r.found = true
 			var m struct {
 				Version string `yaml:"version"`
 			}
 			if yaml.Unmarshal(out, &m) == nil {
 				r.version = m.Version
 			}
+			break
 		}
 		cache[tag] = r
 		return r.version, r.found

@@ -271,6 +271,15 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 // the recorded version for local refs (they have no resolved tag).
 func resolveDepFS(ref, declaredVersion string, global bool) (fs.FS, string, string, string, string, error) {
 	if foundry.IsRemoteReference(ref) {
+		// Fold the dependency's declared version constraint into the reference.
+		// An ore/ingot source string carries no @version (the constraint lives
+		// in the dep's separate `version:` field), so without this the ref
+		// resolves as Latest. On a release-train monorepo whose subpath is
+		// tagged with component-prefixed tags (`<component>-vX.Y.Z`), Latest
+		// resolution fails with "no semver tags found"; embedding the
+		// constraint makes it resolve against those prefixed tags. See ailloy#263.
+		ref = refWithVersion(ref, declaredVersion)
+
 		// Check the smelted binary's embedded dep store first so offline casts
 		// can serve ore/ingot deps without any network access.
 		if parsed, perr := foundry.ParseReference(ref); perr == nil {
@@ -302,6 +311,26 @@ func resolveDepFS(ref, declaredVersion string, global bool) (fs.FS, string, stri
 		return nil, "", "", "", "", fmt.Errorf("%q is not a directory", path)
 	}
 	return os.DirFS(path), path, "", declaredVersion, "", nil
+}
+
+// refWithVersion embeds a dependency's declared version constraint into a
+// foundry reference string. ParseReference splits the //subpath before the
+// @version, so the version is inserted just before the //subpath (if any):
+// `<host>/<owner>/<repo>@<version>//<subpath>`. An empty version, or a ref
+// that already carries an @version, is returned unchanged.
+func refWithVersion(ref, version string) string {
+	if version == "" {
+		return ref
+	}
+	// Ignore a leading git@ SSH prefix when checking for an existing @version,
+	// so `git@github.com:owner/repo` isn't mistaken for an already-versioned ref.
+	if strings.Contains(strings.TrimPrefix(ref, "git@"), "@") {
+		return ref // already carries an @version
+	}
+	if i := strings.Index(ref, "//"); i != -1 {
+		return ref[:i] + "@" + version + ref[i:]
+	}
+	return ref + "@" + version
 }
 
 // depIdentity returns the (source, subpath) identity tuple for a dependency
