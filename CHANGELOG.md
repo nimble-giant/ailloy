@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.43](https://github.com/nimble-giant/ailloy/compare/v0.6.42...v0.6.43) (2026-07-16)
+
+
+### Bug Fixes
+
+* embed each mold source file once across destinations ([b1d5397](https://github.com/nimble-giant/ailloy/commit/b1d5397fb2f090fa327a5b0be017ab4149e5e7af))
+* resolve ingots from the mold filesystem during cast ([912b785](https://github.com/nimble-giant/ailloy/commit/912b785b02f9dd5cbf0ccfcaf422d00a280b3443))
+
 ## [0.6.42](https://github.com/nimble-giant/ailloy/compare/v0.6.41...v0.6.42) (2026-07-16)
 
 
