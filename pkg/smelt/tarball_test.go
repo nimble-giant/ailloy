@@ -8,9 +8,44 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
+
+// TestCollectMoldFiles_DedupsMultiDestSource guards against a source file being
+// archived once per output destination. A mold that maps one source to two
+// destinations (e.g. AGENTS.md -> {AGENTS.md, CLAUDE.md}) must still embed the
+// source exactly once — otherwise stuffbin records two files at the same path
+// and the smelted binary fails to open its embedded mold ("file already exists").
+func TestCollectMoldFiles_DedupsMultiDestSource(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"mold.yaml": {Data: []byte("name: m\nversion: 0.1.0\n")},
+		"flux.yaml": {Data: []byte(
+			"output:\n" +
+				"  AGENTS.md:\n" +
+				"    - dest: AGENTS.md\n" +
+				"      strategy: append\n" +
+				"    - dest: CLAUDE.md\n" +
+				"      strategy: append\n")},
+		"AGENTS.md": {Data: []byte("shared instructions")},
+	}
+
+	files, _, err := collectMoldFiles(moldFS, t.TempDir())
+	if err != nil {
+		t.Fatalf("collectMoldFiles: %v", err)
+	}
+
+	count := 0
+	for _, f := range files {
+		if f.path == "AGENTS.md" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("AGENTS.md archived %d times, want 1", count)
+	}
+}
 
 // writeMoldFixture creates a minimal valid mold directory structure in dir.
 func writeMoldFixture(t *testing.T, dir string) {
