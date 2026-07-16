@@ -160,6 +160,7 @@ func runForge(_ *cobra.Command, args []string) error {
 
 	// Build ingot resolver
 	ingotResolver := buildIngotResolver(flux, reader.Root())
+	ingotResolver.FS = reader.FS()
 	opts := []mold.TemplateOption{mold.WithIngotResolver(ingotResolver)}
 
 	// Load ignore patterns from .ailloyignore and mold.yaml.

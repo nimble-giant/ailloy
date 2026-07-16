@@ -157,6 +157,7 @@ func renderMoldFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[st
 	}
 
 	resolver := buildIngotResolver(flux, reader.Root())
+	resolver.FS = reader.FS()
 	tplOpts := []mold.TemplateOption{
 		mold.WithIngotResolver(resolver),
 		mold.WithLogger(logger),
@@ -212,6 +213,7 @@ func readMoldReadme(reader *blanks.MoldReader, flux map[string]any) ([]byte, err
 		return nil, fmt.Errorf("reading mold README.md: %w", err)
 	}
 	resolver := buildIngotResolver(flux, reader.Root())
+	resolver.FS = reader.FS()
 	processed, perr := mold.ProcessTemplate(string(raw), flux, mold.WithIngotResolver(resolver))
 	if perr != nil {
 		return nil, fmt.Errorf("processing mold README.md: %w", perr)

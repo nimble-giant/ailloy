@@ -2,7 +2,9 @@ package mold
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -12,7 +14,13 @@ import (
 // IngotResolver resolves {{ingot "name"}} template function calls by searching
 // for ingot content across a list of directories. It supports both manifest-based
 // ingots (directory with ingot.yaml) and bare file ingots (name.md).
+//
+// FS, when non-nil, is searched (at "ingots/<name>") before the disk SearchPaths.
+// This is how a stuffed-binary cast resolves the mold's own ingots: the mold
+// lives in an embedded fs.FS, not on disk, so a purely path-based search would
+// miss them.
 type IngotResolver struct {
+	FS          fs.FS
 	SearchPaths []string
 	Flux        map[string]any
 	resolving   map[string]bool
@@ -27,6 +35,14 @@ func NewIngotResolver(searchPaths []string, flux map[string]any) *IngotResolver 
 	}
 }
 
+// NewIngotResolverWithFS is NewIngotResolver plus an fs.FS (e.g. the mold's
+// embedded filesystem) searched before the disk SearchPaths.
+func NewIngotResolverWithFS(fsys fs.FS, searchPaths []string, flux map[string]any) *IngotResolver {
+	r := NewIngotResolver(searchPaths, flux)
+	r.FS = fsys
+	return r
+}
+
 // Resolve finds and renders an ingot by name. It searches each path for a
 // directory with an ingot.yaml manifest first, then falls back to a bare .md file.
 // The ingot content is rendered through the same template engine with the same
@@ -37,6 +53,17 @@ func (r *IngotResolver) Resolve(name string) (string, error) {
 	}
 	r.resolving[name] = true
 	defer delete(r.resolving, name)
+
+	// Search the embedded/mold fs.FS first (stuffed-binary casts: the mold and
+	// its ingots live in this FS, not on disk).
+	if r.FS != nil {
+		if content, err := r.resolveManifestFS(path.Join("ingots", name, "ingot.yaml"), name); err == nil {
+			return r.render(content)
+		}
+		if content, err := fs.ReadFile(r.FS, path.Join("ingots", name+".md")); err == nil {
+			return r.render(string(content))
+		}
+	}
 
 	for _, base := range r.SearchPaths {
 		// Try directory with manifest first
@@ -90,6 +117,33 @@ func (r *IngotResolver) resolveManifest(manifestPath, name string) (string, erro
 		combined.Write(content)
 	}
 
+	return combined.String(), nil
+}
+
+// resolveManifestFS loads an ingot.yaml manifest from r.FS and concatenates all
+// listed files. The fs.FS analogue of resolveManifest for stuffed-binary casts.
+func (r *IngotResolver) resolveManifestFS(manifestPath, name string) (string, error) {
+	data, err := fs.ReadFile(r.FS, manifestPath)
+	if err != nil {
+		return "", err
+	}
+	ingot, err := ParseIngot(data)
+	if err != nil {
+		return "", fmt.Errorf("parsing ingot %q manifest: %w", name, err)
+	}
+	ingotDir := path.Dir(manifestPath)
+	var combined strings.Builder
+	for _, f := range ingot.Files {
+		fp := path.Join(ingotDir, f)
+		if !fs.ValidPath(fp) {
+			return "", fmt.Errorf("ingot %q file %q: invalid path", name, f)
+		}
+		content, err := fs.ReadFile(r.FS, fp)
+		if err != nil {
+			return "", fmt.Errorf("reading ingot %q file %q: %w", name, f, err)
+		}
+		combined.Write(content)
+	}
 	return combined.String(), nil
 }
 
