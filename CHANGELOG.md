@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.42](https://github.com/nimble-giant/ailloy/compare/v0.6.41...v0.6.42) (2026-07-16)
+
+
+### Bug Fixes
+
+* keep target-gated output files that share a dest under different Set ([cbc6159](https://github.com/nimble-giant/ailloy/commit/cbc615937cd82c9f68fe727986712f81260aa3e5))
+
 ## [0.6.41](https://github.com/nimble-giant/ailloy/compare/v0.6.40...v0.6.41) (2026-07-15)
 
 
