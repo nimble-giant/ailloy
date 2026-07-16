@@ -2,6 +2,14 @@
 
 Ailloy is the package manager for AI instructions. This project uses Ailloy blanks for AI-assisted development workflows.
 
+## Behavioral Contract
+
+@features.md
+
+`features.md` is the terse, code-backed contract of ailloy's user-facing behaviors — read it before changing any feature so you don't regress existing behavior.
+
+**Standing rule: keep `features.md` current.** Whenever you add a feature, or introduce or change a behavior or user expectation, update `features.md` in the SAME change. Every claim in it must be backed by the actual code. Treat it as part of the definition of done.
+
 ## Available Commands
 
 The following command blanks are available in the `.claude/commands/` directory:
