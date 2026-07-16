@@ -863,8 +863,10 @@ func copyResolvedFilesWithSchema(reader *blanks.MoldReader, manifest *mold.Mold,
 		logger.Printf("warning: %v", err)
 	}
 
-	// Build ingot resolver
+	// Build ingot resolver. Also search the mold's own FS (the embedded
+	// filesystem for stuffed-binary casts, where the mold's ingots live off-disk).
 	resolver := buildIngotResolver(flux, reader.Root())
+	resolver.FS = reader.FS()
 	tplOpts := []mold.TemplateOption{
 		mold.WithIngotResolver(resolver),
 		mold.WithLogger(logger),

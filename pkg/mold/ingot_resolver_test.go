@@ -5,7 +5,36 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
+
+// TestIngotResolver_FS covers the stuffed-binary cast path: the mold (and its
+// ingots) live in an embedded fs.FS, not on disk, so the resolver must search
+// r.FS. Regression test for embedded ingots resolving to "not found".
+func TestIngotResolver_FS(t *testing.T) {
+	fsys := fstest.MapFS{
+		"ingots/footer.md":       {Data: []byte("-- footer --")},
+		"ingots/head/ingot.yaml": {Data: []byte("files:\n  - head.md\n")},
+		"ingots/head/head.md":    {Data: []byte("== head ==")},
+	}
+	r := NewIngotResolverWithFS(fsys, nil, nil)
+
+	got, err := r.Resolve("footer")
+	if err != nil {
+		t.Fatalf("bare-file ingot from FS: unexpected error: %v", err)
+	}
+	if got != "-- footer --" {
+		t.Errorf("bare-file ingot: got %q, want %q", got, "-- footer --")
+	}
+
+	got, err = r.Resolve("head")
+	if err != nil {
+		t.Fatalf("manifest ingot from FS: unexpected error: %v", err)
+	}
+	if got != "== head ==" {
+		t.Errorf("manifest ingot: got %q, want %q", got, "== head ==")
+	}
+}
 
 func TestIngotResolver_BareFile(t *testing.T) {
 	dir := t.TempDir()
