@@ -105,7 +105,19 @@ func collectMoldFiles(moldFS fs.FS, moldDir string) ([]archiveFile, bool, error)
 	if err != nil {
 		return nil, false, fmt.Errorf("resolving output files: %w", err)
 	}
+	// Archive each source file once, even when the output maps it to multiple
+	// destinations (e.g. AGENTS.md -> {AGENTS.md, CLAUDE.md} via strategy:append,
+	// or one source rendered per target). archiveFiles are keyed by source path,
+	// so adding the same SrcPath twice produces a duplicate entry — which stuffbin
+	// records as two files at the same path, and the resulting binary then fails
+	// to open its embedded mold ("file already exists"). Cast re-reads the single
+	// embedded source for every destination, so one copy is sufficient.
+	seenSrc := make(map[string]bool)
 	for _, rf := range resolved {
+		if seenSrc[rf.SrcPath] {
+			continue
+		}
+		seenSrc[rf.SrcPath] = true
 		data, err := fs.ReadFile(moldFS, rf.SrcPath)
 		if err != nil {
 			return nil, false, fmt.Errorf("reading %s: %w", rf.SrcPath, err)
