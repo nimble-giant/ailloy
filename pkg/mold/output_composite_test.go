@@ -1,6 +1,7 @@
 package mold
 
 import (
+	"fmt"
 	"io/fs"
 	"sort"
 	"strings"
@@ -242,6 +243,47 @@ func TestResolveFilesWithOreSources_DestPathDedup_ConsumerWins(t *testing.T) {
 	}
 	if resolved[0].SrcPath != "consumer.md" {
 		t.Errorf("expected consumer.md, got %q", resolved[0].SrcPath)
+	}
+}
+
+// Regression: a source mapped to the same DestPath under two different Set
+// contexts (e.g. a target-gated mcp/.mcp.json rendered once with
+// agent.current_target=claude and once =opencode) must NOT be deduplicated to
+// a single entry. Both render passes must survive; the empty-render skip
+// downstream keeps whichever produces content. Previously deduplicateByDestPath
+// keyed on DestPath alone and dropped one context, silently losing MCP configs.
+func TestResolveFilesWithOreSources_SameDestDifferentSetKeptDistinct(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"mold.yaml":     &fstest.MapFile{Data: []byte("name: c\n")},
+		"mcp/.mcp.json": &fstest.MapFile{Data: []byte("{{ .agent.current_target }}\n")},
+	}
+	// Map the mcp dir to the repo root twice, once per target context.
+	output := map[string]any{
+		"mcp": []any{
+			map[string]any{"dest": ".", "set": map[string]any{"agent.current_target": "claude"}},
+			map[string]any{"dest": ".", "set": map[string]any{"agent.current_target": "opencode"}},
+		},
+	}
+	resolved, err := ResolveFilesWithOreSources(output, moldFS, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Both target contexts for .mcp.json must be present (2 entries), not 1.
+	var mcp []ResolvedFile
+	for _, r := range resolved {
+		if r.DestPath == ".mcp.json" {
+			mcp = append(mcp, r)
+		}
+	}
+	if len(mcp) != 2 {
+		t.Fatalf("expected 2 .mcp.json render passes (claude + opencode), got %d: %+v", len(mcp), mcp)
+	}
+	seen := map[string]bool{}
+	for _, r := range mcp {
+		seen[fmt.Sprintf("%v", r.Set["agent.current_target"])] = true
+	}
+	if !seen["claude"] || !seen["opencode"] {
+		t.Errorf("expected both claude and opencode current_target contexts, got %v", seen)
 	}
 }
 
