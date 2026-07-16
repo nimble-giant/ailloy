@@ -76,10 +76,11 @@ Packages a mold for distribution. Two output modes via `-o` (`--output-format`);
 
 - Stuffbin embeds files under archive paths (`disk-path:/archive-path`); the binary unstuffs its own embedded `fs.FS` (`UnstuffFS`) to cast without network or cache.
 
-### Ingot resolution (disk + embedded fs.FS)
+### Ingot resolution (disk + embedded)
 
-- `{{ingot "name"}}` resolves against disk search paths in order: **mold source root → cwd → `.ailloy/` → `~/.ailloy/`** (`buildIngotResolver`). First match wins; manifest ingots concatenate `files:` in order.
-- **Smelted-binary cast**: embedded dependencies have no on-disk root. Their `ingots/` subtree is staged out of the embedded `fs.FS` into a temp dir added to the resolver search path (`stageIngotsFromFS`), so `{{ingot "name"}}` resolves from the embedded mold offline. This is a real, tested behavior (regression-covered) — do not break offline embedded-ingot resolution.
+- **Expectation (regression-critical):** `{{ingot "name"}}` MUST resolve when casting a smelted (`-o binary`) mold fully offline — for **both** the mold's own embedded `ingots/` **and** its embedded dependencies' `ingots/`. Do not break offline embedded-ingot resolution for either case. (A prior regression left the mold's own root-level ingots unresolvable in a smelted binary — pin both cases.)
+- For on-disk casts, `{{ingot "name"}}` resolves against disk search paths in order: **mold source root → cwd → `.ailloy/` → `~/.ailloy/`** (`buildIngotResolver`). First match wins; manifest ingots concatenate `files:` in order.
+- For a smelted-binary cast, embedded ingots are made resolvable regardless of on-disk presence (see `internal/commands/cast_deps.go` / the ingot resolver). The expectation above is the contract; the mechanism (e.g. staging embedded ingots to disk vs. an `fs.FS`-native resolver) is an implementation detail and may change.
 - Offline casts prefer the embedded dep store over the network.
 
 ## foundry (dependency resolution & versioning)
