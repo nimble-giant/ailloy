@@ -183,11 +183,15 @@ func ResolveFilesWithOreSources(output any, moldFS fs.FS, oreSources []OreSource
 		if resolved[i].DestPath != resolved[j].DestPath {
 			return resolved[i].DestPath < resolved[j].DestPath
 		}
+		if si, sj := setSignature(resolved[i].Set), setSignature(resolved[j].Set); si != sj {
+			return si < sj
+		}
 		return resolved[i].SrcPath < resolved[j].SrcPath
 	})
 
-	// Deduplicate by DestPath: consumer-origin (Origin == "") beats ore-origin;
-	// two ore-origin entries mapping to the same DestPath is a conflict error.
+	// Deduplicate by (DestPath, Set): consumer-origin (Origin == "") beats
+	// ore-origin; two ore-origin entries mapping to the same DestPath are a
+	// conflict error.
 	resolved, err = deduplicateByDestPath(resolved)
 	if err != nil {
 		return nil, err
@@ -196,9 +200,34 @@ func ResolveFilesWithOreSources(output any, moldFS fs.FS, oreSources []OreSource
 	return resolved, nil
 }
 
-// deduplicateByDestPath removes duplicate DestPath entries from a sorted slice.
-// Consumer-origin (Origin == "") beats ore-origin. Multiple ore-origin entries
-// with the same DestPath return an error naming the conflicting sources.
+// setSignature returns a deterministic signature of a render-context override
+// map. Two output entries that map the same source to the same DestPath but
+// under different Set contexts (e.g. agent.current_target=claude vs =opencode
+// for a target-gated file like mcp/.mcp.json) are NOT duplicates: each is a
+// distinct per-target render attempt, and the empty-render skip downstream
+// keeps whichever one produces content. Deduplication therefore keys on
+// (DestPath, Set) so those distinct contexts both survive.
+func setSignature(set map[string]any) string {
+	if len(set) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(set))
+	for k := range set {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		fmt.Fprintf(&b, "%s=%v\x00", k, set[k])
+	}
+	return b.String()
+}
+
+// deduplicateByDestPath removes duplicate (DestPath, Set) entries from a slice
+// sorted by DestPath then Set signature. Consumer-origin (Origin == "") beats
+// ore-origin. Multiple ore-origin entries with the same DestPath and Set return
+// an error naming the conflicting sources. Entries sharing a DestPath but
+// carrying different Set contexts are kept as distinct render passes.
 func deduplicateByDestPath(resolved []ResolvedFile) ([]ResolvedFile, error) {
 	if len(resolved) <= 1 {
 		return resolved, nil
@@ -207,7 +236,8 @@ func deduplicateByDestPath(resolved []ResolvedFile) ([]ResolvedFile, error) {
 	i := 0
 	for i < len(resolved) {
 		j := i + 1
-		for j < len(resolved) && resolved[j].DestPath == resolved[i].DestPath {
+		for j < len(resolved) && resolved[j].DestPath == resolved[i].DestPath &&
+			setSignature(resolved[j].Set) == setSignature(resolved[i].Set) {
 			j++
 		}
 		group := resolved[i:j]
