@@ -185,6 +185,10 @@ assay:
       enabled: true
     agent-frontmatter:
       enabled: true
+    codex-agent-schema:
+      enabled: true
+    codex-skill-frontmatter:
+      enabled: true
     command-frontmatter:
       enabled: true
       # options:
@@ -253,6 +257,7 @@ assay:
     # - ".claude/rules/generated-*.md"
   # platforms:             # uncomment to limit to specific platforms
   #   - claude
+  #   - codex
   #   - cursor
 `
 }

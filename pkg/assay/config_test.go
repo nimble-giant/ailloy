@@ -113,6 +113,12 @@ func TestGenerateStarterConfig(t *testing.T) {
 	if !contains(content, "plugin-hooks:") {
 		t.Error("expected 'plugin-hooks' rule in starter config")
 	}
+	if !contains(content, "codex-agent-schema:") {
+		t.Error("expected 'codex-agent-schema' rule in starter config")
+	}
+	if !contains(content, "codex-skill-frontmatter:") {
+		t.Error("expected 'codex-skill-frontmatter' rule in starter config")
+	}
 }
 
 func TestAddAllowedFrontmatterFields(t *testing.T) {
