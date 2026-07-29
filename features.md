@@ -11,7 +11,7 @@ Every entry states behavior + expectation. Deeper docs: `docs/`. Do not duplicat
 | **mold** | A template package: `mold.yaml` manifest + auto-discovered blank templates + optional `ingots/`, `ores/`, `flux.yaml`/`flux.schema.yaml`, output mappings. | Cast into a target project. May declare mold/ingot/ore dependencies in `mold.yaml`. |
 | **ingot** | A reusable template fragment (partial), either a bare `ingots/name.md` or a manifest dir (`ingot.yaml` + `files:`). | Embedded into blanks via the `{{ingot "name"}}` template function; rendered with the same flux context; nested ingot calls allowed; circular refs error. |
 | **ore** | A versioned behavior package: flux-schema fragment + defaults + optional `output:` mappings + optional `blanks/`. | Overlays a consuming mold: schema/defaults are namespaced under `ore.<namespace>.*`; gated by `{{if .ore.<ns>.enabled}}` (default `enabled: false`). |
-| **blank** | A markdown template file inside a mold, auto-discovered from the mold tree (reserved dirs/files excluded). | Rendered by Go `text/template`; supports flux vars, conditionals, ranges, `{{ingot}}`. |
+| **blank** | A template file inside a mold, auto-discovered from the mold tree (reserved dirs/files excluded). | Rendered by Go `text/template`; supports flux vars, conditionals, ranges, `{{ingot}}`. |
 
 - Reserved files (never installed as blanks): `mold.yaml`, `flux.yaml`, `flux.schema.yaml`, `ingot.yaml`, `ore.yaml`, `README.md`, `LICENSE`, `.ailloyignore`, etc.
 - Dot-prefixed source directories are excluded from automatic discovery. When `output:` is omitted, the exact native Codex instruction directories `.agents/skills/` and `.codex/agents/` are preserved by identity mapping; explicit `output:` mappings can target any destination.
@@ -57,7 +57,7 @@ Renders a mold's blanks with resolved flux and writes them to destination paths 
 
 ## temper (`validate`)
 
-- Auto-detects `mold.yaml` / `ingot.yaml` / `ore.yaml` at root and validates: manifest parse, required fields, semver, `requires.ailloy` constraint, flux types/select options/discover, dependency shape (exactly one of ingot/ore/mold per dep), output dir existence, template syntax, ingot `files:` existence.
+- Auto-detects `mold.yaml` / `ingot.yaml` / `ore.yaml` at root and validates: manifest parse, required fields, semver, `requires.ailloy` constraint, flux types/select options/discover, dependency shape (exactly one of ingot/ore/mold per dep), output dir existence, template syntax for every output file rendered with `process: true` (including Codex TOML), ingot `files:` existence.
 - Ore checks: `kind: ore`, snake_case name, unprefixed schema/defaults, `enabled: bool` required. Ephemerally resolves ore deps and reports overlay collisions / shadowed keys / orphan defaults.
 - Non-zero exit on errors; exit 0 on warnings-only.
 - `--assay` (alias `--lint`): also renders blanks to a temp dir and runs the assay linter on output (molds only). Supports `--set`, `-f`, `--format`, `--fail-on`, `--max-lines`.
@@ -65,7 +65,7 @@ Renders a mold's blanks with resolved flux and writes them to destination paths 
 ## assay (`lint`)
 
 - Lints rendered AI-instruction output against best-practice rules (severity: error/warning/suggestion). Consumed by `temper --assay`.
-- Codex discovery includes `**/.agents/skills/**/*.md` and `.codex/agents/*.toml` in addition to root and nested `AGENTS.md` files and `codex.md`. Codex `SKILL.md` files require non-empty YAML `name` and `description`; custom-agent TOML requires non-empty `name`, `description`, and `developer_instructions`.
+- Codex discovery includes `**/.agents/skills/**/*.md` and `.codex/agents/*.toml` in addition to root and nested `AGENTS.md` files and `codex.md`. Contained symlinked skill directories are traversed; symlink targets outside the project root are excluded. Project-root discovery prefers an enclosing `.git` root over nested tool markers and does not treat global tool directories in the user's home as a project marker. Codex `SKILL.md` files require non-empty YAML `name` and `description`; custom-agent TOML requires non-empty `name`, `description`, and `developer_instructions`.
 
 ## smelt (`package`)
 

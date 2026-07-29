@@ -151,6 +151,13 @@ func TestDetect_RejectsSymlinksOutsideProjectRoot(t *testing.T) {
 	if err := os.WriteFile(outsideSkill, []byte("---\nname: outside\ndescription: Outside.\n---\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	outsideSkillDir := filepath.Join(outside, "skill-dir")
+	if err := os.MkdirAll(outsideSkillDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outsideSkillDir, "SKILL.md"), []byte("---\nname: outside-dir\ndescription: Outside directory.\n---\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	skillDir := filepath.Join(project, ".agents", "skills", "outside")
 	if err := os.MkdirAll(skillDir, 0o750); err != nil {
@@ -159,6 +166,9 @@ func TestDetect_RejectsSymlinksOutsideProjectRoot(t *testing.T) {
 	for target, link := range map[string]string{
 		outsideAgents: filepath.Join(project, "AGENTS.md"),
 		outsideSkill:  filepath.Join(skillDir, "SKILL.md"),
+		outsideSkillDir: filepath.Join(
+			project, ".agents", "skills", "outside-dir",
+		),
 	} {
 		if err := os.Symlink(target, link); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
@@ -171,6 +181,75 @@ func TestDetect_RejectsSymlinksOutsideProjectRoot(t *testing.T) {
 	}
 	if len(files) != 0 {
 		t.Errorf("detected files through symlinks outside project root: %v", files)
+	}
+}
+
+func TestDetect_FollowsSymlinkedSkillDirectoriesWithinProject(t *testing.T) {
+	project := t.TempDir()
+	actualSkill := filepath.Join(project, "shared", "reviewing")
+	if err := os.MkdirAll(filepath.Join(actualSkill, "references"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(actualSkill, "SKILL.md"),
+		[]byte("---\nname: reviewing\ndescription: Reviews code.\n---\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(actualSkill, "references", "checks.md"), []byte("# Checks\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	skillsDir := filepath.Join(project, ".agents", "skills")
+	if err := os.MkdirAll(skillsDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(
+		filepath.Join("..", "..", "shared", "reviewing"),
+		filepath.Join(skillsDir, "reviewing"),
+	); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	files, err := Detect(project, []Platform{PlatformCodex})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := make(map[string]bool, len(files))
+	for _, file := range files {
+		got[filepath.ToSlash(file.Path)] = true
+	}
+	for _, path := range []string{
+		".agents/skills/reviewing/SKILL.md",
+		".agents/skills/reviewing/references/checks.md",
+	} {
+		if !got[path] {
+			t.Errorf("expected symlinked skill file %s to be detected; got %v", path, got)
+		}
+	}
+}
+
+func TestDetect_DoesNotRecurseThroughSymlinkCycles(t *testing.T) {
+	project := t.TempDir()
+	skillsDir := filepath.Join(project, ".agents", "skills")
+	if err := os.MkdirAll(skillsDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(
+		filepath.Join("..", ".."),
+		filepath.Join(skillsDir, "project-root"),
+	); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	files, err := Detect(project, []Platform{PlatformCodex})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 0 {
+		t.Errorf("expected cyclic skill symlink to be ignored; got %v", files)
 	}
 }
 
@@ -246,5 +325,63 @@ func TestFindProjectRoot_CodexMarkers(t *testing.T) {
 				t.Errorf("root = %q, want %q", root, project)
 			}
 		})
+	}
+}
+
+func TestFindProjectRoot_PrefersEnclosingGitRoot(t *testing.T) {
+	for _, marker := range []string{".claude", ".agents", ".codex"} {
+		t.Run(marker, func(t *testing.T) {
+			tmp := t.TempDir()
+			project := filepath.Join(tmp, "project")
+			scoped := filepath.Join(project, "services", "api")
+			nested := filepath.Join(scoped, "src")
+			if err := os.MkdirAll(filepath.Join(project, ".git"), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(scoped, marker), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(nested, 0o750); err != nil {
+				t.Fatal(err)
+			}
+
+			root, err := FindProjectRoot(nested)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if root != project {
+				t.Errorf("root = %q, want enclosing git root %q", root, project)
+			}
+		})
+	}
+}
+
+func TestFindProjectRoot_DoesNotPromoteHomeToolDirectories(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	resolvedHome, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Clean(resolvedHome) != filepath.Clean(home) {
+		t.Skipf("os.UserHomeDir does not use HOME on this platform: got %q, set %q", resolvedHome, home)
+	}
+
+	for _, marker := range []string{".claude", ".agents", ".codex"} {
+		if err := os.MkdirAll(filepath.Join(home, marker), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	start := filepath.Join(home, "work", "unmarked-project", "src")
+	if err := os.MkdirAll(start, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	root, err := FindProjectRoot(start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != start {
+		t.Errorf("root = %q, want original start directory %q", root, start)
 	}
 }

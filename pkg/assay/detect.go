@@ -70,31 +70,56 @@ func detectFS(fsys fs.FS, realRoot string, platforms []Platform) ([]DetectedFile
 	// level between the working directory and repository root. Walk the whole
 	// repository so scoped skills and their markdown references are linted.
 	if containsPlatform(targetPlatforms, PlatformCodex) {
-		err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return nil
+		activeSkillRoots := make(map[string]bool)
+		if realRoot != "" {
+			if resolvedRoot, ok := resolvedPathWithinRoot(realRoot, "."); ok {
+				activeSkillRoots[resolvedRoot] = true
 			}
-			if d.IsDir() {
-				if shouldSkipDir(d.Name()) {
-					return fs.SkipDir
+		}
+		var walkCodexSkills func(string) error
+		walkCodexSkills = func(root string) error {
+			return fs.WalkDir(fsys, root, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return nil
 				}
+				if d.IsDir() {
+					if shouldSkipDir(d.Name()) {
+						return fs.SkipDir
+					}
+					return nil
+				}
+				// WalkDir does not follow symlinks it encounters below its root.
+				// Codex does follow symlinked skill folders, so recurse when the
+				// logical skill root resolves to a contained directory.
+				if d.Type()&fs.ModeSymlink != 0 && isCodexSkillDirectoryPath(path) {
+					if resolved, ok := resolvedSymlinkDirectoryWithinRoot(realRoot, path); ok {
+						if activeSkillRoots[resolved] {
+							return nil
+						}
+						activeSkillRoots[resolved] = true
+						walkErr := walkCodexSkills(path)
+						delete(activeSkillRoots, resolved)
+						return walkErr
+					}
+					return nil
+				}
+				if !isCodexSkillMarkdownPath(path) || seen[path] || !pathWithinRoot(realRoot, path) {
+					return nil
+				}
+				content, err := fs.ReadFile(fsys, path)
+				if err != nil {
+					return nil
+				}
+				seen[path] = true
+				files = append(files, DetectedFile{
+					Path:     path,
+					Platform: PlatformCodex,
+					Content:  content,
+				})
 				return nil
-			}
-			if !isCodexSkillMarkdownPath(path) || seen[path] || !pathWithinRoot(realRoot, path) {
-				return nil
-			}
-			content, err := fs.ReadFile(fsys, path)
-			if err != nil {
-				return nil
-			}
-			seen[path] = true
-			files = append(files, DetectedFile{
-				Path:     path,
-				Platform: PlatformCodex,
-				Content:  content,
 			})
-			return nil
-		})
+		}
+		err := walkCodexSkills(".")
 		if err != nil {
 			return files, err
 		}
@@ -141,34 +166,50 @@ func detectFS(fsys fs.FS, realRoot string, platforms []Platform) ([]DetectedFile
 	return files, nil
 }
 
-// FindProjectRoot walks up from startDir looking for .git or supported
-// tool-specific instruction-directory markers.
+// FindProjectRoot walks up from startDir looking for an enclosing .git root,
+// falling back to the nearest supported tool-specific instruction directory
+// when the path is not inside a git checkout.
 // Recognizes both .git directories (normal repos) and .git files (worktrees).
 // Returns startDir if no marker is found.
 func FindProjectRoot(startDir string) (string, error) {
-	dir, err := filepath.Abs(startDir)
+	start, err := filepath.Abs(startDir)
 	if err != nil {
 		return "", err
 	}
 
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		home, _ = filepath.Abs(home)
+	}
+
+	dir := start
+	var toolRoot string
 	for {
 		// .git can be a directory (normal repo) or a file (worktree with
 		// "gitdir: ..." content). Both indicate a project root.
 		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
 			return dir, nil
 		}
-		// Tool-specific instruction directories are also valid project root
-		// markers when a project is not inside a git checkout.
-		for _, marker := range []string{".claude", ".agents", ".codex"} {
-			if info, err := os.Stat(filepath.Join(dir, marker)); err == nil && info.IsDir() {
-				return dir, nil
+
+		// Remember the nearest tool-specific marker while continuing upward in
+		// case this is a nested Codex scope inside a git repository. User-level
+		// ~/.claude, ~/.agents, and ~/.codex directories are global config, not
+		// evidence that the entire home directory is one project.
+		if toolRoot == "" && (home == "" || filepath.Clean(dir) != filepath.Clean(home)) {
+			for _, marker := range []string{".claude", ".agents", ".codex"} {
+				if info, err := os.Stat(filepath.Join(dir, marker)); err == nil && info.IsDir() {
+					toolRoot = dir
+					break
+				}
 			}
 		}
 
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			// Reached filesystem root, use the original startDir
-			return filepath.Abs(startDir)
+			if toolRoot != "" {
+				return toolRoot, nil
+			}
+			return start, nil
 		}
 		dir = parent
 	}
@@ -197,8 +238,33 @@ func isCodexSkillMarkdownPath(filePath string) bool {
 	return false
 }
 
+func isCodexSkillDirectoryPath(dirPath string) bool {
+	parts := strings.Split(filepath.ToSlash(dirPath), "/")
+	for i := 0; i+2 < len(parts); i++ {
+		if parts[i] == ".agents" && parts[i+1] == "skills" && i+3 == len(parts) {
+			return true
+		}
+	}
+	return false
+}
+
 func shouldSkipDir(name string) bool {
 	return name == "node_modules" || name == "vendor" || name == ".git"
+}
+
+func resolvedSymlinkDirectoryWithinRoot(realRoot, relativePath string) (string, bool) {
+	if realRoot == "" {
+		return "", false
+	}
+	resolved, ok := resolvedPathWithinRoot(realRoot, relativePath)
+	if !ok {
+		return "", false
+	}
+	info, err := os.Stat(resolved)
+	if err != nil || !info.IsDir() {
+		return "", false
+	}
+	return resolved, true
 }
 
 // pathWithinRoot rejects files whose symlinks escape the project root.
@@ -207,22 +273,29 @@ func pathWithinRoot(realRoot, relativePath string) bool {
 	if realRoot == "" {
 		return true
 	}
+	_, ok := resolvedPathWithinRoot(realRoot, relativePath)
+	return ok
+}
 
+func resolvedPathWithinRoot(realRoot, relativePath string) (string, bool) {
 	absRoot, err := filepath.Abs(realRoot)
 	if err != nil {
-		return false
+		return "", false
 	}
 	resolvedRoot, err := filepath.EvalSymlinks(absRoot)
 	if err != nil {
-		return false
+		return "", false
 	}
 	resolvedPath, err := filepath.EvalSymlinks(filepath.Join(resolvedRoot, relativePath))
 	if err != nil {
-		return false
+		return "", false
 	}
 	rel, err := filepath.Rel(resolvedRoot, resolvedPath)
 	if err != nil {
-		return false
+		return "", false
 	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return resolvedPath, true
 }
