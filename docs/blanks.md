@@ -10,7 +10,7 @@ The only constraints are:
 
 - **Reserved root files** are mold metadata and are never installed: `mold.yaml`, `flux.yaml`, `flux.schema.yaml`, `ingot.yaml`, `README.md`, `PLUGIN_SUMMARY.md`, `LICENSE`, and `.ailloyignore`
 - **`ingots/`** is reserved for reusable template partials (see [Ingots](ingots.md))
-- **Hidden directories** (starting with `.`) are excluded from auto-discovery
+- **Hidden directories** (starting with `.`) are excluded from auto-discovery. When `output:` is omitted, the native Codex instruction directories `.agents/skills/` and `.codex/agents/` are preserved at the same paths
 - **Ignored files** specified via `.ailloyignore` or `mold.yaml` `ignore:` are excluded (see [Ignoring Files](#ignoring-files))
 
 Everything else — directory names, nesting, file types — is up to you. A mold with `prompts/` and `guidelines/` directories is just as valid as one with `commands/` and `skills/`:
@@ -62,6 +62,8 @@ my-mold/
 ```
 
 Skills are ideal for instructions that should always be available — coding standards, review guidelines, or domain-specific knowledge.
+
+For Codex and other tools that implement Agent Skills, use the `skills/<name>/SKILL.md` layout. See [Codex Skills and Agents](codex.md).
 
 #### Workflows
 
@@ -263,7 +265,7 @@ Blanks are automatically discovered from your mold's directory structure. The `o
 - **String output** — all top-level directories go under the specified parent
 - **No output key** — files are placed at their source paths (identity mapping)
 
-Non-reserved root-level files (e.g., `AGENTS.md`) are auto-discovered and installed to the project root. The `ingots/` directory, reserved root files, and hidden directories (starting with `.`) are always excluded from auto-discovery.
+Non-reserved root-level files (e.g., `AGENTS.md`) are auto-discovered and installed to the project root. The `ingots/` directory, reserved root files, and hidden directories (starting with `.`) are excluded from auto-discovery, apart from the two native Codex identity paths described above.
 
 ## Ignoring Files
 
@@ -359,6 +361,18 @@ output:
   commands: .claude/commands
   skills: .claude/skills
 ```
+
+### Codex
+
+Codex loads repository Agent Skills from `.agents/skills/<name>/SKILL.md` and project custom agents from `.codex/agents/<name>.toml`:
+
+```yaml
+output:
+  skills: .agents/skills
+  codex-agents: .codex/agents
+```
+
+Agent Skills can fan out unchanged to compatible tools. Provider-native custom agents use separate source templates; Codex custom agents are TOML configuration layers. See [Codex Skills and Agents](codex.md).
 
 ### Cursor
 

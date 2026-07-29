@@ -14,6 +14,7 @@ Every entry states behavior + expectation. Deeper docs: `docs/`. Do not duplicat
 | **blank** | A markdown template file inside a mold, auto-discovered from the mold tree (reserved dirs/files excluded). | Rendered by Go `text/template`; supports flux vars, conditionals, ranges, `{{ingot}}`. |
 
 - Reserved files (never installed as blanks): `mold.yaml`, `flux.yaml`, `flux.schema.yaml`, `ingot.yaml`, `ore.yaml`, `README.md`, `LICENSE`, `.ailloyignore`, etc.
+- Dot-prefixed source directories are excluded from automatic discovery. When `output:` is omitted, the exact native Codex instruction directories `.agents/skills/` and `.codex/agents/` are preserved by identity mapping; explicit `output:` mappings can target any destination.
 - `.ailloyignore` (or `mold.yaml` `ignore:`) excludes files from `cast`/`forge` (not `smelt`).
 
 ## cast (`install`)
@@ -64,6 +65,7 @@ Renders a mold's blanks with resolved flux and writes them to destination paths 
 ## assay (`lint`)
 
 - Lints rendered AI-instruction output against best-practice rules (severity: error/warning/suggestion). Consumed by `temper --assay`.
+- Codex discovery includes `**/.agents/skills/**/*.md` and `.codex/agents/*.toml` in addition to root and nested `AGENTS.md` files and `codex.md`. Codex `SKILL.md` files require non-empty YAML `name` and `description`; custom-agent TOML requires non-empty `name`, `description`, and `developer_instructions`.
 
 ## smelt (`package`)
 

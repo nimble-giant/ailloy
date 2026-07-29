@@ -62,6 +62,7 @@ var summaries = map[string]string{
 	"plugin":             "Generate plugins from molds (Claude Code)",
 	"ingots":             "Reusable template components",
 	"agents-md":          "Tool-agnostic agent instructions in molds",
+	"codex":              "Build and install Codex Agent Skills and custom agents",
 	"cast-claude-plugin": "Cast a mold as a Claude Code plugin",
 	"helm-users":         "Concept map for Helm users coming to Ailloy",
 	"cache":              "Clear ailloy's on-disk cache (mold artifacts and foundry indexes)",

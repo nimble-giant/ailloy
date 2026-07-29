@@ -40,6 +40,58 @@ func TestResolveFiles_StringOutput(t *testing.T) {
 	}
 }
 
+func TestResolveFiles_IdentityAutoDiscoversCodexDirectories(t *testing.T) {
+	moldFS := fstest.MapFS{
+		".agents/skills/reviewing/SKILL.md": &fstest.MapFile{Data: []byte("# Reviewing")},
+		".codex/agents/reviewer.toml":       &fstest.MapFile{Data: []byte(`name = "reviewer"`)},
+		".codex/config.toml":                &fstest.MapFile{Data: []byte(`model = "gpt-5"`)},
+		".git/config":                       &fstest.MapFile{Data: []byte("[core]")},
+		".idea/workspace.xml":               &fstest.MapFile{Data: []byte("<project/>")},
+	}
+
+	resolved, err := ResolveFiles(nil, moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := make(map[string]string, len(resolved))
+	for _, rf := range resolved {
+		got[rf.SrcPath] = rf.DestPath
+	}
+
+	want := map[string]string{
+		".agents/skills/reviewing/SKILL.md": ".agents/skills/reviewing/SKILL.md",
+		".codex/agents/reviewer.toml":       ".codex/agents/reviewer.toml",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("resolved files = %v, want %v", got, want)
+	}
+	for src, dest := range want {
+		if got[src] != dest {
+			t.Errorf("%s: destination = %q, want %q", src, got[src], dest)
+		}
+	}
+}
+
+func TestResolveFiles_StringOutputExcludesNativeCodexDirectories(t *testing.T) {
+	moldFS := fstest.MapFS{
+		"skills/reviewing/SKILL.md":         &fstest.MapFile{Data: []byte("# Reviewing")},
+		".agents/skills/reviewing/SKILL.md": &fstest.MapFile{Data: []byte("# Native reviewing")},
+		".codex/agents/reviewer.toml":       &fstest.MapFile{Data: []byte(`name = "reviewer"`)},
+	}
+
+	resolved, err := ResolveFiles(".claude", moldFS)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resolved) != 1 {
+		t.Fatalf("resolved files = %v, want only the non-hidden skills directory", resolved)
+	}
+	if resolved[0].DestPath != ".claude/skills/reviewing/SKILL.md" {
+		t.Errorf("destination = %q, want .claude/skills/reviewing/SKILL.md", resolved[0].DestPath)
+	}
+}
+
 func TestResolveFiles_MapOutput(t *testing.T) {
 	moldFS := fstest.MapFS{
 		"commands/hello.md": &fstest.MapFile{Data: []byte("hello")},

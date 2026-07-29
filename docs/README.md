@@ -13,6 +13,7 @@ These guides teach you how to create, package, and share your own AI workflow pa
 ## Getting Started
 
 - [Blanks](blanks.md) — What blanks are and how to create commands, skills, and workflows
+- [Codex Skills and Agents](codex.md) — Build and distribute native Codex skills and custom agents
 - [Coming from Helm?](helm-users.md) — Concept map, command equivalences, and what's new
 
 ## Authoring Guides

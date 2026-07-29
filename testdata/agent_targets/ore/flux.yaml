@@ -2,6 +2,7 @@ enabled: true
 targets:
   - claude
   - opencode
+  - codex
 
 output:
   blanks/AGENTS.md: AGENTS.md
@@ -12,3 +13,10 @@ output:
     - dest: .opencode/agents
       set:
         current_target: opencode
+  blanks/codex-agents:
+    dest: .codex/agents
+    set:
+      current_target: codex
+  blanks/skills:
+    - .claude/skills
+    - .agents/skills

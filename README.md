@@ -22,7 +22,7 @@ Find, create, and share reusable AI workflow packages — the way [Helm](https:/
 ## Why Ailloy
 
 - **Reproducible** — Versioned, configurable mold packages with Helm-style value precedence. Same mold, same flux values, same output every time.
-- **Tool-agnostic** — Works with any AI coding tool that reads file-based instructions: Claude Code, Cursor, Windsurf, GitHub Copilot, and [more](https://agents.md). The `output:` mapping in `flux.yaml` decides where blanks land.
+- **Tool-agnostic** — Works with any AI coding tool that reads file-based instructions: Codex, Claude Code, Cursor, Windsurf, GitHub Copilot, and [more](https://agents.md). The `output:` mapping in `flux.yaml` decides where blanks land.
 - **Helm-style ergonomics** — `cast`, `forge`, `smelt`, `temper`. If you know `helm install` and `helm template`, you already know the shape.
 
 ## What is Ailloy?
@@ -200,7 +200,7 @@ ailloy cast github.com/nimble-giant/nimble-mold -f flux-overrides.yaml
 
 **`ailloy assay [path]`** (alias: `lint`) — Lint rendered AI instruction files.
 
-- Auto-detects CLAUDE.md, AGENTS.md, Cursor rules, Copilot instructions, and more
+- Auto-detects CLAUDE.md, AGENTS.md, Codex skills and custom agents, Cursor rules, Copilot instructions, and more
 - `--format json|markdown` for CI · `--fail-on warning|suggestion` for exit control
 - Configure via `.ailloyrc.yaml` (`--init` for a starter)
 
@@ -335,6 +335,8 @@ Update the status field ({{ .ore.status.field_id }}) after each step.
 ```
 
 The [official mold](https://github.com/nimble-giant/nimble-mold) ships pre-built blanks for SDLC tasks (issue management, PR workflows, code review) and is a good reference. For the full guide, see [docs/blanks.md](docs/blanks.md). For packaging, see [docs/smelt.md](docs/smelt.md).
+
+Ailloy supports Codex Agent Skills at `.agents/skills/<name>/SKILL.md` and custom agents at `.codex/agents/<name>.toml`; see [Codex Skills and Agents](docs/codex.md).
 
 ## Configuration
 
