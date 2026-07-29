@@ -6,4 +6,4 @@
 - name: targets
   type: list
   description: "Which agent surfaces to render for"
-  default: '["claude", "opencode"]'
+  default: '["claude", "opencode", "codex"]'

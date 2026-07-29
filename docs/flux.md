@@ -343,7 +343,7 @@ ailloy cast ./my-mold -f team-cursor.yaml
 
 For more multi-tool targeting patterns, see [Targeting Different AI Tools](blanks.md#targeting-different-ai-tools).
 
-The `ingots/` directory and hidden directories (starting with `.`) are always excluded from output resolution.
+The `ingots/` directory and hidden directories (starting with `.`) are excluded from automatic output resolution. When `output:` is omitted, `.agents/skills/` and `.codex/agents/` are preserved as native Codex identity paths. Explicit map output can target any destination.
 
 ## Validation
 

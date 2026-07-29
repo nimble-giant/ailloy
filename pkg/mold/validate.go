@@ -632,7 +632,7 @@ func temperMold(fsys fs.FS, result *TemperResult) {
 	// Validate flux schema consistency
 	temperFluxSchema(fsys, m.Flux, result)
 
-	// Validate template syntax only for output-manifest files
+	// Validate template syntax for files cast will process.
 	outputFiles := resolveOutputPaths(flux["output"], fsys)
 	validateTemplates(fsys, outputFiles, result)
 }
@@ -763,17 +763,19 @@ func temperFluxSchema(fsys fs.FS, manifestFlux []FluxVar, result *TemperResult) 
 	}
 }
 
-// validateTemplates parses .md files through Go text/template to catch syntax errors.
-// When allowedPaths is non-nil, only files in that set are validated.
+// validateTemplates parses files that cast will process through Go
+// text/template to catch syntax errors. When allowedPaths is non-nil, only
+// files in that set are validated, regardless of extension.
 // resolveOutputPaths returns the set of source paths from the output manifest
 // that will be template-processed at cast time. Files in `process: false`
 // mappings are copied as-is and therefore must not be subject to Go template
 // syntax validation (they may legitimately contain `{{` from Helm/KOTS/Jinja).
-// If output is nil (identity mode), all .md files are considered in scope.
+// If output resolution fails and allowedPaths is nil, validation falls back to
+// markdown files to preserve the legacy best-effort behavior.
 func resolveOutputPaths(output any, fsys fs.FS) map[string]bool {
 	resolved, err := ResolveFiles(output, fsys)
 	if err != nil {
-		return nil // nil means "validate all" as fallback
+		return nil // nil selects the legacy markdown-only fallback
 	}
 	paths := make(map[string]bool, len(resolved))
 	for _, rf := range resolved {
@@ -793,15 +795,15 @@ func validateTemplates(fsys fs.FS, allowedPaths map[string]bool, result *TemperR
 		if d.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) != ".md" {
-			return nil
-		}
 		// Skip manifest files
 		if path == "mold.yaml" || path == "ingot.yaml" {
 			return nil
 		}
-		// If allowedPaths is set, only validate files in scope
-		if allowedPaths != nil && !allowedPaths[path] {
+		if allowedPaths == nil {
+			if filepath.Ext(path) != ".md" {
+				return nil
+			}
+		} else if !allowedPaths[path] {
 			return nil
 		}
 

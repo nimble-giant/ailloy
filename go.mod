@@ -14,6 +14,7 @@ require (
 	github.com/knadh/stuffbin v1.3.0
 	github.com/muesli/termenv v0.16.0
 	github.com/nimble-giant/ailloy-extensions-sdk v0.1.0
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/sync v0.20.0

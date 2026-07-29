@@ -67,7 +67,10 @@ func TestAgentTargetsOreOverlay_EndToEndRendering(t *testing.T) {
 
 	gotDests := destPaths(resolved)
 	wantDests := []string{
+		".agents/skills/example/SKILL.md",
 		".claude/agents/example.md",
+		".claude/skills/example/SKILL.md",
+		".codex/agents/example.toml",
 		".opencode/agents/example.md",
 		"AGENTS.md",
 	}
@@ -90,6 +93,7 @@ func TestAgentTargetsOreOverlay_EndToEndRendering(t *testing.T) {
 	rendered := renderResolvedFiles(t, resolved)
 	claude := rendered[".claude/agents/example.md"]
 	opencode := rendered[".opencode/agents/example.md"]
+	codex := rendered[".codex/agents/example.toml"]
 	if !strings.Contains(claude, "target: claude") {
 		t.Errorf(".claude/agents/example.md missing claude target token; got:\n%s", claude)
 	}
@@ -99,6 +103,13 @@ func TestAgentTargetsOreOverlay_EndToEndRendering(t *testing.T) {
 	// Sanity: the two renders are NOT identical (different set: context).
 	if claude == opencode {
 		t.Errorf("per-target renders should differ but were identical:\n%s", claude)
+	}
+	if !strings.Contains(codex, `name = "example"`) ||
+		!strings.Contains(codex, "rendered for codex") {
+		t.Errorf(".codex/agents/example.toml is not valid target-specific output; got:\n%s", codex)
+	}
+	if rendered[".claude/skills/example/SKILL.md"] != rendered[".agents/skills/example/SKILL.md"] {
+		t.Error("portable Agent Skill should render identically for Claude and Codex")
 	}
 }
 

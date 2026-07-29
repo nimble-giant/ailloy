@@ -410,12 +410,18 @@ output:
 		"skills/kots-skill/SKILL.md": &fstest.MapFile{Data: []byte(
 			"# KOTS\nUse `{{repl ConfigOption \"x\"}}` for KOTS config.\n",
 		)},
+		"skills/custom-agent.toml": &fstest.MapFile{Data: []byte(
+			`developer_instructions = "{{if}}"`,
+		)},
 	}
 
 	result := Temper(fsys)
 
 	for _, d := range result.Errors() {
 		if d.File == "skills/helm-skill/SKILL.md" || d.File == "skills/kots-skill/SKILL.md" {
+			t.Errorf("should not validate template syntax on process:false file %s: %s", d.File, d.Message)
+		}
+		if d.File == "skills/custom-agent.toml" {
 			t.Errorf("should not validate template syntax on process:false file %s: %s", d.File, d.Message)
 		}
 	}
@@ -458,6 +464,37 @@ output:
 	}
 	if !found {
 		t.Error("expected error referencing commands/broken.md")
+	}
+}
+
+func TestTemper_ValidatesNativeCodexAgentTemplates(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte(`
+apiVersion: v1
+kind: mold
+name: codex-agents
+version: 1.0.0
+`)},
+		".codex/agents/reviewer.toml": &fstest.MapFile{Data: []byte(`
+name = "reviewer"
+description = "Reviews changes."
+developer_instructions = "{{if}}missing condition{{end}}"
+`)},
+	}
+
+	result := Temper(fsys)
+
+	if !result.HasErrors() {
+		t.Fatal("expected template syntax error for native Codex custom agent")
+	}
+	found := false
+	for _, d := range result.Errors() {
+		if d.File == ".codex/agents/reviewer.toml" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected error referencing .codex/agents/reviewer.toml; got %v", result.Errors())
 	}
 }
 
