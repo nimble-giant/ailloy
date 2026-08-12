@@ -45,34 +45,51 @@ jobs:
         run: go test -v ./...
 
       - name: Build binaries
+        env:
+          RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
         run: |
-          VERSION=v${{ needs.release-please.outputs.version }}
+          VERSION="v${RELEASE_VERSION}"
           COMMIT=$(git rev-parse --short HEAD)
           DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+          # -s -w strips symbol table and DWARF debug info (~25% smaller).
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
 
           # Linux AMD64
-          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/ailloy-linux-amd64 ./cmd/ailloy
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "${LDFLAGS}" -o dist/ailloy-linux-amd64 ./cmd/ailloy
 
           # Linux ARM64
-          GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/ailloy-linux-arm64 ./cmd/ailloy
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "${LDFLAGS}" -o dist/ailloy-linux-arm64 ./cmd/ailloy
 
           # macOS AMD64
-          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/ailloy-darwin-amd64 ./cmd/ailloy
+          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "${LDFLAGS}" -o dist/ailloy-darwin-amd64 ./cmd/ailloy
 
           # macOS ARM64
-          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/ailloy-darwin-arm64 ./cmd/ailloy
+          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "${LDFLAGS}" -o dist/ailloy-darwin-arm64 ./cmd/ailloy
 
           # Windows AMD64
-          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/ailloy-windows-amd64.exe ./cmd/ailloy
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "${LDFLAGS}" -o dist/ailloy-windows-amd64.exe ./cmd/ailloy
+
+      - name: Compress binaries (xz)
+        run: |
+          # xz with max preset + extreme mode on macOS/Linux only. Windows
+          # users download .exe directly and shouldn't have to decompress
+          # by hand. Homebrew and `ailloy evolve` both consume the .xz
+          # artifacts (see internal/commands/evolve.go).
+          cd dist
+          for f in ailloy-linux-amd64 ailloy-linux-arm64 ailloy-darwin-amd64 ailloy-darwin-arm64; do
+            xz -9 --extreme --threads=0 "$f"
+          done
+          ls -la
 
       - name: Generate checksums
         run: |
           cd dist
           sha256sum * > checksums.txt
+          cat checksums.txt
 
       - name: Upload Release Artifacts
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
-          gh release upload ${{ needs.release-please.outputs.tag_name }} dist/*
+          gh release upload "$RELEASE_TAG" dist/*
