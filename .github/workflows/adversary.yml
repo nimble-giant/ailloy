@@ -27,6 +27,12 @@ jobs:
         with:
           node-version: "22"
 
+      # `builder: local` compiles with tsc but does not install deps, and
+      # adversary/node_modules is gitignored — install it from the lockfile first.
+      - name: Install adversary dependencies
+        working-directory: adversary
+        run: npm ci
+
       # Runs the repo's local adversary by explicit reference (./adversary) and
       # builds it first. NOTE: `adversaries: auto` cannot be combined with
       # `build`/`builder` — the action rejects those flags unless an explicit
