@@ -42,10 +42,10 @@ permissions:
     write:
       - .adversary/results
   network: false
-  # go-quality uses the CLI-owned model broker for synthesis when a model
-  # provider is configured; the other three rules are deterministic and
-  # produce findings with no model access.
-  model: true
+  # All four rules are deterministic and never call ctx.model, so no model
+  # broker is requested. Declaring model access (true) makes the runtime abort
+  # unless an *_API_KEY is present, even for rules that don't use it.
+  model: false
   environment:
     allow: []
 
