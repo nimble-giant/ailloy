@@ -1,0 +1,68 @@
+name: Adversary review
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: adversary-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  # id-token: write   # uncomment when switching auth-mode to oidc (catalog pulls)
+
+jobs:
+  review:
+    name: ailloy-guardian
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history so the action can infer the PR change set
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      # `builder: local` compiles with tsc but does not install deps, and
+      # adversary/node_modules is gitignored — install it from the lockfile first.
+      - name: Install adversary dependencies
+        working-directory: adversary
+        run: npm ci
+
+      # Runs the repo's local adversary by explicit reference (./adversary) and
+      # builds it first. NOTE: `adversaries: auto` cannot be combined with
+      # `build`/`builder` — the action rejects those flags unless an explicit
+      # adversary reference is given, so a local custom adversary must be named
+      # here rather than auto-discovered. `model-api-key` is intentionally
+      # omitted — all four rules produce findings with no model. Advisory by
+      # default (fail-on-findings: false): annotates the PR without blocking.
+      #
+      # To enable ailloy.go-quality model synthesis, add a FIREWORKS_API_KEY
+      # repository secret and set model-provider/model/model-api-key below
+      # (model-provider also accepts openai or anthropic).
+      - name: Run ailloy-guardian
+        uses: adversarylabs/actions/run@5732ffce7abc90efc8ded4a8f7193dfa6469aa0d
+        env:
+          # Authenticated GitHub API for the CLI download/release lookup (avoids
+          # unauthenticated 403 rate-limiting during install).
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          # Pin the CLI: resolving "latest stable" unauthenticated 403s, and the
+          # published releases are prereleases, so an explicit tag is required.
+          cli-version: 2026.8.26-beta.3
+          adversaries: ./adversary
+          path: .
+          build: "true"
+          builder: local
+          # Self-authored (unsigned) adversary → allow host execution non-interactively.
+          allow-unsafe-host-execution: "true"
+          auth-mode: none
+          fail-on-findings: "false"
+          github-review: auto
+          # model-provider: fireworks
+          # model: accounts/fireworks/models/kimi-k2-instruct
+          # model-api-key: ${{ secrets.FIREWORKS_API_KEY }}
