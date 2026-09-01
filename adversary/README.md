@@ -12,10 +12,13 @@ A repo-specific [Adversary Labs](https://adversarylabs.ai/docs) code reviewer fo
 | `ailloy.features-contract` | deterministic | Behavior code (`internal/commands/**`, `pkg/**`, non-test `.go`) changed but `features.md` was not updated in the same change — enforces AGENTS.md's standing rule. |
 | `ailloy.docs-drift` | deterministic | Command surface (`internal/commands/**`, `cmd/**`) changed but no `docs/`, `README.md`, or `AGENTS.md` update. |
 | `ailloy.mold-correctness` | deterministic | A bundled `mold.yaml`/`ore.yaml` is missing `name`/`version` (or `kind: ore`), or an `ingot.yaml` `files:` entry doesn't exist on disk. |
-| `ailloy.go-quality` | heuristic + model | Risky Go patterns on changed files (e.g. `os.Exit` below `main`, `exec.Command`). Uses the model broker for synthesis when a provider is configured; still produces findings without one. |
+| `ailloy.go-quality` | heuristic | Risky Go patterns on changed files (e.g. `os.Exit` below `main`, `exec.Command`), grouped into a finding via a deterministic `aggregate`. |
 
-The first three rules need **no model / no API key**. Only `ailloy.go-quality`
-benefits from a configured model provider.
+All four rules are **deterministic and need no model / no API key** — the
+manifest declares `permissions.model: false`, so the reviewer runs with no
+credentials. (A future revision of `go-quality` could opt into the model broker
+for richer synthesis by calling `ctx.model` and setting `permissions.model: true`,
+which would then require a model API key.)
 
 ## Develop
 
@@ -49,6 +52,8 @@ blocking merges. Flip `fail-on-findings: true` to gate.
 > action only accepts those flags with an explicit adversary reference, so a
 > local custom adversary must be named rather than auto-discovered.
 
-The `ailloy.go-quality` synthesis step needs a model provider. Add a
-`FIREWORKS_API_KEY` repository secret to enable it; without the secret the other
-three rules still run.
+No model API key is required — all rules are deterministic. (If a future rule
+opts into the model broker, set `permissions.model: true` in `adversary.yaml`,
+add a `FIREWORKS_API_KEY` secret, and set `model-provider`/`model-api-key` on the
+workflow step. Note: declaring `permissions.model: true` makes a key mandatory at
+runtime, even for rules that don't call `ctx.model`.)
