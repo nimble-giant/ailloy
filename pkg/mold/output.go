@@ -1,6 +1,7 @@
 package mold
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -13,6 +14,15 @@ import (
 var reservedDirs = map[string]bool{
 	"ingots": true,
 	"deps":   true, // smelt-embedded dep tree; internal to the binary, not mold content
+}
+
+// nativeIdentityDirs are well-known, dot-prefixed instruction directories
+// preserved when a mold omits output and therefore uses identity mapping.
+// Keeping these paths exact avoids treating unrelated hidden configuration as
+// installable content.
+var nativeIdentityDirs = []string{
+	".agents/skills",
+	".codex/agents",
 }
 
 // reservedRootFiles are root-level files excluded from auto-discovery
@@ -75,9 +85,10 @@ func WithIgnorePatterns(patterns []string) ResolveOption {
 // ResolveFiles walks the mold filesystem and resolves all files according
 // to the output mapping.
 //
-// If output is nil, all top-level directories (excluding reserved names
-// like "ingots") and root-level files (excluding metadata like mold.yaml)
-// are walked with identity mapping (src path = dest path).
+// If output is nil, non-hidden top-level directories (excluding reserved names
+// like "ingots"), native identity directories, and root-level files (excluding
+// metadata like mold.yaml) are walked with identity mapping (src path = dest
+// path).
 //
 // If output is a string, it's treated as a parent directory — all top-level
 // directories are mapped under it. Root-level files are mapped to the
@@ -138,6 +149,16 @@ func resolveIdentity(moldFS fs.FS) ([]ResolvedFile, error) {
 			target: OutputTarget{Dest: d},
 		})
 	}
+	nativeDirs, err := discoverNativeIdentityDirs(moldFS)
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range nativeDirs {
+		dirs = append(dirs, dirMapping{
+			src:    d,
+			target: OutputTarget{Dest: d},
+		})
+	}
 
 	rootFiles, err := discoverRootFiles(moldFS)
 	if err != nil {
@@ -172,6 +193,23 @@ func discoverTopLevelDirs(moldFS fs.FS) ([]string, error) {
 			continue
 		}
 		dirs = append(dirs, name)
+	}
+	return dirs, nil
+}
+
+func discoverNativeIdentityDirs(moldFS fs.FS) ([]string, error) {
+	var dirs []string
+	for _, name := range nativeIdentityDirs {
+		info, err := fs.Stat(moldFS, name)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("inspecting native instruction directory %s: %w", name, err)
+		}
+		if info.IsDir() {
+			dirs = append(dirs, name)
+		}
 	}
 	return dirs, nil
 }

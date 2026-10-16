@@ -273,7 +273,14 @@ output:
 
 #### Worked example: `agent_targets`
 
-A complete worked example lives in [`testdata/agent_targets/`](../testdata/agent_targets/). The ore ships an `output:` block that fans `blanks/agents/` out to both `.claude/agents` and `.opencode/agents` with per-target `set: { current_target: <name> }` context, plus `blanks/AGENTS.md → AGENTS.md`. A consumer can pick up the entire multi-target rendering with nothing but a one-line dependency:
+A complete worked example lives in [`testdata/agent_targets/`](../testdata/agent_targets/). The ore ships an `output:` block that:
+
+- Fans `blanks/agents/` out to `.claude/agents` and `.opencode/agents` with per-target `set: { current_target: <name> }` context.
+- Installs target-specific TOML from `blanks/codex-agents/` into `.codex/agents`.
+- Fans one portable Agent Skill from `blanks/skills/` into both `.claude/skills` and `.agents/skills`.
+- Installs `blanks/AGENTS.md` as the project-root `AGENTS.md`.
+
+A consumer can pick up the entire multi-target rendering with nothing but a one-line dependency:
 
 ```yaml
 # consumer/mold.yaml
@@ -286,7 +293,7 @@ dependencies:
     version: 0.1.0
 ```
 
-No `output:` block needed in the consumer. Cast renders `AGENTS.md`, `.claude/agents/...`, and `.opencode/agents/...` from the ore's blanks, each with its per-target context.
+No `output:` block is needed in the consumer. Cast renders `AGENTS.md`, Claude/OpenCode agent definitions, native Codex custom-agent TOML, and the shared Claude/Codex skill from the ore's blanks.
 
 #### Debug provenance
 
@@ -295,7 +302,10 @@ Run `ailloy forge --debug` to see which file came from which ore:
 ```
 [forge --debug] resolved output (dest ← src @ origin):
   AGENTS.md                                ← blanks/AGENTS.md                         @ ore:agent_targets
+  .agents/skills/example/SKILL.md          ← blanks/skills/example/SKILL.md           @ ore:agent_targets
   .claude/agents/example.md                ← blanks/agents/example.md                 @ ore:agent_targets
+  .claude/skills/example/SKILL.md          ← blanks/skills/example/SKILL.md           @ ore:agent_targets
+  .codex/agents/example.toml               ← blanks/codex-agents/example.toml         @ ore:agent_targets
   .opencode/agents/example.md              ← blanks/agents/example.md                 @ ore:agent_targets
 ```
 

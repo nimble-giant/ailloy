@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -11,6 +12,76 @@ import (
 	"github.com/nimble-giant/ailloy/pkg/foundry"
 	"github.com/nimble-giant/ailloy/pkg/mold"
 )
+
+func TestCastMold_InstallsNativeCodexLayoutWithoutOutputMapping(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		global bool
+	}{
+		{name: "project"},
+		{name: "global", global: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projectDir := t.TempDir()
+			t.Chdir(projectDir)
+			homeDir := t.TempDir()
+			t.Setenv("HOME", homeDir)
+
+			moldDir := filepath.Join(projectDir, "mold")
+			skillPath := filepath.Join(moldDir, ".agents", "skills", "reviewing", "SKILL.md")
+			agentPath := filepath.Join(moldDir, ".codex", "agents", "reviewer.toml")
+			for _, path := range []string{skillPath, agentPath} {
+				if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(moldDir, "mold.yaml"), []byte(`apiVersion: v1
+kind: mold
+name: codex-native
+version: 0.1.0
+`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(skillPath, []byte(`---
+name: reviewing
+description: Reviews {{ .project_name }} changes.
+---
+`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(agentPath, []byte(`name = "reviewer"
+description = "Reviews {{ .project_name }} changes."
+developer_instructions = "Return concrete findings."
+`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(moldDir, "flux.yaml"), []byte("project_name: Ailloy\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := CastMold(t.Context(), moldDir, CastOptions{Global: tc.global}); err != nil {
+				t.Fatalf("CastMold: %v", err)
+			}
+
+			installRoot := projectDir
+			if tc.global {
+				installRoot = homeDir
+			}
+			for _, rel := range []string{
+				filepath.Join(".agents", "skills", "reviewing", "SKILL.md"),
+				filepath.Join(".codex", "agents", "reviewer.toml"),
+			} {
+				content, err := os.ReadFile(filepath.Join(installRoot, rel))
+				if err != nil {
+					t.Fatalf("expected %s to be installed: %v", rel, err)
+				}
+				if !strings.Contains(string(content), "Ailloy") {
+					t.Errorf("%s was not rendered with flux: %s", rel, content)
+				}
+			}
+		})
+	}
+}
 
 // TestCastMold_CleansEmptyMultiDestDirs reproduces issue #195: when a
 // multi-destination output mapping has per-dest `set` context and the

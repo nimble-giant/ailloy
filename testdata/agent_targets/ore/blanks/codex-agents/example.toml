@@ -1,0 +1,7 @@
+name = "example"
+description = "Example custom agent rendered for {{ .current_target }}."
+developer_instructions = """
+Work only on the bounded task delegated by the parent agent.
+Return concise findings with concrete file references.
+"""
+sandbox_mode = "read-only"

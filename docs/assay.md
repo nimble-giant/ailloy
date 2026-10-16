@@ -40,6 +40,8 @@ ailloy lint
 | Rule | Severity | Description |
 |------|----------|-------------|
 | `agent-frontmatter` | Error/Warning | `.claude/agents/*.yml` (or plugin `agents/`) missing required `name` or recommended `description` |
+| `codex-agent-schema` | Error | `.codex/agents/*.toml` is invalid TOML or is missing non-empty `name`, `description`, or `developer_instructions` |
+| `codex-skill-frontmatter` | Error | `.agents/skills/<name>/SKILL.md` has invalid YAML frontmatter or is missing non-empty `name` or `description` |
 | `command-frontmatter` | Warning | `.claude/commands/*.md` (or plugin `commands/` / `skills/`) frontmatter contains unknown fields; auto-fixable via `ailloy lint --fix` or `ailloy config allow-fields` |
 | `settings-schema` | Error | `.claude/settings.json` has invalid JSON or unknown hook event types |
 | `plugin-manifest` | Error | `.claude-plugin/plugin.json` is invalid JSON or missing required fields (`name`, `version`, `description`) |
@@ -126,7 +128,7 @@ Assay auto-detects platforms by file presence:
 |----------|-------|
 | Claude | `CLAUDE.md`, `.claude/CLAUDE.md`, `.claude/rules/*.md`, `CLAUDE.local.md` |
 | Cursor | `.cursor/rules/*.md`, `.cursorrules` |
-| Codex | `AGENTS.md`, `codex.md` |
+| Codex | Root and nested `AGENTS.md`, `codex.md`, `**/.agents/skills/**/*.md`, `.codex/agents/*.toml` |
 | Copilot | `.github/copilot-instructions.md` |
 | Generic | `AGENTS.md` (root and nested directories) |
 
@@ -134,6 +136,7 @@ Use `--platform` to limit linting to a single platform:
 
 ```bash
 ailloy assay --platform claude
+ailloy assay --platform codex
 ```
 
 ## Severity Levels

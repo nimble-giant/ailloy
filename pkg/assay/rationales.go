@@ -12,6 +12,8 @@ var ruleRationales = map[string]string{
 	"duplicate-topics":   "Duplicated content creates maintenance burden and risks instructions drifting out of sync, leading to conflicting guidance across files.",
 
 	"agent-frontmatter":           "Agent runtimes use the name and description fields to discover and invoke agents. Missing or malformed fields prevent the agent from being registered.",
+	"codex-agent-schema":          "Codex loads project custom agents from TOML configuration layers. Invalid TOML or missing identity and instruction fields prevent Codex from loading the intended agent. See: https://learn.chatgpt.com/docs/agent-configuration/subagents",
+	"codex-skill-frontmatter":     "Codex uses each Agent Skill's name and description for discovery before loading the full SKILL.md body. Missing metadata prevents reliable registration and selection. See: https://learn.chatgpt.com/docs/build-skills",
 	"command-frontmatter":         "Agent runtimes only recognize specific frontmatter keys. Unrecognized fields are silently ignored — tool restrictions, model overrides, and hints you set may never take effect.",
 	"settings-schema":             "Unrecognized hook event types are silently skipped. A typo in an event name means your hook never fires, with no error to diagnose.",
 	"plugin-manifest":             "The plugin manifest is how agent runtimes identify, load, and display your plugin. Missing required fields prevent installation or cause silent failures.",
