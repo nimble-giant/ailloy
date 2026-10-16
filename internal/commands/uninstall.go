@@ -142,6 +142,14 @@ func resolveUninstallTarget(manifestPath, raw string) (source, subpath string, e
 		return source, "", nil
 	}
 	matches := manifest.FindAllBySource(source)
+	if len(matches) == 0 && source != raw {
+		// owner/repo shorthand expands to github.com/owner/repo, but a
+		// local-path entry recorded verbatim (e.g. "molds/my-mold") must
+		// still be addressable by the string the user cast it with.
+		if rawMatches := manifest.FindAllBySource(raw); len(rawMatches) > 0 {
+			source, matches = raw, rawMatches
+		}
+	}
 	switch len(matches) {
 	case 0, 1:
 		// 0: let UninstallMold report "not found" with its richer message.

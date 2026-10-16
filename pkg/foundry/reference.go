@@ -2,9 +2,14 @@ package foundry
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
+
+// DefaultHost is the SCM host assumed when a mold reference omits one
+// (e.g. "nimble-giant/nimble-mold" → "github.com/nimble-giant/nimble-mold").
+const DefaultHost = "github.com"
 
 // RefType classifies the version specifier in a mold reference.
 type RefType int
@@ -44,6 +49,8 @@ var (
 //
 // Accepted formats:
 //
+//	owner/repo                     (shorthand for github.com/owner/repo)
+//	owner/repo@v1.2.3//subpath
 //	github.com/owner/repo
 //	github.com/owner/repo@v1.2.3
 //	github.com/owner/repo@^1.0.0//subpath
@@ -52,6 +59,12 @@ var (
 func ParseReference(raw string) (*Reference, error) {
 	if raw == "" {
 		return nil, fmt.Errorf("empty reference")
+	}
+
+	// Expand owner/repo shorthand to the default host before any other
+	// normalisation so the rest of the parser always sees host/owner/repo.
+	if isShorthand(raw) {
+		raw = DefaultHost + "/" + raw
 	}
 
 	s := raw
@@ -128,13 +141,60 @@ func classifyVersion(v string) RefType {
 	return Branch
 }
 
+// isShorthand reports whether s has the hostless "owner/repo" shape
+// (optionally followed by @version and/or //subpath). Exactly two non-empty
+// path segments are required, and the first must not look like a hostname
+// (no dot, no colon) — so "github.com/owner" and "localhost:3000/a" are not
+// shorthand. Scheme-prefixed and SSH forms are never shorthand.
+func isShorthand(s string) bool {
+	if s == "" || s[0] == '/' || s[0] == '.' || s[0] == '~' {
+		return false
+	}
+	if strings.Contains(s, "://") || strings.HasPrefix(s, "git@") {
+		return false
+	}
+	p := shorthandPath(s)
+	owner, repo, ok := strings.Cut(p, "/")
+	if !ok || owner == "" || repo == "" || strings.Contains(repo, "/") {
+		return false
+	}
+	return !strings.ContainsAny(owner, ".:")
+}
+
+// shorthandPath returns the path portion of a reference: everything before
+// the first "//" subpath separator and the "@version" suffix.
+func shorthandPath(s string) string {
+	if idx := strings.Index(s, "//"); idx != -1 {
+		s = s[:idx]
+	}
+	if idx := strings.LastIndex(s, "@"); idx != -1 {
+		s = s[:idx]
+	}
+	return s
+}
+
 // IsRemoteReference returns true when the string looks like a remote mold
 // reference rather than a local filesystem path.
 //
 // Heuristic: true when the first path segment contains a dot (e.g.
 // "github.com/..."), or when the string starts with "https://", "http://",
 // or "git@". False for relative ("./local") or absolute ("/abs/path") paths.
+//
+// Hostless "owner/repo" shorthand (see ParseReference) is also remote and
+// resolves against DefaultHost — unless that relative path exists on disk,
+// in which case the local directory wins so existing "dir/mold" invocations
+// keep working. Prefix with "./" to force local, or with a host to force
+// remote.
 func IsRemoteReference(s string) bool {
+	if isShorthand(s) {
+		if _, err := os.Stat(s); err == nil {
+			return false
+		}
+		if _, err := os.Stat(shorthandPath(s)); err == nil {
+			return false
+		}
+		return true
+	}
 	if s == "" {
 		return false
 	}
