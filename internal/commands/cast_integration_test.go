@@ -623,6 +623,78 @@ func TestIntegration_MergeStrategy_JSON(t *testing.T) {
 	}
 }
 
+// TestIntegration_MergeStrategy_TOML casts a rendered (flux-templated)
+// city.toml fragment into an existing Gas City city.toml: the user's own
+// tables survive, the mold's [[github.pr_monitor]] is appended, and a recast
+// does not duplicate it.
+func TestIntegration_MergeStrategy_TOML(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	preExisting := []byte("[workspace]\nname = \"city\"\n\n[mayor]\nappend_fragments = [\"house-style\"]\n")
+	if err := os.WriteFile("city.toml", preExisting, 0644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	moldFS := fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: Mold\nname: test\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(`rig: foundry
+output:
+  city/city.toml:
+    dest: city.toml
+    strategy: merge
+`)},
+		"city/city.toml": &fstest.MapFile{Data: []byte(`[[github.pr_monitor]]
+name = "{{ .rig }}-prs"
+merge_queue = "observe"
+
+[mayor]
+append_fragments = ["con-voyage-orchestration"]
+`)},
+	}
+
+	reader := blanks.NewMoldReader(moldFS)
+	manifest, err := reader.LoadManifest()
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	flux, err := reader.LoadFluxDefaults()
+	if err != nil {
+		t.Fatalf("load flux: %v", err)
+	}
+	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	for range 2 { // cast, then recast
+		if err := copyResolvedFiles(reader, manifest, flux, resolved, copyOpts{}); err != nil {
+			t.Fatalf("copy: %v", err)
+		}
+	}
+
+	got, err := os.ReadFile("city.toml")
+	if err != nil {
+		t.Fatalf("readback: %v", err)
+	}
+	want := `[workspace]
+name = "city"
+
+[mayor]
+append_fragments = ["house-style", "con-voyage-orchestration"]
+
+[[github.pr_monitor]]
+name = "foundry-prs"
+merge_queue = "observe"
+`
+	if string(got) != want {
+		t.Errorf("merged city.toml mismatch.\nwant:\n%s\ngot:\n%s", want, got)
+	}
+}
+
 func TestIntegration_MergeStrategy_TwoMolds(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()

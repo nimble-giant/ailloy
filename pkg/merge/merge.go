@@ -1,4 +1,4 @@
-// Package merge implements deep-merge of JSON and YAML files for
+// Package merge implements deep-merge of JSON, YAML, and TOML files for
 // `ailloy cast --strategy=merge` output entries. See issue #171.
 package merge
 
@@ -23,7 +23,7 @@ type Options struct {
 // --force-replace-on-parse-error flag.
 type ParseError struct {
 	Path   string
-	Format string // "json" or "yaml"
+	Format string // "json", "yaml", or "toml"
 	Err    error
 }
 
@@ -37,7 +37,7 @@ func (e *ParseError) Unwrap() error { return e.Err }
 //
 // Behavior:
 //   - destPath does not exist: write newContent verbatim, creating parent dirs.
-//   - extension not .json/.yaml/.yml: write newContent verbatim (replace).
+//   - extension not .json/.yaml/.yml/.toml: write newContent verbatim (replace).
 //   - existing file unparseable: return *ParseError unless opts.ForceReplaceOnParseError.
 //   - otherwise: parse both, deep-merge, serialize, atomically replace destPath.
 //
@@ -86,16 +86,22 @@ func detectFormat(p string) string {
 		return "json"
 	case ".yaml", ".yml":
 		return "yaml"
+	case ".toml":
+		return "toml"
 	default:
 		return ""
 	}
 }
 
 func loaderFor(format string) (func([]byte) (*node, error), func(*node) ([]byte, error)) {
-	if format == "json" {
+	switch format {
+	case "json":
 		return loadJSON, dumpJSON
+	case "toml":
+		return loadTOML, dumpTOML
+	default:
+		return loadYAML, dumpYAML
 	}
-	return loadYAML, dumpYAML
 }
 
 func writeAll(destPath string, data []byte) error {

@@ -4,6 +4,7 @@ go 1.25.8
 
 require (
 	dario.cat/mergo v1.0.2
+	github.com/BurntSushi/toml v1.5.0
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10

@@ -9,10 +9,10 @@ const (
 )
 
 // node is a format-agnostic ordered representation used by both
-// the JSON and YAML backends. Maps preserve insertion order via `keys`.
+// the JSON, YAML, and TOML backends. Maps preserve insertion order via `keys`.
 type node struct {
 	kind   nodeKind
-	scalar any              // for kindScalar (string, bool, nil, json.Number, int64, float64)
+	scalar any              // for kindScalar (string, bool, nil, json.Number, int64, float64, time.Time)
 	keys   []string         // ordered keys for kindMap
 	fields map[string]*node // map[string]*node for kindMap
 	seq    []*node          // ordered entries for kindSeq
