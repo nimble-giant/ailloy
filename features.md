@@ -93,6 +93,17 @@ Packages a mold for distribution. Two output modes via `-o` (`--output-format`);
 - **`.ailloy/installed.yaml`**: always written by cast; records source/version/commit/timestamp/file hashes and `InstalledAs` (direct|transitive) for cascade-uninstall.
 - Cache: `~/.ailloy/cache/<host>/<owner>/<repo>/` (shared bare clone + per-version snapshots).
 
+## serve (foundry API)
+
+HTTP server that renders casts just in time for clients without the CLI. Code: `internal/server/` (HTTP surface), `internal/commands/serve*.go` (command + renderer).
+
+- `POST /v1/cast` (JSON) and `GET /v1/cast` (query) take `mold`, `set`, `values`, `targets`, `with_workflows`, `format`; `GET /healthz` is unauthenticated.
+- **Auth**: bearer tokens from `--token-file` / `AILLOY_SERVE_TOKENS`, compared in constant time. Refuses to start with neither tokens nor `--public`; tokens and `--public` together error.
+- **Formats**: `tar` (gzip, default), `zip`, `ndjson` (mold header → one `file` event per file → `done` trailer), `multipart` (`multipart/mixed`, `X-Ailloy-Path` per part), `json`. Explicit `format` beats `Accept`. Non-UTF-8 content is base64 in ndjson/json.
+- **Rendering** matches forge/cast output: flux = ore defaults < `flux.yaml` < `mold.yaml` defaults < `values` (top-level replace, like `-f`) < `set` < `targets` (as `agent.targets=[...]`). Empty renders skipped; `.github/` excluded unless `with_workflows`. Merge/append files are returned as the rendered fragment with their strategy reported, never merged server-side.
+- **Isolation (security-critical)**: only remote refs (`400` for local paths); `--allow-source` prefixes match whole segments, case-insensitive (`403` otherwise); ingots resolve from the requested mold's FS only, never the server's cwd/`.ailloy/`/`~/.ailloy/`; no persisted flux, no `ailloy.lock`; process runs in a fresh temp workdir unless `--workdir` is given. Output paths that are absolute or escape the root are refused (`422`).
+- `--max-concurrent` caps in-flight casts; overflow returns `503` + `Retry-After`.
+
 ## Other commands (behavior summaries)
 
 - **recast** (`upgrade`): re-resolve installed molds to newer versions and re-render; refreshes `installed.yaml` and (if present) `ailloy.lock`. Layers `--set`/`-f`/`--with-workflows` on top of the original cast's recorded options.
