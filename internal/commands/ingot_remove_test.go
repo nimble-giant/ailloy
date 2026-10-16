@@ -34,7 +34,7 @@ func TestRunIngotRemove_HasMoldDependents_ErrorsWithoutForce(t *testing.T) {
 			{Name: "github-patterns", Source: "g/gp", Dependents: []string{"g/some-mold"}},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestRunIngotRemove_OnlyUserDependent_Removes(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(".ailloy", "ingots", "github-patterns"), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Join(projectStateDir(), "ingots", "github-patterns"), 0750); err != nil {
 		t.Fatal(err)
 	}
 	manifest := &foundry.InstalledManifest{
@@ -59,14 +59,14 @@ func TestRunIngotRemove_OnlyUserDependent_Removes(t *testing.T) {
 			{Name: "github-patterns", Source: "g/gp", Dependents: []string{"user"}},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := runIngotRemove(nil, []string{"github-patterns"}); err != nil {
 		t.Fatalf("runIngotRemove: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(".ailloy", "ingots", "github-patterns")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectStateDir(), "ingots", "github-patterns")); !os.IsNotExist(err) {
 		t.Errorf("ingot dir should be gone: %v", err)
 	}
 	got, _ := foundry.ReadInstalledManifest(manifestPath)
@@ -83,7 +83,7 @@ func TestRunIngotRemove_Force_OverridesMoldDependents(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(".ailloy", "ingots", "github-patterns"), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Join(projectStateDir(), "ingots", "github-patterns"), 0750); err != nil {
 		t.Fatal(err)
 	}
 	manifest := &foundry.InstalledManifest{
@@ -92,7 +92,7 @@ func TestRunIngotRemove_Force_OverridesMoldDependents(t *testing.T) {
 			{Name: "github-patterns", Source: "g/gp", Dependents: []string{"g/some-mold"}},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestRunIngotRemove_Force_OverridesMoldDependents(t *testing.T) {
 	if err := runIngotRemove(nil, []string{"github-patterns"}); err != nil {
 		t.Fatalf("runIngotRemove with --force: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(".ailloy", "ingots", "github-patterns")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectStateDir(), "ingots", "github-patterns")); !os.IsNotExist(err) {
 		t.Errorf("ingot dir should be gone: %v", err)
 	}
 }

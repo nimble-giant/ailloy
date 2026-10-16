@@ -224,15 +224,15 @@ func init() {
 
 	// Flags for bidirectional "add ore" must mirror "ore add" flags.
 	addOreSubCmd.Flags().StringVar(&oreAddAlias, "as", "", "namespace alias (install at ore.<alias>.* instead of ore.<name>.*)")
-	addOreSubCmd.Flags().BoolVar(&oreAddGlobal, "global", false, "install under ~/.ailloy/ores/ instead of ./.ailloy/ores/")
+	addOreSubCmd.Flags().BoolVar(&oreAddGlobal, "global", false, "install under ~/.ailloy/ores/ instead of the project state dir")
 
 	// Flags for bidirectional "remove ore" must mirror "ore remove" flags.
 	removeOreSubCmd.Flags().BoolVar(&oreRemoveForce, "force", false, "remove even if other molds depend on this ore")
-	removeOreSubCmd.Flags().BoolVar(&oreRemoveGlobal, "global", false, "remove from ~/.ailloy/ores/ instead of ./.ailloy/ores/")
+	removeOreSubCmd.Flags().BoolVar(&oreRemoveGlobal, "global", false, "remove from ~/.ailloy/ores/ instead of the project state dir")
 
 	// Flags for bidirectional "remove ingot" must mirror "ingot remove" flags.
 	removeIngotSubCmd.Flags().BoolVar(&ingotRemoveForce, "force", false, "remove even if other molds depend on this ingot")
-	removeIngotSubCmd.Flags().BoolVar(&ingotRemoveGlobal, "global", false, "remove from ~/.ailloy/ingots/ instead of ./.ailloy/ingots/")
+	removeIngotSubCmd.Flags().BoolVar(&ingotRemoveGlobal, "global", false, "remove from ~/.ailloy/ingots/ instead of the project state dir")
 
 	// search <noun>
 	rootCmd.AddCommand(searchCmd)

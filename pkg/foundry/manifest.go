@@ -7,10 +7,24 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 )
 
-// InstalledManifestPath is the default project manifest path.
+// InstalledManifestPath is the manifest path relative to a legacy-layout
+// root. The global manifest still lives here under the home directory
+// (~/.ailloy/installed.yaml); project manifests live in the project's state
+// dir — use ProjectManifestPath.
 const InstalledManifestPath = ".ailloy/installed.yaml"
+
+// ManifestFileName is the installed manifest's file name.
+const ManifestFileName = "installed.yaml"
+
+// ProjectManifestPath returns the installed-manifest path for the project
+// rooted at the current working directory. It lives in the project's state
+// dir under ~/.ailloy/projects/, not in the project tree.
+func ProjectManifestPath() string {
+	return filepath.Join(projectstate.Dir(), ManifestFileName)
+}
 
 // CastOptionsRecord captures the option-shaped flags that drove a `cast`
 // invocation. Persisted on the installed entry so `recast` can replay them

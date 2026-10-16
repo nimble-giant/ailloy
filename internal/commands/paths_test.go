@@ -7,12 +7,19 @@ import (
 	"testing"
 )
 
+// Project bookkeeping lives in the project's state dir under
+// ~/.ailloy/projects/, never in the project tree.
 func TestProjectPaths(t *testing.T) {
-	if got := projectLockPath(); got != "ailloy.lock" {
-		t.Errorf("projectLockPath() = %q, want ailloy.lock", got)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("no home dir: %v", err)
 	}
-	if got := projectManifestPath(); got != filepath.Join(".ailloy", "installed.yaml") {
-		t.Errorf("projectManifestPath() = %q", got)
+	stateRoot := filepath.Join(home, ".ailloy", "projects") + string(filepath.Separator)
+	if got := projectLockPath(); got != filepath.Join(projectStateDir(), "ailloy.lock") || !strings.HasPrefix(got, stateRoot) {
+		t.Errorf("projectLockPath() = %q, want <state dir>/ailloy.lock under %q", got, stateRoot)
+	}
+	if got := projectManifestPath(); got != filepath.Join(projectStateDir(), "installed.yaml") || !strings.HasPrefix(got, stateRoot) {
+		t.Errorf("projectManifestPath() = %q, want <state dir>/installed.yaml under %q", got, stateRoot)
 	}
 }
 
@@ -36,10 +43,10 @@ func TestGlobalPaths(t *testing.T) {
 }
 
 func TestLockAndManifestPathsByGlobalFlag(t *testing.T) {
-	if got := lockPathFor(false); got != "ailloy.lock" {
+	if got := lockPathFor(false); got != projectLockPath() {
 		t.Errorf("lockPathFor(false) = %q", got)
 	}
-	if got := manifestPathFor(false); got != filepath.Join(".ailloy", "installed.yaml") {
+	if got := manifestPathFor(false); got != projectManifestPath() {
 		t.Errorf("manifestPathFor(false) = %q", got)
 	}
 	if _, err := os.UserHomeDir(); err != nil {

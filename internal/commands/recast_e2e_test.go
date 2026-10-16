@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -163,6 +164,9 @@ func setupRecastE2EEnv(t *testing.T) *recastE2EEnv {
 			t.Fatal(err)
 		}
 	}
+	// Match the spawned binary's HOME so projectstate.DirFor resolves the same
+	// per-project state dir the subprocess writes to.
+	t.Setenv("HOME", env.homeDir)
 
 	// Write the gitconfig that makes git redirect the synthetic CloneURL
 	// (https://localhost.test/ailloy-test/recast-fixture[.git]) to the local
@@ -230,7 +234,7 @@ func TestE2E_Recast_RerenderWithRecordedOptions(t *testing.T) {
 	}
 
 	// Manifest must record the --set override so a no-flag recast can replay it.
-	manifest, err := foundry.ReadInstalledManifest(filepath.Join(project, ".ailloy", "installed.yaml"))
+	manifest, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(project), "installed.yaml"))
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
@@ -272,7 +276,7 @@ func TestE2E_Recast_RerenderWithRecordedOptions(t *testing.T) {
 		t.Errorf("expected recast --set to update render, got:\n%s", got)
 	}
 
-	manifest, err = foundry.ReadInstalledManifest(filepath.Join(project, ".ailloy", "installed.yaml"))
+	manifest, err = foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(project), "installed.yaml"))
 	if err != nil {
 		t.Fatalf("re-read manifest: %v", err)
 	}
@@ -303,7 +307,7 @@ func TestE2E_Recast_DryRunWritesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read README before: %v", err)
 	}
-	manifestPath := filepath.Join(project, ".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectstate.DirFor(project), "installed.yaml")
 	manBefore, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatalf("read manifest before: %v", err)

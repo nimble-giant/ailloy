@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 )
 
 // UninstallOptions controls UninstallMold behavior.
@@ -159,7 +161,7 @@ func UninstallMold(manifestPath, source, subpath string, opts UninstallOptions) 
 	}
 
 	// Best-effort: also drop the matching lock entry if a lock exists alongside.
-	lockPath := filepath.Join(rootDir, LockFileName)
+	lockPath := lockPathForManifest(manifestPath, rootDir)
 	if lock, lerr := ReadLockFile(lockPath); lerr == nil && lock != nil {
 		dropped := false
 		for i := range lock.Molds {
@@ -177,19 +179,38 @@ func UninstallMold(manifestPath, source, subpath string, opts UninstallOptions) 
 	return res, nil
 }
 
-// projectRootForManifest returns the directory that contains the manifest's
-// .ailloy/ subdirectory. Cast records files relative to this root.
+// projectRootForManifest returns the root that cast recorded files relative
+// to.
 //
-// For ".ailloy/installed.yaml" we want "."; for "/home/u/.ailloy/installed.yaml"
-// we want "/home/u". The rule is: take the parent of the directory holding the
-// manifest file. If the manifest path doesn't follow the .ailloy/ convention,
-// fall back to the manifest's directory.
+// A manifest in the current project's state dir maps to "."; one in another
+// project's state dir maps to the root recorded in its project.yaml. For the
+// legacy layout, ".ailloy/installed.yaml" maps to "." and
+// "/home/u/.ailloy/installed.yaml" (the global manifest) maps to "/home/u":
+// the parent of the directory holding the manifest file. Otherwise fall back
+// to the manifest's directory.
 func projectRootForManifest(manifestPath string) string {
 	dir := filepath.Dir(manifestPath)
+	if filepath.Clean(dir) == filepath.Clean(projectstate.Dir()) {
+		return "."
+	}
+	if root, ok := projectstate.RootFor(dir); ok {
+		return root
+	}
 	if filepath.Base(dir) == ".ailloy" {
 		return filepath.Dir(dir)
 	}
 	return dir
+}
+
+// lockPathForManifest returns the lock that sits alongside manifestPath: a
+// sibling in a project state dir, or <root>/ailloy.lock for the legacy and
+// global layouts.
+func lockPathForManifest(manifestPath, rootDir string) string {
+	dir := filepath.Dir(manifestPath)
+	if filepath.Clean(dir) != filepath.Clean(projectstate.Dir()) && filepath.Base(dir) == ".ailloy" {
+		return filepath.Join(rootDir, LockFileName)
+	}
+	return filepath.Join(dir, LockFileName)
 }
 
 func fileModifiedSinceCast(path, expectedHash string) (bool, error) {

@@ -29,7 +29,7 @@ is passed. To uninstall a mold and its unshared dependents, use 'ailloy uninstal
 func init() {
 	ingotCmd.AddCommand(ingotRemoveCmd)
 	ingotRemoveCmd.Flags().BoolVar(&ingotRemoveForce, "force", false, "remove even if other molds depend on this ingot")
-	ingotRemoveCmd.Flags().BoolVar(&ingotRemoveGlobal, "global", false, "remove from ~/.ailloy/ingots/ instead of ./.ailloy/ingots/")
+	ingotRemoveCmd.Flags().BoolVar(&ingotRemoveGlobal, "global", false, "remove from ~/.ailloy/ingots/ instead of the project state dir")
 }
 
 func runIngotRemove(_ *cobra.Command, args []string) error {
@@ -66,7 +66,7 @@ func runIngotRemove(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot remove ingot %q: still required by mold(s) %v; use --force to override or 'ailloy uninstall' on the mold", name, molds)
 	}
 
-	baseDir := filepath.Join(".ailloy", "ingots", name)
+	baseDir := filepath.Join(projectStateDir(), "ingots", name)
 	if ingotRemoveGlobal {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -92,9 +92,9 @@ func runIngotRemove(_ *cobra.Command, args []string) error {
 
 	// Drop from lock if present (project scope only).
 	if !ingotRemoveGlobal {
-		if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
+		if lock, _ := foundry.ReadLockFile(foundry.ProjectLockPath()); lock != nil {
 			dropIngotLockEntry(lock, name)
-			_ = foundry.WriteLockFile(foundry.LockFileName, lock)
+			_ = foundry.WriteLockFile(foundry.ProjectLockPath(), lock)
 		}
 	}
 	return nil

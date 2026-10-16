@@ -82,6 +82,7 @@ var CommandTopic = map[string]string{
 	"plugin":  "plugin",
 	"ingot":   "ingots",
 	"cache":   "cache",
+	"state":   "project-state",
 }
 
 // FS exposes the embedded filesystem for advanced consumers (e.g. tests).

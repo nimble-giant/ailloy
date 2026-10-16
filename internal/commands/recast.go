@@ -19,7 +19,7 @@ var recastCmd = &cobra.Command{
 	Short:   "Re-resolve installed molds to newer versions",
 	Long: `Re-resolve installed molds to newer versions and re-render their content (alias: upgrade).
 
-Reads .ailloy/installed.yaml, refreshes each mold to its latest matching
+Reads the project's installed manifest, refreshes each mold to its latest matching
 version, and re-runs the cast pipeline so files on disk reflect the new
 version. If ailloy.lock exists, it is updated in lockstep.
 
@@ -128,7 +128,7 @@ func init() {
 	recastCmd.Flags().StringArrayVar(&recastSetFlags, "set", nil, "override flux variable (key=value, repeatable; supports dotted keys)")
 	recastCmd.Flags().StringArrayVarP(&recastValFiles, "values", "f", nil, "flux value file (repeatable; later files override earlier)")
 	recastCmd.Flags().BoolVar(&recastForceReplace, "force-replace-on-parse-error", false, "replace unparseable merge-strategy destinations instead of erroring")
-	recastCmd.Flags().BoolVar(&recastFrozen, "frozen", false, "fail (do not auto-install) when a declared ingot/ore dep is missing from .ailloy/; intended for CI")
+	recastCmd.Flags().BoolVar(&recastFrozen, "frozen", false, "fail (do not auto-install) when a declared ingot/ore dep is missing from the project state dir; intended for CI")
 }
 
 type recastChange struct {

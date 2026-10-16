@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,11 +63,11 @@ func TestInstallDeclaredDeps_InstallsMissingOre(t *testing.T) {
 		t.Fatalf("installDeclaredDeps: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(moldDir, ".ailloy", "ores", "status", "ore.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(projectstate.DirFor(moldDir), "ores", "status", "ore.yaml")); err != nil {
 		t.Errorf("ore not installed: %v", err)
 	}
 
-	m, err := foundry.ReadInstalledManifest(filepath.Join(moldDir, ".ailloy", "installed.yaml"))
+	m, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(moldDir), "installed.yaml"))
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
@@ -115,7 +116,7 @@ func TestInstallDeclaredDeps_AppendsDependent(t *testing.T) {
 		t.Fatalf("second install: %v", err)
 	}
 
-	m, _ := foundry.ReadInstalledManifest(filepath.Join(moldDir, ".ailloy", "installed.yaml"))
+	m, _ := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(moldDir), "installed.yaml"))
 	if m == nil {
 		t.Fatal("manifest missing")
 	}
@@ -200,7 +201,7 @@ func TestCast_AutoInstallsOreFromMoldYAML(t *testing.T) {
 	if err := installDeclaredDeps(manifest, "g/m", false, true, false, false, nil); err != nil {
 		t.Fatalf("installDeclaredDeps: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(".ailloy", "ores", "status", "ore.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(projectStateDir(), "ores", "status", "ore.yaml")); err != nil {
 		t.Fatalf("ore not installed: %v", err)
 	}
 
@@ -275,7 +276,7 @@ func TestInstallDeclaredDeps_DistinctSubpathsCoexist(t *testing.T) {
 		t.Fatalf("installDeclaredDeps: %v", err)
 	}
 
-	im, _ := foundry.ReadInstalledManifest(filepath.Join(moldDir, ".ailloy", "installed.yaml"))
+	im, _ := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(moldDir), "installed.yaml"))
 	if im == nil {
 		t.Fatal("manifest missing")
 	}
@@ -359,7 +360,7 @@ func TestInstallDeclaredDeps_FrozenErrorsOnMissing(t *testing.T) {
 	if !strings.Contains(err.Error(), "frozen") {
 		t.Errorf("error should mention frozen: %v", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(moldDir, ".ailloy", "ores", "status")); statErr == nil {
+	if _, statErr := os.Stat(filepath.Join(projectstate.DirFor(moldDir), "ores", "status")); statErr == nil {
 		t.Error("frozen install should not have created the install dir")
 	}
 }

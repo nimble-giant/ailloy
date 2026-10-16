@@ -8,7 +8,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/nimble-giant/ailloy/internal/tui/foundries/data"
 	"github.com/nimble-giant/ailloy/pkg/foundry/index"
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"github.com/nimble-giant/ailloy/pkg/styles"
+	"path/filepath"
 )
 
 var (
@@ -42,7 +44,7 @@ func runChecks(cfg *index.Config) tea.Cmd {
 		catalog, _ := data.LoadCatalog(cfg)
 		items, _ := data.LoadInventory(cfg)
 		out := data.DriftFindings(cfg, items, catalog)
-		out = append(out, data.AssayFindings(data.ReadBlankDirs(".ailloy/state.yaml"))...)
+		out = append(out, data.AssayFindings(data.ReadBlankDirs(filepath.Join(projectstate.Dir(), "state.yaml")))...)
 		return findingsMsg{findings: out}
 	}
 }

@@ -17,8 +17,9 @@ var quenchCmd = &cobra.Command{
 	Short:   "Pin installed molds to exact versions (creates ailloy.lock)",
 	Long: `Pin installed molds to exact versions and verify integrity (alias: lock).
 
-Creates or refreshes ailloy.lock by pinning each mold in .ailloy/installed.yaml
-to its current resolved version and commit. Once ailloy.lock exists, subsequent
+Creates or refreshes ailloy.lock by pinning each mold in the installed manifest
+to its current resolved version and commit. Both files live in the project's
+state dir under ~/.ailloy/projects/ (see 'ailloy state path'). Once ailloy.lock exists, subsequent
 'cast', 'ingot add', and 'recast' will keep it in sync automatically.
 
 Pass a reference to quench a single mold. Use --verify to check existing pins
