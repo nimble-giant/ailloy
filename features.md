@@ -25,7 +25,7 @@ Renders a mold's blanks with resolved flux and writes them to destination paths 
 - Flux validation runs during cast (required non-empty, type conformance); violations warn, not fatal.
 - Declared ore deps are auto-installed to `.ailloy/ores/` before rendering.
 - Writes `.ailloy/installed.yaml` (provenance: source, version, commit, file SHA-256s for uninstall drift). Updates `ailloy.lock` only if it already exists.
-- `--claude-plugin` packages rendered output as a Claude Code plugin instead of loose files.
+- `--claude-plugin` packages rendered output as a Claude Code plugin instead of loose files. It pins `agent.targets=[claude]` and `agent.current_target=claude` and applies per-destination `set:`, so target-gated blanks render into the plugin.
 
 ### Output mapping (source → destination)
 
@@ -35,6 +35,9 @@ Renders a mold's blanks with resolved flux and writes them to destination paths 
   - `replace` (default): whole-file overwrite.
   - `merge`: deep-merge JSON/YAML/TOML by extension (`.json`, `.yaml`/`.yml`, `.toml`; maps/tables merge, arrays and arrays-of-tables concat+dedup, ints preserved; TOML keeps float/datetime types). Errors on unparseable destination unless `--force-replace-on-parse-error`. Comments are not preserved.
   - `append`: markdown only. Wraps content in an idempotent HTML-comment sentinel keyed by mold name (`<!-- ailloy:mold=<name>:start -->…:end -->`); re-cast replaces that block in place, preserving foreign content and other molds' blocks.
+- **Agent targets** (`targets: <surface>`): an entry like `agents: {targets: agents}` expands to one destination per enabled harness that declares that surface (`instructions`, `agents`, `skills`, `commands`, `rules`, `mcp`) in the `agent_targets` ore registry (`ores/agent_targets/flux.yaml`, embedded as the built-in default; overridable via `ore.agent_targets.harnesses`). Targets come from `agent.targets`, else `ore.agent_targets.targets` (default `[claude]`). Each pass sets `agent.current_target`, `agent.current_targets`, `agent.format`, `agent.targets`; entry `set`/`strategy`/`process` override. Harnesses sharing a destination are written once; a surface `ext` renames files under a directory (e.g. Codex `.toml`); no matching harness → `skip: true` (source not installed at its identity path); unknown target id or disabled ore errors. Callers without flux (temper, smelt) expand against every built-in harness. See `docs/agent-targets.md`.
+- `ext` (string starting with `.`) and `skip` (bool) are valid in expanded output targets.
+- Ingots render with the calling blank's flux, so they see per-destination `set:` context.
 - Ore-supplied `output:` entries merge into the consumer's; consumer key wins on collision; two ores claiming the same key (unresolved by consumer) error. Consumer may pull ore blanks via `from: ore/<namespace>/<path>`.
 
 ## flux

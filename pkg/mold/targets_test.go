@@ -1,6 +1,7 @@
 package mold
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -238,5 +239,44 @@ func TestResolveFiles_ExpandsTargetsWithoutFlux(t *testing.T) {
 	}
 	if len(files) == 0 {
 		t.Fatal("want agents/a.md resolved")
+	}
+}
+
+func TestBuiltinRegistry_Consistent(t *testing.T) {
+	// Given every built-in harness enabled at once
+	defaults, err := builtinTargetDefaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := defaults["harnesses"].(map[string]any)
+	if len(registry) < 50 {
+		t.Errorf("registry has %d harnesses, want at least 50", len(registry))
+	}
+
+	for _, kind := range []string{"instructions", "agents", "skills", "commands", "rules", "mcp"} {
+		// When each surface is expanded
+		got, err := ExpandTargetOutputs(map[string]any{"src": map[string]any{"targets": kind}}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", kind, err)
+		}
+
+		// Then no destination is claimed with two different extensions or
+		// formats, which would make harnesses overwrite each other
+		seen := map[string]string{}
+		for _, e := range got.(map[string]any)["src"].([]any) {
+			m := e.(map[string]any)
+			dest := m["dest"].(string)
+			sig := fmt.Sprint(m["ext"], m["set"].(map[string]any)["agent.format"])
+			if prev, ok := seen[dest]; ok && prev != sig {
+				t.Errorf("%s: %s claimed as %s and %s", kind, dest, prev, sig)
+			}
+			seen[dest] = sig
+		}
+	}
+
+	for id, h := range registry {
+		if name, _ := h.(map[string]any)["name"].(string); name == "" {
+			t.Errorf("harness %q has no name", id)
+		}
 	}
 }
