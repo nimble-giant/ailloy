@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/BurntSushi/toml"
+	"github.com/pelletier/go-toml/v2"
 )
 
 func tomlFixedPoint(t *testing.T, name, input string) {
@@ -105,7 +105,7 @@ func TestDumpTOML_OutputIsValidTOML(t *testing.T) {
 		t.Fatal(err)
 	}
 	var v map[string]any
-	if _, err := toml.Decode(string(out), &v); err != nil {
+	if err := toml.Unmarshal(out, &v); err != nil {
 		t.Fatalf("dump is not valid TOML: %v\n%s", err, out)
 	}
 }
@@ -163,7 +163,7 @@ func TestMergeFile_TOML_CityConfig(t *testing.T) {
 			AppendFragments []string `toml:"append_fragments"`
 		}
 	}
-	if _, err := toml.Decode(string(got), &v); err != nil {
+	if err := toml.Unmarshal(got, &v); err != nil {
 		t.Fatalf("merged city.toml does not parse: %v\n%s", err, got)
 	}
 	if v.Workspace.Name != "repl_city" || v.Workspace.Provider != "claude" {

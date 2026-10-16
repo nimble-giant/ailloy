@@ -7,40 +7,95 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/BurntSushi/toml"
+	"github.com/pelletier/go-toml/v2"
+	"github.com/pelletier/go-toml/v2/unstable"
 )
 
 // loadTOML parses TOML bytes into an order-preserving *node tree.
 //
-// BurntSushi/toml decodes into unordered Go maps, so key order is rebuilt
-// from MetaData.Keys(), which lists every key in document order. Ranks are
-// tracked per table path with array-of-tables indices dropped, so every
-// element of an array of tables shares one key order.
+// go-toml decodes into unordered Go maps, so key order is rebuilt from a
+// second pass over the document with go-toml's unstable AST parser, which
+// yields every key in document order. Ranks are tracked per table path with
+// array indices dropped, so every element of an array of tables shares one
+// key order.
 //
-// Scalars keep their TOML types: int64, float64, string, bool, and
-// time.Time (local dates/times carry BurntSushi's sentinel locations so they
-// re-encode in their original form).
+// Scalars keep their TOML types: int64, float64, string, bool, time.Time
+// for offset date-times, and toml.LocalDateTime/LocalDate/LocalTime for
+// local ones, so each re-encodes in its original form.
 func loadTOML(data []byte) (*node, error) {
 	var raw map[string]any
-	md, err := toml.Decode(string(data), &raw)
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	order, err := tomlKeyOrder(data)
 	if err != nil {
 		return nil, err
 	}
+	return tomlToNode(raw, nil, order), nil
+}
+
+// tomlKeyOrder returns, for each table path (segments joined by NUL), the
+// rank of each child key in order of first appearance in the document.
+func tomlKeyOrder(data []byte) (map[string]map[string]int, error) {
 	order := map[string]map[string]int{}
-	for _, k := range md.Keys() {
-		for i := range k {
-			parent := strings.Join(k[:i], "\x00")
+	record := func(path []string) {
+		for i := range path {
+			parent := strings.Join(path[:i], "\x00")
 			ranks, ok := order[parent]
 			if !ok {
 				ranks = map[string]int{}
 				order[parent] = ranks
 			}
-			if _, seen := ranks[k[i]]; !seen {
-				ranks[k[i]] = len(ranks)
+			if _, seen := ranks[path[i]]; !seen {
+				ranks[path[i]] = len(ranks)
 			}
 		}
 	}
-	return tomlToNode(raw, nil, order), nil
+	var walkValue func(v *unstable.Node, path []string)
+	walkValue = func(v *unstable.Node, path []string) {
+		switch v.Kind {
+		case unstable.InlineTable:
+			it := v.Children()
+			for it.Next() {
+				kv := it.Node()
+				child := append(append([]string(nil), path...), tomlKeyParts(kv)...)
+				record(child)
+				walkValue(kv.Value(), child)
+			}
+		case unstable.Array:
+			// Array elements share the array's path, matching tomlToNode.
+			it := v.Children()
+			for it.Next() {
+				walkValue(it.Node(), path)
+			}
+		}
+	}
+
+	var p unstable.Parser
+	p.Reset(data)
+	var table []string
+	for p.NextExpression() {
+		e := p.Expression()
+		switch e.Kind {
+		case unstable.Table, unstable.ArrayTable:
+			table = tomlKeyParts(e)
+			record(table)
+		case unstable.KeyValue:
+			path := append(append([]string(nil), table...), tomlKeyParts(e)...)
+			record(path)
+			walkValue(e.Value(), path)
+		}
+	}
+	return order, p.Error()
+}
+
+func tomlKeyParts(n *unstable.Node) []string {
+	var parts []string
+	it := n.Key()
+	for it.Next() {
+		parts = append(parts, string(it.Node().Data))
+	}
+	return parts
 }
 
 func tomlToNode(v any, path []string, order map[string]map[string]int) *node {
@@ -224,12 +279,16 @@ func writeTOMLInline(buf *bytes.Buffer, n *node) error {
 	return nil
 }
 
-// tomlScalar formats one scalar value by delegating to BurntSushi's encoder,
-// which already handles TOML string escaping, float forms (1.0, inf, nan)
-// and offset/local date-times.
+// tomlScalar formats one scalar value. Strings are always written as TOML
+// basic ("double-quoted") strings so output style is stable; every other
+// type is delegated to go-toml's encoder, which handles float forms (1.0,
+// inf, nan) and offset/local date-times.
 func tomlScalar(v any) (string, error) {
 	if v == nil {
 		return "", fmt.Errorf("toml has no null value")
+	}
+	if s, ok := v.(string); ok {
+		return tomlBasicString(s), nil
 	}
 	var buf bytes.Buffer
 	if err := toml.NewEncoder(&buf).Encode(map[string]any{"v": v}); err != nil {
@@ -243,16 +302,44 @@ func tomlScalar(v any) (string, error) {
 	return out, nil
 }
 
+// tomlBasicString quotes s as a TOML basic string, escaping quotes,
+// backslashes and control characters.
+func tomlBasicString(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\f':
+			b.WriteString(`\f`)
+		case '\r':
+			b.WriteString(`\r`)
+		default:
+			if r < 0x20 || r == 0x7f {
+				fmt.Fprintf(&b, `\u%04X`, r)
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
 var tomlBareKey = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 func tomlKey(k string) string {
 	if tomlBareKey.MatchString(k) {
 		return k
 	}
-	s, err := tomlScalar(k)
-	if err != nil {
-		// Strings always encode; keep a safe fallback anyway.
-		return fmt.Sprintf("%q", k)
-	}
-	return s
+	return tomlBasicString(k)
 }
