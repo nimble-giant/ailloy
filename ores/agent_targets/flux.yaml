@@ -33,6 +33,8 @@
 #   mcp-json           JSON {"mcpServers": {...}}
 #   vscode-mcp-json    JSON {"servers": {...}}
 #   opencode-json      JSON {"mcp": {...}} (opencode.json / kilo.jsonc)
+#   mcp-toml           TOML [mcp_servers.<name>] tables (Codex, Grok)
+#   vibe-mcp-toml      TOML [[mcp_servers]] array (Mistral Vibe)
 #
 # Paths come from vendor docs and source as of 2026-10; see
 # docs/agent-targets.md for sources and confidence.
@@ -54,6 +56,7 @@ harnesses:
     instructions: AGENTS.md
     agents: {dest: .codex/agents, ext: .toml, format: codex-toml}
     skills: .agents/skills
+    mcp: {dest: .codex/config.toml, format: mcp-toml, strategy: merge}
   opencode:
     name: OpenCode
     instructions: AGENTS.md
@@ -194,6 +197,7 @@ harnesses:
     instructions: AGENTS.md
     agents: {dest: .vibe/agents, ext: .toml, format: vibe-toml}
     skills: .agents/skills
+    mcp: {dest: .vibe/config.toml, format: vibe-mcp-toml, strategy: merge}
   aider:
     name: Aider
     instructions: CONVENTIONS.md
@@ -211,6 +215,7 @@ harnesses:
     skills: .grok/skills
     commands: .grok/commands
     rules: .grok/rules
+    mcp: {dest: .grok/config.toml, format: mcp-toml, strategy: merge}
   openhands:
     name: OpenHands
     instructions: AGENTS.md

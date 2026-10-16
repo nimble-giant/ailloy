@@ -133,8 +133,10 @@ Plugin casts pin `agent.targets=[claude]` and `agent.current_target=claude`, so 
 | `mcp-json` | `{"mcpServers": {...}}` |
 | `vscode-mcp-json` | `{"servers": {...}}` |
 | `opencode-json` | `{"mcp": {...}}` (`opencode.json`, `kilo.jsonc`) |
+| `mcp-toml` | TOML `[mcp_servers.<name>]` tables (Codex, Grok) |
+| `vibe-mcp-toml` | TOML `[[mcp_servers]]` array (Mistral Vibe) |
 
-MCP surfaces use `strategy: merge`, so a mold adds its servers without clobbering the project's own. TOML-configured MCP (Codex, Mistral Vibe, Grok) is not in the registry until TOML merge lands.
+MCP surfaces use `strategy: merge` (JSON, YAML and TOML), so a mold adds its servers without clobbering the project's own.
 
 ## Registry
 
@@ -143,7 +145,7 @@ Project-relative paths researched from vendor docs and source in October 2026. G
 | id | Harness | instructions | agents | skills | commands | rules | mcp |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `claude` | Claude Code | `CLAUDE.md` | `.claude/agents` | `.claude/skills` | `.claude/commands` | `.claude/rules` (paths-rule) | `.mcp.json` (mcp-json) |
-| `codex` | OpenAI Codex | `AGENTS.md` | `.codex/agents` (.toml, codex-toml) | `.agents/skills` |  |  |  |
+| `codex` | OpenAI Codex | `AGENTS.md` | `.codex/agents` (.toml, codex-toml) | `.agents/skills` |  |  | `.codex/config.toml` (mcp-toml) |
 | `opencode` | OpenCode | `AGENTS.md` | `.opencode/agents` (opencode) | `.opencode/skills` | `.opencode/commands` (opencode) |  | `opencode.json` (opencode-json) |
 | `gemini` | Gemini CLI | `GEMINI.md` | `.gemini/agents` | `.agents/skills` | `.gemini/commands` (.toml, gemini-toml) |  | `.gemini/settings.json` (mcp-json) |
 | `antigravity` | Google Antigravity | `AGENTS.md` |  | `.agents/skills` | `.agents/workflows` | `.agents/rules` |  |
@@ -166,11 +168,11 @@ Project-relative paths researched from vendor docs and source in October 2026. G
 | `letta` | Letta Code | `AGENTS.md` | `.letta/agents` | `.agents/skills` |  |  |  |
 | `continue` | Continue | `AGENTS.md` |  | `.continue/skills` |  | `.continue/rules` (continue-rule) |  |
 | `iflow` | iFlow CLI | `IFLOW.md` | `.iflow/agents` |  | `.iflow/commands` |  | `.iflow/settings.json` (mcp-json) |
-| `vibe` | Mistral Vibe | `AGENTS.md` | `.vibe/agents` (.toml, vibe-toml) | `.agents/skills` |  |  |  |
+| `vibe` | Mistral Vibe | `AGENTS.md` | `.vibe/agents` (.toml, vibe-toml) | `.agents/skills` |  |  | `.vibe/config.toml` (vibe-mcp-toml) |
 | `aider` | Aider | `CONVENTIONS.md` |  |  |  |  |  |
 | `gptme` | gptme | `AGENTS.md` |  |  |  |  |  |
 | `open-interpreter` | Open Interpreter | `AGENTS.md` |  | `.agents/skills` |  |  |  |
-| `grok` | Grok Build | `AGENTS.md` | `.grok/agents` | `.grok/skills` | `.grok/commands` | `.grok/rules` |  |
+| `grok` | Grok Build | `AGENTS.md` | `.grok/agents` | `.grok/skills` | `.grok/commands` | `.grok/rules` | `.grok/config.toml` (mcp-toml) |
 | `openhands` | OpenHands | `AGENTS.md` | `.openhands/agents` | `.agents/skills` |  |  |  |
 | `junie` | JetBrains Junie | `.junie/AGENTS.md` |  | `.junie/skills` |  |  | `.junie/mcp/mcp.json` (mcp-json) |
 | `qoder` | Qoder | `AGENTS.md` | `.qoder/agents` | `.qoder/skills` |  | `.qoder/rules` |  |
