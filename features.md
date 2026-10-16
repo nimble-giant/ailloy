@@ -33,7 +33,7 @@ Renders a mold's blanks with resolved flux and writes them to destination paths 
 - **One source → many destinations**: a source may list multiple targets, each with its own `dest`, `strategy`, and `set:` render context. Example: `AGENTS.md` written to both `AGENTS.md` and `CLAUDE.md`, each rendered with per-destination `set:` overrides. Resolver emits one file per `(src, dest, set)` tuple; `(dest, set)` tuples are deduped.
 - **Strategies** (per target, on existing destination):
   - `replace` (default): whole-file overwrite.
-  - `merge`: deep-merge JSON/YAML by extension (maps merge, arrays concat+dedup, ints preserved). Errors on unparseable destination unless `--force-replace-on-parse-error`.
+  - `merge`: deep-merge JSON/YAML/TOML by extension (`.json`, `.yaml`/`.yml`, `.toml`; maps/tables merge, arrays and arrays-of-tables concat+dedup, ints preserved; TOML keeps float/datetime types). Errors on unparseable destination unless `--force-replace-on-parse-error`. Comments are not preserved.
   - `append`: markdown only. Wraps content in an idempotent HTML-comment sentinel keyed by mold name (`<!-- ailloy:mold=<name>:start -->…:end -->`); re-cast replaces that block in place, preserving foreign content and other molds' blocks.
 - Ore-supplied `output:` entries merge into the consumer's; consumer key wins on collision; two ores claiming the same key (unresolved by consumer) error. Consumer may pull ore blanks via `from: ore/<namespace>/<path>`.
 

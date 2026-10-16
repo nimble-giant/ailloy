@@ -1884,6 +1884,35 @@ func TestReferenceDepthRule(t *testing.T) {
 	}
 }
 
+// Links that resolve outside the project root are not followed.
+func TestReferenceDepthRule_IgnoresLinksOutsideRoot(t *testing.T) {
+	outer := t.TempDir()
+	root := filepath.Join(outer, "proj")
+	for rel, content := range map[string]string{
+		"outside.md": "See [more](more.md).\n",
+		"more.md":    "More.\n",
+	} {
+		if err := os.WriteFile(filepath.Join(outer, rel), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".claude", "skills", "foo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx := &RuleContext{
+		RootDir: root,
+		Files: []DetectedFile{{
+			Path:     ".claude/skills/foo/SKILL.md",
+			Platform: PlatformClaude,
+			Content:  []byte("See [outside](../../../../outside.md).\n"),
+		}},
+		Config: DefaultConfig(),
+	}
+	if diags := (&referenceDepthRule{}).Check(ctx); len(diags) > 0 {
+		t.Errorf("expected no diagnostic for a link outside the root, got: %v", diags)
+	}
+}
+
 func TestWindowsPathsRule(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -92,6 +92,44 @@ func FuzzYAMLRoundTrip(f *testing.F) {
 	})
 }
 
+func FuzzTOMLRoundTrip(f *testing.F) {
+	seeds := []string{
+		"a = 1\n",
+		"[a]\nb = 2\n",
+		"items = [\"a\", \"b\"]\n",
+		"[[p]]\nname = \"x\"\n[[p]]\nname = \"y\"\n",
+		"t = { x = 1 }\n",
+		"d = 1979-05-27T07:32:00Z\nf = 1.0\n",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, raw string) {
+		if len(raw) > 64*1024 {
+			t.Skip()
+		}
+		n1, err := loadTOML([]byte(raw))
+		if err != nil {
+			return
+		}
+		out1, err := dumpTOML(n1)
+		if err != nil {
+			t.Fatalf("loadTOML accepted but dumpTOML failed: %v\ninput: %q", err, raw)
+		}
+		n2, err := loadTOML(out1)
+		if err != nil {
+			t.Fatalf("dumpTOML output not parseable: %v\ninput: %q\nout1:\n%s", err, raw, out1)
+		}
+		out2, err := dumpTOML(n2)
+		if err != nil {
+			t.Fatalf("second dump failed: %v", err)
+		}
+		if string(out1) != string(out2) {
+			t.Fatalf("not a fixed point.\ninput: %q\nout1:\n%s\nout2:\n%s", raw, out1, out2)
+		}
+	})
+}
+
 // FuzzMergeNodes asserts that merging two parsed trees never crashes and the
 // result is dumpable.
 func FuzzMergeNodesJSON(f *testing.F) {

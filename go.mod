@@ -14,9 +14,10 @@ require (
 	github.com/knadh/stuffbin v1.3.0
 	github.com/muesli/termenv v0.16.0
 	github.com/nimble-giant/ailloy-extensions-sdk v0.1.0
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/spf13/cobra v1.9.1
-	golang.org/x/sync v0.20.0
+	golang.org/x/sync v0.22.0
 	golang.org/x/term v0.43.0
 )
 
@@ -52,9 +53,9 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	github.com/yuin/goldmark v1.7.13 // indirect
+	github.com/yuin/goldmark v1.7.17 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 )

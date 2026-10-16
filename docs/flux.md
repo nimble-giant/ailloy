@@ -233,7 +233,7 @@ writes the destination when a file already exists:
 | --------- | -------------------------------------------------------------------------------------------------------------- |
 | (omitted) | Same as `replace`.                                                                                             |
 | `replace` | Whole-file overwrite. Default.                                                                                 |
-| `merge`   | Deep-merge with the existing file (JSON/YAML only).                                                            |
+| `merge`   | Deep-merge with the existing file (JSON/YAML/TOML only).                                                       |
 | `append`  | Idempotent text append for markdown files. Each mold's content goes into a sentinel block keyed by mold name.  |
 
 **Use `strategy: merge` when multiple molds need to contribute to a shared
@@ -252,17 +252,18 @@ output:
 
 #### Merge semantics
 
-- Detected by extension (`.json`, `.yaml`, `.yml`). Other extensions silently fall back to replace.
+- Detected by extension (`.json`, `.yaml`, `.yml`, `.toml`). Other extensions silently fall back to replace.
 - **Maps**: deep-merge. Existing keys keep their position; new keys are appended.
 - **Arrays**: concat with deep-equality dedupe (base entries first, then overlay-only).
 - **Type mismatch** (e.g., scalar replaced by a map): overlay wins.
 - **Non-existent destination**: the new content is written verbatim.
 - **JSON output**: 2-space indented, key insertion order preserved, integers preserved as integers (no float coercion).
 - **YAML output**: 2-space indented, key insertion order preserved. Comments and anchors are *not guaranteed* to survive round-tripping.
+- **TOML output**: key order preserved within each table, except that a table's plain `key = value` pairs are written before its sub-tables (TOML requires it). Arrays of tables (`[[name]]`) concat with dedupe like any array, so a mold can add its own `[[github.pr_monitor]]` entry without touching the user's. Integers, floats (`1.0` stays a float), and offset/local date-times keep their types. Inline tables are rewritten as standard `[table]` sections, dotted keys as nested tables, and comments are dropped.
 
 #### Malformed existing files
 
-If the destination is hand-edited and no longer parses as JSON/YAML, `cast`
+If the destination is hand-edited and no longer parses as JSON/YAML/TOML, `cast`
 errors out by default to avoid clobbering the user's work. Re-run with
 `--force-replace-on-parse-error` to overwrite:
 
