@@ -100,7 +100,11 @@ func (g *Generator) loadBlanks() error {
 		mold.ApplyManifestOutputDefault(flux, manifest)
 	}
 
-	resolved, err := mold.ResolveFiles(flux["output"], g.reader.FS())
+	output, err := mold.OutputFor(flux)
+	if err != nil {
+		return fmt.Errorf("resolving files: %w", err)
+	}
+	resolved, err := mold.ResolveFiles(output, g.reader.FS())
 	if err != nil {
 		return fmt.Errorf("resolving files: %w", err)
 	}

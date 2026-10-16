@@ -102,6 +102,13 @@ func ResolveFiles(output any, moldFS fs.FS, opts ...ResolveOption) ([]ResolvedFi
 	if output == nil {
 		resolved, err = resolveIdentity(moldFS)
 	} else {
+		// Callers that render expand `targets:` entries with their flux
+		// first (OutputFor); this pass covers callers that only need source
+		// paths and is a no-op for already-expanded output.
+		output, err = ExpandTargetOutputs(output, nil)
+		if err != nil {
+			return nil, fmt.Errorf("parsing output mapping: %w", err)
+		}
 		var dirs []dirMapping
 		var files []fileMapping
 		dirs, files, err = parseOutput(output, moldFS)
@@ -257,6 +264,9 @@ func parseMapOutput(m map[string]any, moldFS fs.FS) ([]dirMapping, []fileMapping
 		}
 
 		for _, target := range targets {
+			if target.Skip {
+				continue
+			}
 			if isDir {
 				dirs = append(dirs, dirMapping{src: src, target: target})
 			} else {
@@ -375,6 +385,23 @@ func parseTargetMap(v map[string]any) (OutputTarget, error) {
 			return t, fmt.Errorf("unknown strategy %q: must be \"replace\", \"merge\", or \"append\"", s)
 		}
 	}
+	if ext, ok := v["ext"]; ok {
+		e, ok := ext.(string)
+		if !ok || !strings.HasPrefix(e, ".") {
+			return t, fmt.Errorf("ext must be a string starting with \".\"")
+		}
+		t.Ext = e
+	}
+	if skip, ok := v["skip"]; ok {
+		b, ok := skip.(bool)
+		if !ok {
+			return t, fmt.Errorf("skip must be a boolean")
+		}
+		t.Skip = b
+	}
+	if _, ok := v["targets"]; ok {
+		return t, fmt.Errorf("targets entry was not expanded")
+	}
 	if from, ok := v["from"]; ok {
 		f, ok := from.(string)
 		if !ok {
@@ -424,6 +451,9 @@ func resolveFromMappings(dirs []dirMapping, files []fileMapping, moldFS fs.FS) (
 			rel := strings.TrimPrefix(p, dm.src)
 			rel = strings.TrimPrefix(rel, "/")
 			destPath := path.Join(dm.target.Dest, rel)
+			if dm.target.Ext != "" {
+				destPath = strings.TrimSuffix(destPath, path.Ext(destPath)) + dm.target.Ext
+			}
 
 			resolved = append(resolved, ResolvedFile{
 				SrcPath:  p,

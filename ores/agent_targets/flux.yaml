@@ -1,0 +1,27 @@
+enabled: true
+targets:
+  - claude
+harnesses:
+  claude:
+    name: Claude Code
+    instructions: CLAUDE.md
+    agents: .claude/agents
+    skills: .claude/skills
+    commands: .claude/commands
+  codex:
+    name: OpenAI Codex
+    instructions: AGENTS.md
+    agents:
+      dest: .codex/agents
+      ext: .toml
+      format: codex-toml
+    skills: .agents/skills
+  opencode:
+    name: OpenCode
+    instructions: AGENTS.md
+    agents:
+      dest: .opencode/agents
+      format: opencode
+    commands:
+      dest: .opencode/commands
+      format: opencode

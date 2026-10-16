@@ -43,6 +43,14 @@ func NewIngotResolverWithFS(fsys fs.FS, searchPaths []string, flux map[string]an
 	return r
 }
 
+// withFlux returns a copy of r that renders ingots with flux. The copy shares
+// r's in-progress set so circular references are still detected.
+func (r *IngotResolver) withFlux(flux map[string]any) *IngotResolver {
+	c := *r
+	c.Flux = flux
+	return &c
+}
+
 // Resolve finds and renders an ingot by name. It searches each path for a
 // directory with an ingot.yaml manifest first, then falls back to a bare .md file.
 // The ingot content is rendered through the same template engine with the same

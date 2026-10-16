@@ -131,7 +131,9 @@ func ProcessTemplate(content string, flux map[string]any, opts ...TemplateOption
 
 	funcMap := baseFuncMap()
 	if cfg.ingotResolver != nil {
-		funcMap["ingot"] = cfg.ingotResolver.Resolve
+		// Ingots render with this template's flux, not the resolver's base
+		// flux, so they see per-destination `set:` context.
+		funcMap["ingot"] = cfg.ingotResolver.withFlux(flux).Resolve
 	}
 
 	tmpl, err := template.New("").Funcs(funcMap).Option("missingkey=zero").Parse(content)
