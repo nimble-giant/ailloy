@@ -52,6 +52,7 @@ type Topic struct {
 // summary — but listing them yields tighter prose.
 var summaries = map[string]string{
 	"getting-started":    "Quickstart: install ailloy and cast your first mold",
+	"glossary":           "Every Ailloy term and command in plain English",
 	"blanks":             "Blanks: commands, skills, and workflow templates",
 	"anneal":             "Configure flux variables interactively (alias: configure)",
 	"flux":               "Template variable system, schemas, and value layering",
