@@ -194,14 +194,19 @@ func collectMarkdownRefs(content []byte, fileDir, rootDir string) []string {
 
 // resolveLocalMarkdown resolves a relative markdown link against the
 // containing file's directory, returning a project-relative slash path.
+// Links that resolve outside rootDir are ignored, and the existence check
+// goes through os.Root so it cannot follow a path out of the project.
 func resolveLocalMarkdown(target, fileDir, rootDir string) (string, bool) {
-	candidate := filepath.Join(rootDir, fileDir, target)
-	clean := filepath.Clean(candidate)
-	if _, err := os.Stat(clean); err != nil {
+	rel := filepath.Join(fileDir, target)
+	if !filepath.IsLocal(rel) {
 		return "", false
 	}
-	rel, err := filepath.Rel(rootDir, clean)
+	root, err := os.OpenRoot(rootDir)
 	if err != nil {
+		return "", false
+	}
+	defer func() { _ = root.Close() }()
+	if _, err := root.Stat(rel); err != nil {
 		return "", false
 	}
 	return filepath.ToSlash(rel), true
