@@ -1,8 +1,10 @@
 package commands
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
@@ -110,5 +112,29 @@ func TestEphemeralOreResolver_BackwardCompat_NoOutputBlock(t *testing.T) {
 				t.Errorf("output key leaked into namespaced defaults: %+v", leg)
 			}
 		}
+	}
+}
+
+// A multi-package ingot repo (ingots/<name>/ingot.yaml, no root manifest) is
+// valid for cast's installer, so ephemeral resolution must accept it too and
+// expose every package.
+func TestResolveDepsEphemeral_MultiPackageIngotDep(t *testing.T) {
+	multi := t.TempDir()
+	writeMultiIngotFixture(t, multi, "alpha", "beta")
+	m := &mold.Mold{Dependencies: []mold.Dependency{{Ingot: multi, Version: "1.0.0"}}}
+
+	r, err := ResolveDepsEphemeral(m, true)
+	if err != nil {
+		t.Fatalf("ResolveDepsEphemeral: %v", err)
+	}
+	var names []string
+	for _, in := range r.IngotSources() {
+		names = append(names, in.Name)
+		if _, err := fs.Stat(in.FS, "ingot.yaml"); err != nil {
+			t.Fatalf("ingot %s FS not rooted at its package: %v", in.Name, err)
+		}
+	}
+	if strings.Join(names, ",") != "alpha,beta" {
+		t.Fatalf("ingot sources = %v", names)
 	}
 }
