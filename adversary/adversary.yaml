@@ -1,0 +1,53 @@
+name: ailloy-guardian
+version: 0.1.0
+description: >-
+  Repo-specific reviewer for github.com/nimble-giant/ailloy. Enforces the
+  features.md behavioral contract, flags docs drift, checks bundled
+  mold/ingot/ore manifests, and surfaces risky Go patterns.
+
+triggers:
+  manual: true
+  files_changed:
+    - "**/*.go"
+    - "features.md"
+    - "docs/**"
+    - "README.md"
+    - "AGENTS.md"
+    - "**/mold.yaml"
+    - "**/ingot.yaml"
+    - "**/ore.yaml"
+
+# Drives `adversary auto` selection: run this reviewer when ailloy's Go
+# sources, docs, or bundled mold packages change.
+detection:
+  files:
+    - "**/*.go"
+    - "features.md"
+    - "docs/**"
+    - "**/mold.yaml"
+    - "**/ingot.yaml"
+    - "**/ore.yaml"
+
+runtime:
+  name: node
+  version: "22"
+  command:
+    - dist/index.js
+
+permissions:
+  enforcement: advisory
+  filesystem:
+    read:
+      - .
+    write:
+      - .adversary/results
+  network: false
+  # All four rules are deterministic and never call ctx.model, so no model
+  # broker is requested. Declaring model access (true) makes the runtime abort
+  # unless an *_API_KEY is present, even for rules that don't use it.
+  model: false
+  environment:
+    allow: []
+
+findings:
+  format: adversary.review.v1
