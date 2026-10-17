@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io/fs"
 
 	"dario.cat/mergo"
 	"github.com/nimble-giant/ailloy/pkg/foundry"
@@ -22,6 +23,26 @@ type EphemeralOreResolver struct {
 	// mold's output and to resolve `from:` selectors that point into an
 	// ore's blanks/ tree.
 	sources []mold.OreSource
+	// ingots records each package discovered in declared ingot deps, in
+	// declaration order. Callers that render without installing (serve)
+	// mount these so {{ingot "name"}} resolves as it would after a cast.
+	ingots []IngotSource
+}
+
+// IngotSource is one ingot package resolved from a declared ingot dep: its
+// manifest name and an fs.FS rooted at the package (ingot.yaml at its root).
+type IngotSource struct {
+	Name string
+	FS   fs.FS
+}
+
+// IngotSources returns the ingot packages resolved from declared ingot deps.
+// Empty for nil receiver.
+func (r *EphemeralOreResolver) IngotSources() []IngotSource {
+	if r == nil {
+		return nil
+	}
+	return r.ingots
 }
 
 // Overlays returns the prefixed schema overlays produced from declared ore
@@ -85,10 +106,25 @@ func ResolveDepsEphemeral(manifest *mold.Mold, allowLocalDeps bool) (*EphemeralO
 		}
 
 		if kind == "ingot" {
-			// Validate ingot manifest parses, but don't add anything to
-			// overlays — ingots don't contribute to flux schema/defaults.
-			if _, err := mold.LoadIngotFromFS(fsys, "ingot.yaml"); err != nil {
+			// Discover packages the same way cast's installer does (a root
+			// ingot.yaml, or one package per ingots/<name>/). Ingots don't
+			// contribute to flux schema/defaults; they're recorded for
+			// callers that resolve {{ingot}} without installing.
+			pkgs, err := mold.DiscoverIngotPackages(fsys)
+			if err != nil {
 				return nil, fmt.Errorf("invalid ingot manifest at %s: %w", ref, err)
+			}
+			if len(pkgs) == 0 {
+				return nil, fmt.Errorf("invalid ingot manifest at %s: no ingot.yaml found", ref)
+			}
+			for _, pkg := range pkgs {
+				pkgFS := fsys
+				if pkg.Root != "." {
+					if pkgFS, err = fs.Sub(fsys, pkg.Root); err != nil {
+						return nil, fmt.Errorf("scoping ingot %s at %s: %w", pkg.Name, ref, err)
+					}
+				}
+				r.ingots = append(r.ingots, IngotSource{Name: pkg.Name, FS: pkgFS})
 			}
 			continue
 		}

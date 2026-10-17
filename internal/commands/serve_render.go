@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 
 	"dario.cat/mergo"
@@ -21,8 +22,8 @@ import (
 //
 //   - only remote foundry references are accepted, so a request can never
 //     read the server's own filesystem;
-//   - ingots resolve from the requested mold's tree only, never from the
-//     server's cwd, .ailloy/ or ~/.ailloy/;
+//   - ingots resolve from the requested mold's tree and its declared ingot
+//     deps only, never from the server's cwd, .ailloy/ or ~/.ailloy/;
 //   - persisted flux files and ailloy.lock are not consulted;
 //   - nothing is written to disk except the shared foundry cache.
 type serveRenderer struct {
@@ -75,9 +76,10 @@ func (r *serveRenderer) Render(_ context.Context, req server.CastRequest) (*serv
 		r.logger.Printf("cast %s: warning: %v", req.Mold, verr)
 	}
 
-	// The mold's own tree is the only ingot source: no disk search paths.
+	// Ingots come from the mold's own tree plus its declared ingot deps,
+	// mounted in memory: no disk search paths.
 	tplOpts := []mold.TemplateOption{
-		mold.WithIngotResolver(mold.NewIngotResolverWithFS(reader.FS(), nil, flux)),
+		mold.WithIngotResolver(mold.NewIngotResolverWithFS(mountIngotDeps(reader.FS(), oreResolver.IngotSources()), nil, flux)),
 		mold.WithLogger(r.logger),
 	}
 
@@ -208,4 +210,55 @@ func sourceAllowed(ref string, patterns []string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// mountIngotDeps returns moldFS with each declared ingot dependency mounted
+// at ingots/<name>/, which is where cast installs them and where the ingot
+// resolver looks. The mold's own ingots win on a name collision, matching
+// cast's search order (mold root before .ailloy/); between deps, the first
+// declared wins.
+func mountIngotDeps(moldFS fs.FS, ingots []IngotSource) fs.FS {
+	mounts := map[string]fs.FS{}
+	for _, in := range ingots {
+		if !fs.ValidPath(in.Name) || strings.Contains(in.Name, "/") || in.Name == "." {
+			continue
+		}
+		if _, dup := mounts[in.Name]; dup {
+			continue
+		}
+		if fileExists(moldFS, path.Join("ingots", in.Name, "ingot.yaml")) || fileExists(moldFS, path.Join("ingots", in.Name+".md")) {
+			continue
+		}
+		mounts[in.Name] = in.FS
+	}
+	if len(mounts) == 0 {
+		return moldFS
+	}
+	return ingotMountFS{base: moldFS, mounts: mounts}
+}
+
+func fileExists(fsys fs.FS, name string) bool {
+	_, err := fs.Stat(fsys, name)
+	return err == nil
+}
+
+type ingotMountFS struct {
+	base   fs.FS
+	mounts map[string]fs.FS
+}
+
+func (m ingotMountFS) Open(name string) (fs.File, error) {
+	if !fs.ValidPath(name) {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
+	}
+	if rest, ok := strings.CutPrefix(name, "ingots/"); ok {
+		pkg, sub, _ := strings.Cut(rest, "/")
+		if mfs, ok := m.mounts[pkg]; ok {
+			if sub == "" {
+				sub = "."
+			}
+			return mfs.Open(sub)
+		}
+	}
+	return m.base.Open(name)
 }

@@ -78,7 +78,7 @@ A cast request must never read the server's own files:
 
 1. `mold` must be a remote foundry reference; local paths are a `400`.
 2. Mold dependencies declared with local paths are refused (the same rule forge applies to remote molds).
-3. Ingots resolve only from the requested mold's filesystem. Forge and cast also search cwd, `.ailloy/` and `~/.ailloy/`; the server does not.
+3. Ingots resolve only from the requested mold's filesystem and its declared ingot dependencies. Dependencies are resolved into the foundry cache and mounted in memory at `ingots/<name>/`, where cast would have installed them; the mold's own ingots win on a name clash, as in cast. Forge and cast also search cwd, `.ailloy/` and `~/.ailloy/`; the server does not.
 4. Persisted flux (`~/.ailloy/flux/`) and `ailloy.lock` are not consulted, and the process runs in a fresh temp directory so cwd-relative lookups find nothing.
 5. Every output path is checked again at the HTTP layer; absolute paths or `..` escapes are a `422`.
 
@@ -90,13 +90,8 @@ Resource limits: 1 MiB request bodies, `--max-concurrent` in-flight casts (`503`
 
 When #275 lands, its `mold.OutputFor(flux)` expansion must also be applied at the serve render site (`serveRenderer.Render`, before `ResolveFilesWithOreSources`), like every other render site. Whichever PR merges second should add that line. The cleaner follow-up is to fold forge, `renderMoldFiles` (plugin) and serve into one shared in-memory render function, which this PR avoids doing so it does not collide with #275's edits to those files.
 
-## Known gaps
-
-- Ingots that a mold declares as **dependencies** (`dependencies: - ingot: …`) are not yet resolvable through the server. Cast finds them because it installs them into `.ailloy/ingots/`, a disk path the server deliberately does not search. The fix is for `ResolveDepsEphemeral` to hand back each ingot dep's filesystem so the renderer can search it after the mold's own tree. Bundled ingots (the mold's own `ingots/`) and ores work today.
-
 ## Follow-ups
 
-- Resolve declared ingot dependencies in memory (see Known gaps).
 - Apply `mold.OutputFor` at the serve render site after #275, then unify the three render paths.
 - `GET /v1/molds` backed by foundry indexes, so clients can discover what the server can cast.
 - `GET /v1/smelt` for source tarballs (mirror use case).

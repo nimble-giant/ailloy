@@ -104,7 +104,6 @@ Unauthenticated liveness check: `{"status":"ok","version":"..."}`.
 ## What the server will not do
 
 - Read local paths. `mold` must be a foundry reference, so a request can never read the server's own files.
-- Resolve ingots from its own `.ailloy/`, `~/.ailloy/` or working directory. Ingots come from the requested mold.
+- Resolve ingots from its own `.ailloy/`, `~/.ailloy/` or working directory. Ingots come from the requested mold's `ingots/` and the ingots it declares as dependencies, which are resolved in memory and never installed. The mold's own ingots win on a name clash.
 - Use persisted flux (`~/.ailloy/flux/`) or an `ailloy.lock`. Each request carries its own flux.
-- Resolve ingots a mold declares as dependencies, yet. Bundled ingots in the mold's own `ingots/` work.
 - Write anything except the shared foundry cache (`~/.ailloy/cache/`).

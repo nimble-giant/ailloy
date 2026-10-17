@@ -253,3 +253,57 @@ func TestServe_EndToEndTarball(t *testing.T) {
 		t.Fatalf("tar = %v", got)
 	}
 }
+
+// writeIngotDepMold builds a mold that declares two ingot dependencies: a
+// single-package ingot repo and a multi-package one (ingots/<name>/), plus a
+// bundled ingot whose name collides with a dependency's.
+func writeIngotDepMold(t *testing.T) string {
+	t.Helper()
+	single := t.TempDir()
+	mustWrite(t, filepath.Join(single, "ingot.yaml"), "apiVersion: v1\nkind: ingot\nname: greeting\nversion: 1.0.0\nfiles: [body.md]\n")
+	mustWrite(t, filepath.Join(single, "body.md"), "Hi from {{.project.organization}}")
+
+	multi := t.TempDir()
+	writeMultiIngotFixture(t, multi, "alpha", "shadowed")
+
+	moldDir := t.TempDir()
+	for _, d := range []string{"commands", "ingots"} {
+		if err := os.MkdirAll(filepath.Join(moldDir, d), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustWrite(t, filepath.Join(moldDir, "mold.yaml"), `apiVersion: v1
+kind: mold
+name: deps-demo
+version: 0.1.0
+dependencies:
+  - ingot: `+single+`
+    version: 1.0.0
+  - ingot: `+multi+`
+    version: 1.0.0
+`)
+	mustWrite(t, filepath.Join(moldDir, "flux.yaml"), "project:\n  organization: acme\noutput:\n  commands: .claude/commands\n")
+	mustWrite(t, filepath.Join(moldDir, "ingots", "shadowed.md"), "bundled wins")
+	mustWrite(t, filepath.Join(moldDir, "commands", "x.md"), `{{ingot "greeting"}} | {{ingot "alpha"}} | {{ingot "shadowed"}}`+"\n")
+	return moldDir
+}
+
+// Ingots a mold declares as dependencies resolve in memory, like cast's
+// installed .ailloy/ingots/, with the mold's own ingots taking precedence.
+func TestServeRenderer_ResolvesIngotDependencies(t *testing.T) {
+	moldDir := writeIngotDepMold(t)
+	t.Chdir(t.TempDir())
+	r := &serveRenderer{allowLocal: true, logger: log.New(io.Discard, "", 0)}
+	res, err := r.Render(context.Background(), server.CastRequest{Mold: moldDir})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	got := string(filesByPath(res)[".claude/commands/x.md"].Content)
+	want := "Hi from acme | # alpha\n | bundled wins\n"
+	if got != want {
+		t.Fatalf("x.md = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(".ailloy"); !os.IsNotExist(err) {
+		t.Fatal("serve must not install ingot deps into .ailloy/")
+	}
+}
