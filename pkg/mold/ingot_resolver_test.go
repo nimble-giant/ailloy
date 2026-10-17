@@ -267,3 +267,25 @@ func TestIngotResolver_EmptySearchPaths(t *testing.T) {
 		t.Errorf("expected 'not found' error, got: %v", err)
 	}
 }
+
+func TestIngotResolver_SeesPerDestinationSet(t *testing.T) {
+	// Given an ingot that branches on the agent target, and a resolver built
+	// once with the base flux (as cast does)
+	fsys := fstest.MapFS{
+		"ingots/frontmatter.md": &fstest.MapFile{Data: []byte(`{{if eq .agent.format "codex-toml"}}toml{{else}}yaml{{end}}`)},
+	}
+	base := map[string]any{"agent": map[string]any{"format": "markdown"}}
+	r := NewIngotResolverWithFS(fsys, nil, base)
+
+	// When a blank is rendered with a per-destination set
+	fileFlux := MergeSet(base, map[string]any{"agent.format": "codex-toml"})
+	got, err := ProcessTemplate(`{{ingot "frontmatter"}}`, fileFlux, WithIngotResolver(r))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Then the ingot renders with that destination's context
+	if got != "toml" {
+		t.Errorf("got %q, want toml", got)
+	}
+}

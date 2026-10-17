@@ -421,3 +421,50 @@ output:
 	}
 	return blanks.NewMoldReader(fsys)
 }
+
+// agentGatedReader is a mold whose agent only renders for the claude target,
+// the multi-target pattern #201 reports --claude-plugin dropping.
+func agentGatedReader(output string) *blanks.MoldReader {
+	return blanks.NewMoldReader(fstest.MapFS{
+		"mold.yaml": &fstest.MapFile{Data: []byte("apiVersion: v1\nkind: mold\nname: gated\nversion: 0.1.0\n")},
+		"flux.yaml": &fstest.MapFile{Data: []byte(output)},
+		"agents/reviewer.md": &fstest.MapFile{Data: []byte(
+			"{{- if and (eq .agent.current_target \"claude\") (has \"claude\" .agent.targets) -}}\n# reviewer\n{{- end -}}\n")},
+	})
+}
+
+func TestRenderMoldFiles_PluginSetsClaudeTarget(t *testing.T) {
+	cases := map[string]string{
+		"targets entry": "output:\n  agents:\n    targets: agents\n",
+		"legacy multi-dest": "output:\n  agents:\n    - dest: .claude/agents\n      set:\n        agent.current_target: claude\n" +
+			"    - dest: .opencode/agents\n      set:\n        agent.current_target: opencode\n",
+	}
+	for name, output := range cases {
+		t.Run(name, func(t *testing.T) {
+			// Given a mold gated on agent.current_target / agent.targets
+			reader := agentGatedReader(output)
+			flux, err := reader.LoadFluxDefaults()
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest, _ := reader.LoadManifest()
+
+			// When rendered for a Claude plugin
+			files, err := renderMoldFiles(reader, manifest, flux, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Then the claude agent is kept
+			var got []string
+			for _, f := range files {
+				if strings.TrimSpace(string(f.Content)) != "" {
+					got = append(got, f.CastDest)
+				}
+			}
+			if len(got) != 1 || got[0] != ".claude/agents/reviewer.md" {
+				t.Errorf("rendered %v, want only .claude/agents/reviewer.md", got)
+			}
+		})
+	}
+}

@@ -140,7 +140,11 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 		resolveOpts = append(resolveOpts, mold.WithIgnorePatterns(ignore))
 	}
 
-	resolved, err := mold.ResolveFiles(flux["output"], reader.FS(), resolveOpts...)
+	output, err := mold.OutputFor(flux)
+	if err != nil {
+		return res, fmt.Errorf("resolving output files: %w", err)
+	}
+	resolved, err := mold.ResolveFiles(output, reader.FS(), resolveOpts...)
 	if err != nil {
 		return res, fmt.Errorf("resolving output files: %w", err)
 	}

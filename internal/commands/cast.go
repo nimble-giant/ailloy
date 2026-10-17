@@ -454,7 +454,11 @@ func castProject(reader *blanks.MoldReader, source string) error {
 	if derr != nil {
 		return fmt.Errorf("resolving ore output overlays: %w", derr)
 	}
-	resolved, err := mold.ResolveFilesWithOreSources(flux["output"], reader.FS(), depResolver.OreSources(), resolveOpts...)
+	output, err := mold.OutputFor(flux)
+	if err != nil {
+		return fmt.Errorf("failed to resolve output files: %w", err)
+	}
+	resolved, err := mold.ResolveFilesWithOreSources(output, reader.FS(), depResolver.OreSources(), resolveOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to resolve output files: %w", err)
 	}

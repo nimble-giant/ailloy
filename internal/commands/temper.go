@@ -167,7 +167,11 @@ func runTemperLint(moldDir string) error {
 	resolver.FS = reader.FS()
 	opts := []mold.TemplateOption{mold.WithIngotResolver(resolver)}
 
-	resolved, err := mold.ResolveFiles(flux["output"], reader.FS())
+	output, err := mold.OutputFor(flux)
+	if err != nil {
+		return fmt.Errorf("resolving output files: %w", err)
+	}
+	resolved, err := mold.ResolveFiles(output, reader.FS())
 	if err != nil {
 		return fmt.Errorf("resolving output files: %w", err)
 	}
