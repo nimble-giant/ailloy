@@ -1,6 +1,7 @@
 package mold
 
 import (
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,7 +62,7 @@ func TestPersistedFluxPaths_OrderingAndExistence(t *testing.T) {
 		t.Fatalf("expected [%s]; got %v", globalPath, got)
 	}
 
-	projectPath := filepath.Join(".ailloy", "flux", slug+".yaml")
+	projectPath := filepath.Join(projectstate.Dir(), "flux", slug+".yaml")
 	if err := os.MkdirAll(filepath.Dir(projectPath), 0o750); err != nil {
 		t.Fatal(err)
 	}

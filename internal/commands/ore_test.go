@@ -74,7 +74,7 @@ func TestRunOreRemove_HasMoldDependents_ErrorsWithoutForce(t *testing.T) {
 			{Name: "status", Source: "g/status-ore", Dependents: []string{"g/some-mold"}},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestRunOreRemove_OnlyUserDependent_Removes(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create the ore install dir + manifest entry.
-	if err := os.MkdirAll(filepath.Join(".ailloy", "ores", "status"), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Join(projectStateDir(), "ores", "status"), 0750); err != nil {
 		t.Fatal(err)
 	}
 	manifest := &foundry.InstalledManifest{
@@ -100,7 +100,7 @@ func TestRunOreRemove_OnlyUserDependent_Removes(t *testing.T) {
 			{Name: "status", Source: "g/status-ore", Dependents: []string{"user"}},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestRunOreRemove_OnlyUserDependent_Removes(t *testing.T) {
 		t.Fatalf("runOreRemove: %v", err)
 	}
 	// Verify dir gone, manifest entry gone.
-	if _, err := os.Stat(filepath.Join(".ailloy", "ores", "status")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectStateDir(), "ores", "status")); !os.IsNotExist(err) {
 		t.Errorf("ore dir should be gone: %v", err)
 	}
 	got, _ := foundry.ReadInstalledManifest(manifestPath)
@@ -125,7 +125,7 @@ func TestRunOreRemove_Force_OverridesMoldDependents(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(".ailloy", "ores", "status"), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Join(projectStateDir(), "ores", "status"), 0750); err != nil {
 		t.Fatal(err)
 	}
 	manifest := &foundry.InstalledManifest{
@@ -134,7 +134,7 @@ func TestRunOreRemove_Force_OverridesMoldDependents(t *testing.T) {
 			{Name: "status", Source: "g/status-ore", Dependents: []string{"g/some-mold"}},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestRunOreRemove_Force_OverridesMoldDependents(t *testing.T) {
 	if err := runOreRemove(nil, []string{"status"}); err != nil {
 		t.Fatalf("runOreRemove with --force: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(".ailloy", "ores", "status")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectStateDir(), "ores", "status")); !os.IsNotExist(err) {
 		t.Errorf("ore dir should be gone: %v", err)
 	}
 }

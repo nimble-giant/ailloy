@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"path/filepath"
 	"slices"
@@ -36,7 +37,7 @@ func TestInstallDeclaredDeps_BareIngotRef_MultiLayout_InstallsAll(t *testing.T) 
 		t.Fatalf("installDeclaredDeps: %v", err)
 	}
 
-	im, err := foundry.ReadInstalledManifest(filepath.Join(projectDir, ".ailloy", "installed.yaml"))
+	im, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(projectDir), "installed.yaml"))
 	if err != nil || im == nil {
 		t.Fatalf("read installed manifest: im=%v err=%v", im, err)
 	}
@@ -78,7 +79,7 @@ func TestInstallDeclaredDeps_SubpathIngotRef_InstallsOne(t *testing.T) {
 		t.Fatalf("installDeclaredDeps: %v", err)
 	}
 
-	im, err := foundry.ReadInstalledManifest(filepath.Join(projectDir, ".ailloy", "installed.yaml"))
+	im, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(projectDir), "installed.yaml"))
 	if err != nil || im == nil {
 		t.Fatalf("read installed manifest: im=%v err=%v", im, err)
 	}
@@ -112,7 +113,7 @@ func TestInstallDeclaredDeps_BareIngotRef_DoubleInvoke_NoReInstall(t *testing.T)
 		t.Fatalf("first install: %v", err)
 	}
 
-	im, err := foundry.ReadInstalledManifest(filepath.Join(projectDir, ".ailloy", "installed.yaml"))
+	im, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(projectDir), "installed.yaml"))
 	if err != nil || im == nil {
 		t.Fatalf("read manifest: im=%v err=%v", im, err)
 	}
@@ -129,7 +130,7 @@ func TestInstallDeclaredDeps_BareIngotRef_DoubleInvoke_NoReInstall(t *testing.T)
 		t.Fatalf("second install: %v", err)
 	}
 
-	im2, err := foundry.ReadInstalledManifest(filepath.Join(projectDir, ".ailloy", "installed.yaml"))
+	im2, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(projectDir), "installed.yaml"))
 	if err != nil || im2 == nil {
 		t.Fatalf("read manifest after 2nd: im=%v err=%v", im2, err)
 	}

@@ -12,7 +12,7 @@ after a corrupt fetch, when a registry has been republished, or when you
 want to reclaim disk space.
 
 > **Note:** `cache clear` only touches the global cache. It does not delete
-> project metadata (`.ailloy/installed.yaml`, `ailloy.lock`) or rendered
+> project metadata (`installed.yaml`, `ailloy.lock` in the project state directory) or rendered
 > output. Use [`uninstall`](foundry.md#uninstalling-a-casted-mold) for
 > casted files.
 

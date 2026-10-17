@@ -10,6 +10,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 
 	"github.com/nimble-giant/ailloy/pkg/mold"
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 )
 
 // writeFluxFile writes overrides into a YAML file at path, merging with any
@@ -84,7 +85,7 @@ func setDottedKey(m map[string]any, key string, value any) error {
 
 // resolveProjectPath returns the project-scoped flux file path for a mold.
 func resolveProjectPath(moldName string) string {
-	return filepath.Join(".ailloy", "flux", moldName+".yaml")
+	return filepath.Join(projectstate.Dir(), "flux", moldName+".yaml")
 }
 
 // resolveGlobalPath returns the global-scoped flux file path for a mold.
@@ -179,7 +180,7 @@ func persistFoundryOverrides(
 		var path string
 		switch target {
 		case SaveTargetProject:
-			path = filepath.Join(".ailloy", "flux", slug+".yaml")
+			path = filepath.Join(projectstate.Dir(), "flux", slug+".yaml")
 		case SaveTargetGlobal:
 			home, err := os.UserHomeDir()
 			if err != nil {

@@ -247,14 +247,14 @@ func installDeclaredDeps(manifest *mold.Mold, moldKey string, global, allowLocal
 
 	// Update ailloy.lock if it exists (project-scope only).
 	if !global {
-		if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
+		if lock, _ := foundry.ReadLockFile(foundry.ProjectLockPath()); lock != nil {
 			for _, e := range im.Ingots {
 				lock.UpsertArtifactLock("ingot", artifactToLock(e))
 			}
 			for _, e := range im.Ores {
 				lock.UpsertArtifactLock("ore", artifactToLock(e))
 			}
-			_ = foundry.WriteLockFile(foundry.LockFileName, lock)
+			_ = foundry.WriteLockFile(foundry.ProjectLockPath(), lock)
 		}
 	}
 
@@ -487,7 +487,7 @@ func pruneRemovedDeps(manifestPath, moldKey string, currentDeps []mold.Dependenc
 	}
 
 	// Remove orphan install directories. Project scope lives under
-	// .ailloy/<kind>s/<name>; global lives under ~/.ailloy/<kind>s/<name>.
+	// <project state dir>/<kind>s/<name>; global lives under ~/.ailloy/<kind>s/<name>.
 	for _, p := range orphanPlans {
 		dir, derr := artifactInstallDir(p.kind, p.installName, global)
 		if derr != nil {
@@ -525,12 +525,13 @@ func stripDependent(s []string, target string) []string {
 }
 
 // artifactInstallDir returns the on-disk install directory for an artifact of
-// the given kind and install-name. Project scope returns ".ailloy/<kind>s/<name>";
+// the given kind and install-name. Project scope returns
+// "<project state dir>/<kind>s/<name>";
 // global scope returns "~/.ailloy/<kind>s/<name>". Returns an error if the home
 // directory cannot be resolved while in global mode.
 func artifactInstallDir(kind, name string, global bool) (string, error) {
 	if !global {
-		return filepath.Join(".ailloy", kind+"s", name), nil
+		return filepath.Join(projectStateDir(), kind+"s", name), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -683,7 +684,7 @@ func cascadeUninstallArtifacts(manifestPath, moldKey string, global bool) error 
 	// Drop orphans from the lock as well (project-scope only — global has no
 	// lock convention today).
 	if !global && len(orphans) > 0 {
-		if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
+		if lock, _ := foundry.ReadLockFile(foundry.ProjectLockPath()); lock != nil {
 			for _, o := range orphans {
 				kind, ok := kindByKey[kindKey{o.Source, o.Subpath, o.Alias}]
 				if !ok {
@@ -695,7 +696,7 @@ func cascadeUninstallArtifacts(manifestPath, moldKey string, global bool) error 
 				}
 				dropArtifactLockEntry(lock, kind, installName)
 			}
-			_ = foundry.WriteLockFile(foundry.LockFileName, lock)
+			_ = foundry.WriteLockFile(foundry.ProjectLockPath(), lock)
 		}
 	}
 

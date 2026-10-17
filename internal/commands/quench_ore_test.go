@@ -27,7 +27,7 @@ func TestQuench_PinsOresAndIngots(t *testing.T) {
 			{Name: "or", Source: "g/or-source", Version: "1.0.0", Commit: "ghi", InstalledAt: time.Now().UTC(), Alias: "aliased", Dependents: []string{"g/m"}},
 		},
 	}
-	if err := foundry.WriteInstalledManifest(filepath.Join(".ailloy", "installed.yaml"), manifest); err != nil {
+	if err := foundry.WriteInstalledManifest(filepath.Join(projectStateDir(), "installed.yaml"), manifest); err != nil {
 		t.Fatal(err)
 	}
 
@@ -35,7 +35,7 @@ func TestQuench_PinsOresAndIngots(t *testing.T) {
 		t.Fatalf("runQuench: %v", err)
 	}
 
-	lock, err := foundry.ReadLockFile(foundry.LockFileName)
+	lock, err := foundry.ReadLockFile(foundry.ProjectLockPath())
 	if err != nil {
 		t.Fatal(err)
 	}

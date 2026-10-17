@@ -1,6 +1,7 @@
 package fluxpicker
 
 import (
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,7 +60,7 @@ func TestEndToEnd_SaveToProject(t *testing.T) {
 
 	// Slug is derived from the full mold ref so nested-foundry molds with
 	// the same final segment can't clobber each other.
-	wantPath := filepath.Join(".ailloy", "flux", "official_agents.yaml")
+	wantPath := filepath.Join(projectstate.Dir(), "flux", "official_agents.yaml")
 	b, err := os.ReadFile(wantPath)
 	if err != nil {
 		t.Fatalf("read written file at %s: %v", wantPath, err)
@@ -96,7 +97,7 @@ func TestEndToEnd_SessionTargetSkipsDisk(t *testing.T) {
 	}
 
 	// Confirm no flux file was written.
-	if _, err := os.Stat(filepath.Join(".ailloy", "flux", "ref.yaml")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectstate.Dir(), "flux", "ref.yaml")); !os.IsNotExist(err) {
 		t.Fatalf("expected no flux file on session save; stat err = %v", err)
 	}
 

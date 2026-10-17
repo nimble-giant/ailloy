@@ -13,6 +13,7 @@ Every entry states behavior + expectation. Deeper docs: `docs/`. Do not duplicat
 | **ore** | A versioned behavior package: flux-schema fragment + defaults + optional `output:` mappings + optional `blanks/`. | Overlays a consuming mold: schema/defaults are namespaced under `ore.<namespace>.*`; gated by `{{if .ore.<ns>.enabled}}` (default `enabled: false`). |
 | **blank** | A markdown template file inside a mold, auto-discovered from the mold tree (reserved dirs/files excluded). | Rendered by Go `text/template`; supports flux vars, conditionals, ranges, `{{ingot}}`. |
 
+- **Project state lives outside the project.** Ailloy bookkeeping is not mold output: `installed.yaml`, `ailloy.lock`, `state.yaml`, project flux (`flux/`), installed `ores/` and `ingots/` live in a per-project state dir `~/.ailloy/projects/<sanitized-basename>-<sha256(abs path)[:12]>/` (`pkg/projectstate`), with `project.yaml` recording the root. Only rendered blanks/workflows/plugin files are written to the project. `AILLOY_PROJECT_STATE_DIR` overrides (relative → against project root; `.ailloy` keeps state in-tree). Global scope (`--global`) still uses `~/.ailloy/*` and `~/ailloy.lock`.
 - Reserved files (never installed as blanks): `mold.yaml`, `flux.yaml`, `flux.schema.yaml`, `ingot.yaml`, `ore.yaml`, `README.md`, `LICENSE`, `.ailloyignore`, etc.
 - `.ailloyignore` (or `mold.yaml` `ignore:`) excludes files from `cast`/`forge` (not `smelt`).
 
@@ -20,11 +21,11 @@ Every entry states behavior + expectation. Deeper docs: `docs/`. Do not duplicat
 
 Renders a mold's blanks with resolved flux and writes them to destination paths in the target project.
 
-- **Flux precedence** (low→high): `mold.yaml` inline `flux:`/`output:` defaults → `flux.yaml` defaults + ore overlays → persisted `~/.ailloy/flux/<slug>.yaml` then `./.ailloy/flux/<slug>.yaml` → `-f`/`--values` files (layered left→right) → `--set key=value` (highest).
+- **Flux precedence** (low→high): `mold.yaml` inline `flux:`/`output:` defaults → `flux.yaml` defaults + ore overlays → persisted `~/.ailloy/flux/<slug>.yaml` then `<state dir>/flux/<slug>.yaml` → `-f`/`--values` files (layered left→right) → `--set key=value` (highest).
 - `--set` uses dotted paths (`project.organization=acme`); YAML-structured values parse; plain scalars stay strings.
 - Flux validation runs during cast (required non-empty, type conformance); violations warn, not fatal.
-- Declared ore deps are auto-installed to `.ailloy/ores/` before rendering.
-- Writes `.ailloy/installed.yaml` (provenance: source, version, commit, file SHA-256s for uninstall drift). Updates `ailloy.lock` only if it already exists.
+- Declared ore deps are auto-installed to `<state dir>/ores/` before rendering.
+- Writes `<state dir>/installed.yaml` (provenance: source, version, commit, file SHA-256s for uninstall drift). Updates `ailloy.lock` only if it already exists.
 - `--claude-plugin` packages rendered output as a Claude Code plugin instead of loose files.
 
 ### Output mapping (source → destination)
@@ -51,7 +52,7 @@ Renders a mold's blanks with resolved flux and writes them to destination paths 
 ## forge (`template`, `blank`)
 
 - Dry-run preview: renders all blanks with resolved flux ("what cast would produce"). Analogous to `helm template`.
-- **Ephemeral**: resolves ore deps without writing `.ailloy/ores/`; no `installed.yaml`, no lock update, no provenance recording.
+- **Ephemeral**: resolves ore deps without writing `<state dir>/ores/`; no `installed.yaml`, no lock update, no provenance recording.
 - Default: prints each blank to stdout prefixed `--- <dest> ---` (no trailing ceremony stamp, pipe-safe). `--output <dir>` writes files (respecting strategy). `--debug` prints resolved mapping with origin (mold vs `ore:<ns>`).
 
 ## temper (`validate`)
@@ -80,7 +81,7 @@ Packages a mold for distribution. Two output modes via `-o` (`--output-format`);
 ### Ingot resolution (disk + embedded)
 
 - **Expectation (regression-critical):** `{{ingot "name"}}` MUST resolve when casting a smelted (`-o binary`) mold fully offline — for **both** the mold's own embedded `ingots/` **and** its embedded dependencies' `ingots/`. Do not break offline embedded-ingot resolution for either case. (A prior regression left the mold's own root-level ingots unresolvable in a smelted binary — pin both cases.)
-- For on-disk casts, `{{ingot "name"}}` resolves against disk search paths in order: **mold source root → cwd → `.ailloy/` → `~/.ailloy/`** (`buildIngotResolver`). First match wins; manifest ingots concatenate `files:` in order.
+- For on-disk casts, `{{ingot "name"}}` resolves against disk search paths in order: **mold source root → cwd → `<state dir>/` → `~/.ailloy/`** (`buildIngotResolver`). First match wins; manifest ingots concatenate `files:` in order.
 - For a smelted-binary cast, embedded ingots are made resolvable regardless of on-disk presence (see `internal/commands/cast_deps.go` / the ingot resolver). The expectation above is the contract; the mechanism (e.g. staging embedded ingots to disk vs. an `fs.FS`-native resolver) is an implementation detail and may change.
 - Offline casts prefer the embedded dep store over the network.
 
@@ -89,8 +90,8 @@ Packages a mold for distribution. Two output modes via `-o` (`--output-format`);
 - A foundry is an **SCM-native registry**: a git repo of molds/ingots/ores. Versions are git tags; no central index required.
 - Version refs: `latest`/none (highest semver, always re-resolves), exact (`@v1.2.3`), constraint (`@^1.0.0`, `@~1.2`, `@>=1.0`), branch (`@main`, mutable — warns), SHA (`@abc1234`).
 - Resolution uses `git ls-remote --tags` (no clone to pick a version). Monorepo subpaths prefer `<subpath>-v*` tags, falling back to plain tags.
-- **`ailloy.lock`** (opt-in via `quench`): pins each dep to an exact commit SHA. On resolve, a locked non-`latest`/branch/SHA ref that still satisfies its constraint skips remote resolution; `latest` always re-resolves.
-- **`.ailloy/installed.yaml`**: always written by cast; records source/version/commit/timestamp/file hashes and `InstalledAs` (direct|transitive) for cascade-uninstall.
+- **`ailloy.lock`** (opt-in via `quench`; in `<state dir>/`, or `<moldDir>`'s state dir / legacy `<moldDir>/ailloy.lock` for `smelt`): pins each dep to an exact commit SHA. On resolve, a locked non-`latest`/branch/SHA ref that still satisfies its constraint skips remote resolution; `latest` always re-resolves.
+- **`<state dir>/installed.yaml`**: always written by cast; records source/version/commit/timestamp/file hashes and `InstalledAs` (direct|transitive) for cascade-uninstall.
 - Cache: `~/.ailloy/cache/<host>/<owner>/<repo>/` (shared bare clone + per-version snapshots).
 
 ## Other commands (behavior summaries)
@@ -98,5 +99,6 @@ Packages a mold for distribution. Two output modes via `-o` (`--output-format`);
 - **recast** (`upgrade`): re-resolve installed molds to newer versions and re-render; refreshes `installed.yaml` and (if present) `ailloy.lock`. Layers `--set`/`-f`/`--with-workflows` on top of the original cast's recorded options.
 - **quench**: opt into `ailloy.lock` by pinning everything in `installed.yaml`; `--verify` is a CI drift check.
 - **evolve** (`reinstall`): self-upgrade the ailloy binary from the latest GitHub release; refuses on Homebrew installs.
+- **state** (`path`/`list`/`migrate`): print/list per-project state dirs. Every command (except help/completion) first migrates legacy `.ailloy/{installed.yaml,state.yaml,flux,ores,ingots}` + `./ailloy.lock` into the state dir: never overwrites (conflicts left in place + warned), leaves unknown `.ailloy/` files, removes `.ailloy/` once empty, never runs in `$HOME` (that's global state). After each command, `project.yaml` is recorded if the state dir exists.
 - **cache clear**: clear on-disk cache under `~/.ailloy/cache/` (`--molds`, `--indexes`, `--dry-run`, `--yes`).
 - **mold new/list/show**: scaffold / list / display molds.

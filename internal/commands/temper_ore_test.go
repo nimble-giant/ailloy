@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,7 +52,7 @@ dependencies:
 		t.Fatalf("runTemper: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(moldDir, ".ailloy", "ores")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectstate.DirFor(moldDir), "ores")); !os.IsNotExist(err) {
 		t.Errorf(".ailloy/ores should not exist after temper: %v", err)
 	}
 }

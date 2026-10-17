@@ -339,7 +339,7 @@ func runGetMold(_ *cobra.Command, args []string) error {
 	}
 
 	// Read lock to get resolved version for path display.
-	lock, _ := foundry.ReadLockFile(foundry.LockFileName)
+	lock, _ := foundry.ReadLockFile(foundry.ProjectLockPath())
 	version := "latest"
 	if entry := lock.FindEntry(parsed.CacheKey(), parsed.Subpath); entry != nil {
 		version = entry.Version
@@ -364,10 +364,10 @@ func runGetMold(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-// loadInstalledDirs reads .ailloy/state.yaml to find where blanks are installed.
-// Falls back to empty lists when no state file exists.
+// loadInstalledDirs reads the project's state.yaml to find where blanks are
+// installed. Falls back to empty lists when no state file exists.
 func loadInstalledDirs() (blankDirs, workflowDirs []string) {
-	data, err := os.ReadFile(".ailloy/state.yaml") // #nosec G304 -- fixed path in project directory
+	data, err := os.ReadFile(installStatePath()) // #nosec G304 -- fixed path in project state dir
 	if err == nil {
 		var state installState
 		if yaml.Unmarshal(data, &state) == nil && len(state.BlankDirs) > 0 {

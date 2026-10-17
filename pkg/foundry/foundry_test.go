@@ -119,8 +119,8 @@ func TestResolve_NoLockFile_DoesNotCreateLock(t *testing.T) {
 	var cfg resolveConfig
 	applyResolveDefaults(&cfg)
 
-	if cfg.lockPath != LockFileName {
-		t.Errorf("default lockPath = %q, want %q", cfg.lockPath, LockFileName)
+	if cfg.lockPath != ProjectLockPath() {
+		t.Errorf("default lockPath = %q, want %q", cfg.lockPath, ProjectLockPath())
 	}
 
 	// Simulate the lock-write decision: if no file at lockPath, no write should happen.

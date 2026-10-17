@@ -5,16 +5,26 @@ import (
 	"path/filepath"
 
 	"github.com/nimble-giant/ailloy/pkg/foundry"
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 )
 
-// projectLockPath returns the lock path inside the current project.
-func projectLockPath() string {
-	return foundry.LockFileName
+// projectStateDir returns the current project's state dir. It lives under
+// ~/.ailloy/projects/, outside the project tree, and holds ailloy's
+// bookkeeping (installed manifest, lock, install state, persisted flux,
+// installed ores/ingots).
+func projectStateDir() string {
+	return projectstate.Dir()
 }
 
-// projectManifestPath returns the installed-manifest path inside the current project.
+// projectLockPath returns the current project's lock path (in its state dir).
+func projectLockPath() string {
+	return foundry.ProjectLockPath()
+}
+
+// projectManifestPath returns the current project's installed-manifest path
+// (in its state dir).
 func projectManifestPath() string {
-	return foundry.InstalledManifestPath
+	return foundry.ProjectManifestPath()
 }
 
 // globalLockPath returns the lock path under the user's home directory.
