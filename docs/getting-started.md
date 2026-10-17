@@ -5,6 +5,8 @@ configurable packages of AI workflow files (commands, skills, workflows) that
 can be installed into any project — much like Helm charts for Kubernetes.
 
 This guide walks you through installing ailloy and casting your first mold.
+New to the vocabulary? Keep the [Glossary](glossary.md) open alongside —
+it translates every term into plain English.
 
 ## 1. Install
 
@@ -33,8 +35,11 @@ with your flux (values) into the destinations declared by the mold's
 `output:` mapping.
 
 ```bash
-# Cast the official mold from GitHub
-ailloy cast github.com/nimble-giant/nimble-mold
+# Cast the official mold (owner/repo defaults to github.com)
+ailloy cast nimble-giant/nimble-mold
+
+# Other SCMs work too — just include the host
+ailloy cast gitlab.com/my-team/my-mold
 
 # Or cast a local mold directory
 ailloy cast ./my-mold

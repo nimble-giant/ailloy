@@ -2,6 +2,41 @@
 
 Ailloy can resolve molds directly from git repositories — no local clone required. The SCM itself acts as the foundry: versions are git tags, and resolved molds are cached locally for fast subsequent access.
 
+## Mold References
+
+A mold reference names where a mold lives, plus an optional version and subpath:
+
+```text
+[<host>/]<owner>/<repo>[@<version>][//<subpath>]
+```
+
+The host is optional. When it is left off, ailloy assumes **`github.com`**, so these two commands are identical:
+
+```bash
+ailloy cast nimble-giant/nimble-mold
+ailloy cast github.com/nimble-giant/nimble-mold
+```
+
+Name the host explicitly for any other SCM — GitLab, Bitbucket, Gitea, or a self-hosted server:
+
+```bash
+ailloy cast gitlab.com/my-team/my-mold@v1.0.0
+ailloy cast git.example.com/platform/molds@^2.0.0//frontend
+```
+
+| Form | Example | Notes |
+|------|---------|-------|
+| Shorthand | `owner/repo` | Defaults to `github.com` |
+| Full | `github.com/owner/repo` | Any host: `gitlab.com/...`, `git.example.com/...` |
+| URL | `https://github.com/owner/repo` | Scheme is stripped |
+| SSH | `git@github.com:owner/repo` | Normalised to `github.com/owner/repo` |
+| Version | `owner/repo@v1.2.3`, `@^1.0.0`, `@main`, `@abc1234` | See [Versioning](#versioning-best-practices) |
+| Subpath | `owner/repo//molds/frontend` | Monorepos; combine with `@version` before `//` |
+
+**Local directories win.** If `owner/repo` also exists as a relative directory on disk, ailloy casts the local directory so existing `ailloy cast molds/my-mold` workflows keep working. Prefix `./` to force a local path, or include the host to force a remote lookup.
+
+Installed manifests and `ailloy.lock` always record the full `host/owner/repo` form, so shorthand and full references are interchangeable for `recast`, `quench`, and `uninstall`.
+
 ## Publishing Your Own Mold
 
 Any git repository with a `mold.yaml` at its root (or at a subpath) is a valid foundry. There is no registry — your SCM is the distribution layer.

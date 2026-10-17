@@ -106,34 +106,39 @@ make build   # binary at ./bin/ailloy
 
 ### 2. Cast a mold
 
-Molds resolve directly from git — no clone required:
+Molds resolve directly from git — no clone required. `owner/repo` defaults to GitHub:
 
 ```bash
 # Install blanks from the official mold (latest tag)
-ailloy cast github.com/nimble-giant/nimble-mold
+ailloy cast nimble-giant/nimble-mold
 
 # Pin to a version, or use a semver range
-ailloy cast github.com/nimble-giant/nimble-mold@v0.1.10
-ailloy cast github.com/nimble-giant/nimble-mold@^0.1.0
+ailloy cast nimble-giant/nimble-mold@v0.1.10
+ailloy cast nimble-giant/nimble-mold@^0.1.0
+
+# Other SCMs: include the host
+ailloy cast gitlab.com/my-team/my-mold@v1.0.0
 
 # Include GitHub Actions workflow blanks
-ailloy cast github.com/nimble-giant/nimble-mold --with-workflows
+ailloy cast nimble-giant/nimble-mold --with-workflows
 
 # Override flux at install time
-ailloy cast github.com/nimble-giant/nimble-mold --set project.organization=mycompany
+ailloy cast nimble-giant/nimble-mold --set project.organization=mycompany
 
 # Install as a Claude Code plugin (writes to .claude/plugins/<slug>/)
-ailloy cast github.com/nimble-giant/nimble-mold --claude-plugin
+ailloy cast nimble-giant/nimble-mold --claude-plugin
 ```
+
+New to the vocabulary? The [Glossary](docs/glossary.md) explains every term in plain English.
 
 ### 3. Configure flux variables
 
 ```bash
 # Interactive wizard
-ailloy anneal github.com/nimble-giant/nimble-mold -o flux-overrides.yaml
+ailloy anneal nimble-giant/nimble-mold -o flux-overrides.yaml
 
 # Use the overrides
-ailloy cast github.com/nimble-giant/nimble-mold -f flux-overrides.yaml
+ailloy cast nimble-giant/nimble-mold -f flux-overrides.yaml
 ```
 
 <br clear="right" />

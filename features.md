@@ -87,6 +87,7 @@ Packages a mold for distribution. Two output modes via `-o` (`--output-format`);
 ## foundry (dependency resolution & versioning)
 
 - A foundry is an **SCM-native registry**: a git repo of molds/ingots/ores. Versions are git tags; no central index required.
+- Mold references: `[<host>/]<owner>/<repo>[@<version>][//<subpath>]`. A hostless `owner/repo` (exactly two segments, first segment has no `.`/`:`) defaults to `github.com`; explicit hosts (`gitlab.com/...`, self-hosted) are honoured unchanged. If the shorthand path exists on disk relative to cwd, it is treated as a **local** dir (local wins; `./` forces local, a host forces remote). Manifests/lock always record the canonical `host/owner/repo` (`pkg/foundry/reference.go`).
 - Version refs: `latest`/none (highest semver, always re-resolves), exact (`@v1.2.3`), constraint (`@^1.0.0`, `@~1.2`, `@>=1.0`), branch (`@main`, mutable — warns), SHA (`@abc1234`).
 - Resolution uses `git ls-remote --tags` (no clone to pick a version). Monorepo subpaths prefer `<subpath>-v*` tags, falling back to plain tags.
 - **`ailloy.lock`** (opt-in via `quench`): pins each dep to an exact commit SHA. On resolve, a locked non-`latest`/branch/SHA ref that still satisfies its constraint skips remote resolution; `latest` always re-resolves.
