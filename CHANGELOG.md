@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.44](https://github.com/nimble-giant/ailloy/compare/v0.6.43...v0.6.44) (2026-10-17)
+
+
+### Features
+
+* deep-merge TOML destinations with strategy: merge ([#274](https://github.com/nimble-giant/ailloy/issues/274)) ([09057dc](https://github.com/nimble-giant/ailloy/commit/09057dccb91a1bbe41181c898f3a17c82a375731))
+
+
+### Bug Fixes
+
+* **assay:** skip fenced code blocks when scanning [@imports](https://github.com/imports) ([#280](https://github.com/nimble-giant/ailloy/issues/280)) ([06888a6](https://github.com/nimble-giant/ailloy/commit/06888a640c777c7fe5bfd78aceac20ffb8e30cba))
+
 ## [0.6.43](https://github.com/nimble-giant/ailloy/compare/v0.6.42...v0.6.43) (2026-07-16)
 
 
