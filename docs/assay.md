@@ -30,7 +30,7 @@ ailloy lint
 | `structure` | Warning | Markdown file lacks headings — unstructured instructions reduce adherence |
 | `agents-md-presence` | Suggestion | Project has platform-specific files but no `AGENTS.md`; when `CLAUDE.md` is detected the tip gives a concrete migration path using `@AGENTS.md` |
 | `cross-reference` | Warning | `CLAUDE.md` exists alongside `AGENTS.md` but doesn't import it via `@AGENTS.md` |
-| `import-validation` | Error | `@path/to/file` reference does not resolve to an existing file |
+| `import-validation` | Error | `@path/to/file` reference does not resolve to an existing file (lines inside fenced code blocks are not imports and are skipped) |
 | `empty-file` | Warning | Instruction file exists but has no meaningful content |
 | `duplicate-topics` | Warning | Same heading in multiple files with similar content — consider centralizing |
 | `context-usage` | Warning/Error | Total expanded context (including recursive `@` imports) exceeds percentage-based thresholds of the model context window (default: warn at 10%, error at 25% of 200K); checks both individual files and per-plugin/project rollup totals; promotes [progressive context disclosure](https://agentskills.io/specification#progressive-disclosure) |

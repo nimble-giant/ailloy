@@ -213,13 +213,26 @@ func resolveImportRef(ref, fileDir, rootDir string) (string, bool) {
 	return "", false
 }
 
-// extractImportRefs returns all @ references found in content.
+// extractImportRefs returns all @ references found in content. Lines inside
+// fenced code blocks are skipped, matching Claude Code, which does not
+// evaluate imports in code blocks: decorators, annotations and scoped package
+// names in examples are not imports.
 func extractImportRefs(content []byte) []string {
 	var refs []string
+	var fence string // opening fence marker while inside a fenced code block
 	scanner := bufio.NewScanner(bytes.NewReader(content))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "@") {
+		if marker := fenceMarker(line); marker != "" {
+			switch {
+			case fence == "":
+				fence = marker
+			case marker[0] == fence[0] && len(marker) >= len(fence) && strings.TrimLeft(line, marker[:1]) == "":
+				fence = ""
+			}
+			continue
+		}
+		if fence != "" || !strings.HasPrefix(line, "@") {
 			continue
 		}
 		matches := importRefRegex.FindStringSubmatch(line)
@@ -228,6 +241,19 @@ func extractImportRefs(content []byte) []string {
 		}
 	}
 	return refs
+}
+
+// fenceMarker returns the run of backticks or tildes that opens or closes a
+// fenced code block (at least three), or "" when line is not a fence.
+func fenceMarker(line string) string {
+	if line == "" || (line[0] != '`' && line[0] != '~') {
+		return ""
+	}
+	n := len(line) - len(strings.TrimLeft(line, line[:1]))
+	if n < 3 {
+		return ""
+	}
+	return line[:n]
 }
 
 func (r *importValidationRule) Check(ctx *RuleContext) []mold.Diagnostic {

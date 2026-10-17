@@ -64,6 +64,7 @@ Renders a mold's blanks with resolved flux and writes them to destination paths 
 ## assay (`lint`)
 
 - Lints rendered AI-instruction output against best-practice rules (severity: error/warning/suggestion). Consumed by `temper --assay`.
+- `@path` imports are only recognized outside fenced code blocks (``` or ~~~), matching Claude Code: decorators, annotations and scoped package names in code examples are never flagged by `import-validation` or counted by `context-usage`.
 
 ## smelt (`package`)
 
