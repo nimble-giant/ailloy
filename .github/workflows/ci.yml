@@ -51,7 +51,7 @@ jobs:
           cache: true
 
       - name: Install conform
-        run: go install github.com/siderolabs/conform/cmd/conform@latest
+        run: go install github.com/siderolabs/conform/cmd/conform@v0.1.0-alpha.31
 
       - name: Enforce commit policy
         run: conform enforce
