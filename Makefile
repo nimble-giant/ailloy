@@ -1,4 +1,4 @@
-.PHONY: build clean install test fmt lint help plugin-generate plugin-update plugin-validate check-act ci ci-build ci-lint ci-security setup check-deps hooks hooks-uninstall
+.PHONY: build clean install test fmt lint check-workflow-pins help plugin-generate plugin-update plugin-validate check-act ci ci-build ci-lint ci-security setup check-deps hooks hooks-uninstall
 
 # Variables
 BINARY_NAME=ailloy
@@ -48,6 +48,19 @@ fmt:
 lint:
 	@echo "Running linter..."
 	golangci-lint run
+
+check-workflow-pins:
+	@echo "Checking workflow tool pins..."
+	@floating=$$(grep -rnE 'go install +[^ ]+@(latest|master|main|HEAD)\b' .github/workflows/ || true); \
+	if [ -n "$$floating" ]; then \
+		echo "Workflow installs a tool from a floating ref:"; \
+		echo "$$floating"; \
+		echo "Pin it to an explicit version. setup-go exports GOTOOLCHAIN=local, so a"; \
+		echo "vendor release that raises its Go floor reds a required check with no"; \
+		echo "change of ours. Bump the pin on purpose, together with the job's"; \
+		echo "go-version if the new floor needs it."; \
+		exit 1; \
+	fi
 
 # Git Hooks (lefthook)
 hooks:
@@ -170,6 +183,7 @@ help:
 	@echo "  test            - Run tests"
 	@echo "  fmt             - Check formatting (gofmt)"
 	@echo "  lint            - Run linter"
+	@echo "  check-workflow-pins - Fail if a workflow installs a tool from a floating ref"
 	@echo "  hooks           - Install git hooks (lefthook)"
 	@echo "  hooks-uninstall - Remove git hooks"
 	@echo ""
