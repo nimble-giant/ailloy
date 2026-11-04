@@ -1,6 +1,8 @@
 package foundry
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -140,6 +142,38 @@ func TestParseReference(t *testing.T) {
 			},
 		},
 		{
+			name: "shorthand defaults to github.com",
+			raw:  "nimble-giant/nimble-mold",
+			want: Reference{
+				Host: "github.com", Owner: "nimble-giant", Repo: "nimble-mold",
+				Type: Latest,
+			},
+		},
+		{
+			name: "shorthand with version and subpath",
+			raw:  "nimble-giant/molds@^1.0.0//wiki",
+			want: Reference{
+				Host: "github.com", Owner: "nimble-giant", Repo: "molds",
+				Version: "^1.0.0", Subpath: "wiki", Type: Constraint,
+			},
+		},
+		{
+			name: "shorthand with subpath and no version",
+			raw:  "nimble-giant/molds//wiki",
+			want: Reference{
+				Host: "github.com", Owner: "nimble-giant", Repo: "molds",
+				Subpath: "wiki", Type: Latest,
+			},
+		},
+		{
+			name: "explicit non-github host still honoured",
+			raw:  "gitlab.example.com/team/project",
+			want: Reference{
+				Host: "gitlab.example.com", Owner: "team", Repo: "project",
+				Type: Latest,
+			},
+		},
+		{
 			name:    "empty",
 			raw:     "",
 			wantErr: true,
@@ -208,6 +242,15 @@ func TestIsRemoteReference(t *testing.T) {
 		{"~/molds/my-mold", false},
 		{"local-dir", false},
 		{"", false},
+
+		// owner/repo shorthand defaults to github.com.
+		{"nimble-giant/nimble-mold", true},
+		{"nimble-giant/nimble-mold@v1.0.0", true},
+		{"nimble-giant/molds//wiki", true},
+		{"nimble-giant/molds@^1.0.0//wiki", true},
+		// Hostname-looking or deeper paths are not shorthand.
+		{"localhost:3000/owner", false},
+		{"a/b/c", false},
 	}
 
 	for _, tt := range tests {
@@ -302,5 +345,22 @@ func TestReference_String(t *testing.T) {
 				t.Errorf("String() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// A relative path that exists on disk must stay local even though it has the
+// owner/repo shape, so pre-existing `ailloy cast molds/my-mold` invocations
+// keep working.
+func TestIsRemoteReference_ExistingLocalPathWins(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.MkdirAll(filepath.Join("molds", "my-mold"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if IsRemoteReference("molds/my-mold") {
+		t.Errorf("existing local path molds/my-mold treated as remote")
+	}
+	if !IsRemoteReference("molds/other-mold") {
+		t.Errorf("non-existent molds/other-mold should resolve as github.com shorthand")
 	}
 }
