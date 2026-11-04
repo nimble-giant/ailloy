@@ -1,0 +1,363 @@
+# agent_targets ore: the harness registry `targets:` output entries expand
+# against. Each harness lists the project-relative surfaces it reads.
+#
+# Surfaces (the `targets:` value in a mold's output entry):
+#   instructions  file  always-on project instructions (AGENTS.md, CLAUDE.md, ...)
+#   agents        dir   subagent / custom-agent definitions
+#   skills        dir   Agent Skills (<name>/SKILL.md)
+#   commands      dir   slash commands / prompt files / workflows
+#   rules         dir   scoped rule files
+#   mcp           file  MCP server config (cast with strategy: merge)
+#
+# A surface is a destination string or {dest, ext, format, strategy}.
+# `format` (default "markdown") is exposed to blanks as agent.format so one
+# template can emit the right frontmatter; `ext` renames files written under
+# a directory surface. Harnesses sharing a destination are written once.
+#
+# Formats used below:
+#   markdown           Markdown + YAML frontmatter (name, description), Claude style
+#   opencode           Markdown + YAML frontmatter, filename is the name (description, mode, model, permission)
+#   codex-toml         Codex custom agent TOML (name, description, developer_instructions)
+#   vibe-toml          Mistral Vibe agent TOML
+#   copilot-agent      GitHub Copilot .agent.md (description required; tools, model)
+#   copilot-prompt     GitHub Copilot .prompt.md (description, agent, model, tools)
+#   copilot-instructions  .instructions.md with applyTo glob frontmatter
+#   gemini-toml        Gemini / Qwen style command TOML (description, prompt)
+#   kiro-json          Kiro / Amazon Q custom agent JSON (name, description, prompt, tools)
+#   cursor-mdc         Cursor .mdc rule (description, globs, alwaysApply)
+#   windsurf-rule      Markdown rule with trigger/globs/description frontmatter
+#   kiro-steering      Markdown steering with inclusion/fileMatchPattern frontmatter
+#   continue-rule      Markdown rule with name/globs/regex/alwaysApply frontmatter
+#   augment-rule       Markdown rule with type/description frontmatter
+#   paths-rule         Markdown rule with optional `paths:` glob frontmatter
+#   mcp-json           JSON {"mcpServers": {...}}
+#   vscode-mcp-json    JSON {"servers": {...}}
+#   opencode-json      JSON {"mcp": {...}} (opencode.json / kilo.jsonc)
+#   mcp-toml           TOML [mcp_servers.<name>] tables (Codex, Grok)
+#   vibe-mcp-toml      TOML [[mcp_servers]] array (Mistral Vibe)
+#
+# Paths come from vendor docs and source as of 2026-10; see
+# docs/agent-targets.md for sources and confidence.
+enabled: true
+targets:
+  - claude
+harnesses:
+  # --- Terminal / CLI agents ---
+  claude:
+    name: Claude Code
+    instructions: CLAUDE.md
+    agents: .claude/agents
+    skills: .claude/skills
+    commands: .claude/commands
+    rules: {dest: .claude/rules, format: paths-rule}
+    mcp: {dest: .mcp.json, format: mcp-json, strategy: merge}
+  codex:
+    name: OpenAI Codex
+    instructions: AGENTS.md
+    agents: {dest: .codex/agents, ext: .toml, format: codex-toml}
+    skills: .agents/skills
+    mcp: {dest: .codex/config.toml, format: mcp-toml, strategy: merge}
+  opencode:
+    name: OpenCode
+    instructions: AGENTS.md
+    agents: {dest: .opencode/agents, format: opencode}
+    skills: .opencode/skills
+    commands: {dest: .opencode/commands, format: opencode}
+    mcp: {dest: opencode.json, format: opencode-json, strategy: merge}
+  gemini:
+    name: Gemini CLI
+    instructions: GEMINI.md
+    agents: .gemini/agents
+    skills: .agents/skills
+    commands: {dest: .gemini/commands, ext: .toml, format: gemini-toml}
+    mcp: {dest: .gemini/settings.json, format: mcp-json, strategy: merge}
+  antigravity:
+    name: Google Antigravity
+    instructions: AGENTS.md
+    skills: .agents/skills
+    commands: .agents/workflows
+    rules: .agents/rules
+  copilot:
+    name: GitHub Copilot (VS Code, CLI, cloud agent)
+    instructions: .github/copilot-instructions.md
+    agents: {dest: .github/agents, ext: .agent.md, format: copilot-agent}
+    skills: .github/skills
+    commands: {dest: .github/prompts, ext: .prompt.md, format: copilot-prompt}
+    rules: {dest: .github/instructions, ext: .instructions.md, format: copilot-instructions}
+    mcp: {dest: .vscode/mcp.json, format: vscode-mcp-json, strategy: merge}
+  cursor:
+    name: Cursor (IDE, CLI, cloud agents)
+    instructions: AGENTS.md
+    agents: .cursor/agents
+    skills: .cursor/skills
+    commands: .cursor/commands
+    rules: {dest: .cursor/rules, ext: .mdc, format: cursor-mdc}
+    mcp: {dest: .cursor/mcp.json, format: mcp-json, strategy: merge}
+  amp:
+    name: Amp
+    instructions: AGENTS.md
+    skills: .agents/skills
+  goose:
+    name: goose
+    instructions: AGENTS.md
+    agents: .agents/agents
+    skills: .agents/skills
+  crush:
+    name: Crush
+    instructions: AGENTS.md
+    skills: .agents/skills
+  qwen:
+    name: Qwen Code
+    instructions: QWEN.md
+    agents: .qwen/agents
+    skills: .qwen/skills
+    commands: .qwen/commands
+    rules: {dest: .qwen/rules, format: paths-rule}
+    mcp: {dest: .qwen/settings.json, format: mcp-json, strategy: merge}
+  kimi:
+    name: Kimi Code
+    instructions: AGENTS.md
+    agents: .agents/agents
+    skills: .agents/skills
+    mcp: {dest: .kimi-code/mcp.json, format: mcp-json, strategy: merge}
+  kiro:
+    name: Kiro (IDE and CLI)
+    instructions: AGENTS.md
+    agents: {dest: .kiro/agents, ext: .json, format: kiro-json}
+    skills: .kiro/skills
+    rules: {dest: .kiro/steering, format: kiro-steering}
+    mcp: {dest: .kiro/settings/mcp.json, format: mcp-json, strategy: merge}
+  amazon-q:
+    name: Amazon Q Developer
+    instructions: AmazonQ.md
+    agents: {dest: .amazonq/cli-agents, ext: .json, format: kiro-json}
+    rules: .amazonq/rules
+  factory:
+    name: Factory Droid
+    instructions: AGENTS.md
+    agents: .factory/droids
+    skills: .factory/skills
+    commands: .factory/commands
+    rules: .factory/rules
+    mcp: {dest: .factory/mcp.json, format: mcp-json, strategy: merge}
+  warp:
+    name: Warp
+    instructions: AGENTS.md
+    skills: .agents/skills
+  auggie:
+    name: Augment (Auggie CLI and IDE)
+    instructions: AGENTS.md
+    agents: .augment/agents
+    skills: .augment/skills
+    commands: .augment/commands
+    rules: {dest: .augment/rules, format: augment-rule}
+  pi:
+    name: Pi
+    instructions: AGENTS.md
+    skills: .agents/skills
+    commands: .pi/prompts
+    mcp: {dest: .pi/mcp.json, format: mcp-json, strategy: merge}
+  kilo:
+    name: Kilo Code
+    instructions: AGENTS.md
+    agents: {dest: .kilo/agents, format: opencode}
+    skills: .kilo/skills
+    commands: .kilo/commands
+    rules: .kilo/rules
+    mcp: {dest: kilo.jsonc, format: opencode-json, strategy: merge}
+  cline:
+    name: Cline
+    instructions: AGENTS.md
+    skills: .cline/skills
+    commands: .clinerules/workflows
+    rules: {dest: .clinerules, format: paths-rule}
+  rovo:
+    name: Atlassian Rovo Dev
+    instructions: AGENTS.md
+    agents: .rovodev/subagents
+    skills: .agents/skills
+  letta:
+    name: Letta Code
+    instructions: AGENTS.md
+    agents: .letta/agents
+    skills: .agents/skills
+  continue:
+    name: Continue
+    instructions: AGENTS.md
+    skills: .continue/skills
+    rules: {dest: .continue/rules, format: continue-rule}
+  iflow:
+    name: iFlow CLI
+    instructions: IFLOW.md
+    agents: .iflow/agents
+    commands: .iflow/commands
+    mcp: {dest: .iflow/settings.json, format: mcp-json, strategy: merge}
+  vibe:
+    name: Mistral Vibe
+    instructions: AGENTS.md
+    agents: {dest: .vibe/agents, ext: .toml, format: vibe-toml}
+    skills: .agents/skills
+    mcp: {dest: .vibe/config.toml, format: vibe-mcp-toml, strategy: merge}
+  aider:
+    name: Aider
+    instructions: CONVENTIONS.md
+  gptme:
+    name: gptme
+    instructions: AGENTS.md
+  open-interpreter:
+    name: Open Interpreter
+    instructions: AGENTS.md
+    skills: .agents/skills
+  grok:
+    name: Grok Build
+    instructions: AGENTS.md
+    agents: .grok/agents
+    skills: .grok/skills
+    commands: .grok/commands
+    rules: .grok/rules
+    mcp: {dest: .grok/config.toml, format: mcp-toml, strategy: merge}
+  openhands:
+    name: OpenHands
+    instructions: AGENTS.md
+    agents: .openhands/agents
+    skills: .agents/skills
+  junie:
+    name: JetBrains Junie
+    instructions: .junie/AGENTS.md
+    skills: .junie/skills
+    mcp: {dest: .junie/mcp/mcp.json, format: mcp-json, strategy: merge}
+  qoder:
+    name: Qoder
+    instructions: AGENTS.md
+    agents: .qoder/agents
+    skills: .qoder/skills
+    rules: .qoder/rules
+  codebuddy:
+    name: CodeBuddy Code
+    instructions: CODEBUDDY.md
+    skills: .codebuddy/skills
+    commands: .codebuddy/commands
+  forge:
+    name: ForgeCode
+    instructions: AGENTS.md
+    agents: .forge/agents
+    skills: .forge/skills
+    mcp: {dest: .mcp.json, format: mcp-json, strategy: merge}
+  reasonix:
+    name: DeepSeek Reasonix
+    instructions: AGENTS.md
+    skills: .agents/skills
+    commands: .reasonix/commands
+  deepagents:
+    name: LangChain Deep Agents CLI
+    instructions: .deepagents/AGENTS.md
+    skills: .agents/skills
+  hermes:
+    name: Hermes Agent
+    instructions: AGENTS.md
+    skills: .agents/skills
+  # --- IDEs and IDE extensions ---
+  windsurf:
+    name: Windsurf
+    instructions: AGENTS.md
+    commands: .windsurf/workflows
+    rules: {dest: .windsurf/rules, format: windsurf-rule}
+  zed:
+    name: Zed
+    instructions: AGENTS.md
+    skills: .agents/skills
+  roo:
+    name: Roo Code
+    instructions: AGENTS.md
+    skills: .roo/skills
+    commands: .roo/commands
+    rules: .roo/rules
+    mcp: {dest: .roo/mcp.json, format: mcp-json, strategy: merge}
+  trae:
+    name: Trae
+    instructions: AGENTS.md
+    rules: .trae/rules
+  tabnine:
+    name: Tabnine
+    mcp: {dest: .tabnine/agent/settings.json, format: mcp-json, strategy: merge}
+  firebase-studio:
+    name: Firebase Studio
+    instructions: .idx/airules.md
+    mcp: {dest: .idx/mcp.json, format: mcp-json, strategy: merge}
+  android-studio:
+    name: Gemini in Android Studio
+    instructions: AGENT.md
+  void:
+    name: Void
+    instructions: .voidrules
+  lingma:
+    name: Tongyi Lingma
+    skills: .lingma/skills
+    rules: .lingma/rules
+  zcode:
+    name: Z.ai ZCode
+    instructions: AGENTS.md
+    skills: .zcode/skills
+  firebender:
+    name: Firebender
+    instructions: AGENTS.md
+    skills: .agents/skills
+  avante:
+    name: avante.nvim
+    instructions: avante.md
+  codecompanion:
+    name: CodeCompanion.nvim
+    instructions: AGENTS.md
+    skills: .codecompanion/skills
+  ona:
+    name: Ona
+    instructions: AGENTS.md
+    skills: .ona/skills
+  # --- Cloud and background agents ---
+  jules:
+    name: Google Jules
+    instructions: AGENTS.md
+  devin:
+    name: Devin
+    instructions: AGENTS.md
+    skills: .agents/skills
+  cosine:
+    name: Cosine Genie
+    instructions: AGENTS.md
+  codegen:
+    name: Codegen
+    instructions: AGENTS.md
+  tembo:
+    name: Tembo
+    instructions: AGENTS.md
+  sweep:
+    name: Sweep
+    instructions: SWEEP.md
+  replit:
+    name: Replit Agent
+    instructions: replit.md
+    skills: .agents/skills
+  gitlab-duo:
+    name: GitLab Duo Agent Platform
+    instructions: AGENTS.md
+    skills: .agents/skills
+    mcp: {dest: .gitlab/duo/mcp.json, format: mcp-json, strategy: merge}
+  # --- Review bots ---
+  claude-review:
+    name: Claude Code Review
+    instructions: REVIEW.md
+  cursor-bugbot:
+    name: Cursor Bugbot
+    instructions: .cursor/BUGBOT.md
+  gemini-review:
+    name: Gemini Code Assist on GitHub
+    instructions: .gemini/styleguide.md
+  greptile:
+    name: Greptile
+    instructions: .greptile/rules.md
+  qodo:
+    name: Qodo (IDE and Merge)
+    instructions: AGENTS.md
+  coderabbit:
+    name: CodeRabbit
+    instructions: AGENTS.md

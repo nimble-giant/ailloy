@@ -1,0 +1,9 @@
+- name: enabled
+  type: bool
+  description: "Enable agent-target fan-out for `targets:` output entries"
+  default: "true"
+
+- name: targets
+  type: list
+  description: "Harness ids to cast for (keys of harnesses). `agent.targets` overrides this when set."
+  default: '["claude"]'

@@ -135,13 +135,25 @@ func renderMoldFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[st
 	if logger == nil {
 		logger = log.Default()
 	}
+	// A Claude plugin has exactly one harness, so pin the agent-target
+	// contract to claude: `targets:` entries expand only for claude and
+	// blanks gated on agent.current_target / agent.targets render (#201).
+	flux = mold.MergeSet(flux, map[string]any{
+		"agent.targets":        []any{"claude"},
+		"agent.current_target": "claude",
+	})
+
 	ignorePatterns := mold.LoadIgnorePatterns(reader.FS(), manifest)
 	var resolveOpts []mold.ResolveOption
 	if len(ignorePatterns) > 0 {
 		resolveOpts = append(resolveOpts, mold.WithIgnorePatterns(ignorePatterns))
 	}
 
-	resolved, err := mold.ResolveFiles(flux["output"], reader.FS(), resolveOpts...)
+	outputMap, err := mold.OutputFor(flux)
+	if err != nil {
+		return nil, fmt.Errorf("resolving output files: %w", err)
+	}
+	resolved, err := mold.ResolveFiles(outputMap, reader.FS(), resolveOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("resolving output files: %w", err)
 	}
@@ -171,7 +183,11 @@ func renderMoldFiles(reader *blanks.MoldReader, manifest *mold.Mold, flux map[st
 		}
 		var output []byte
 		if rf.Process {
-			processed, perr := mold.ProcessTemplate(string(content), flux, tplOpts...)
+			fluxForFile := flux
+			if len(rf.Set) > 0 {
+				fluxForFile = mold.MergeSet(flux, rf.Set)
+			}
+			processed, perr := mold.ProcessTemplate(string(content), fluxForFile, tplOpts...)
 			if perr != nil {
 				return nil, fmt.Errorf("processing %s: %w", rf.SrcPath, perr)
 			}

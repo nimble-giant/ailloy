@@ -164,7 +164,11 @@ func castTransitiveDepsWith(fetcher depFetcher, rootResult *foundry.ResolveResul
 			resolveOpts = append(resolveOpts, mold.WithIgnorePatterns(ignorePatterns))
 		}
 
-		resolved, err := mold.ResolveFiles(flux["output"], reader.FS(), resolveOpts...)
+		output, err := mold.OutputFor(flux)
+		if err != nil {
+			return fmt.Errorf("resolving output files for %s: %w", node.Key, err)
+		}
+		resolved, err := mold.ResolveFiles(output, reader.FS(), resolveOpts...)
 		if err != nil {
 			return fmt.Errorf("resolving output files for %s: %w", node.Key, err)
 		}

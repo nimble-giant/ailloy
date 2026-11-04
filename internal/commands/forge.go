@@ -172,7 +172,11 @@ func runForge(_ *cobra.Command, args []string) error {
 	}
 
 	// Resolve all output files from the flux.
-	resolved, err := mold.ResolveFilesWithOreSources(flux["output"], reader.FS(), oreResolver.OreSources(), resolveOpts...)
+	output, err := mold.OutputFor(flux)
+	if err != nil {
+		return fmt.Errorf("resolving output files: %w", err)
+	}
+	resolved, err := mold.ResolveFilesWithOreSources(output, reader.FS(), oreResolver.OreSources(), resolveOpts...)
 	if err != nil {
 		return fmt.Errorf("resolving output files: %w", err)
 	}

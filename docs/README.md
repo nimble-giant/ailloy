@@ -18,6 +18,7 @@ These guides teach you how to create, package, and share your own AI workflow pa
 ## Authoring Guides
 
 - [AGENTS.md](agents-md.md) — Tool-agnostic agent instructions in molds
+- [Agent Targets](agent-targets.md) — Cast one mold to Claude Code, Codex, OpenCode, Cursor, Copilot and 60+ other harnesses
 - [Flux Variables](flux.md) — Configure blanks with variables, schemas, and value layering
 - [Ingots](ingots.md) — Create and use reusable template components
 - [Ore](ore.md) — Reusable flux partials for opt-in business-logic data structures

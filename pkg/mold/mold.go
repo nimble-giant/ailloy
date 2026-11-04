@@ -121,6 +121,12 @@ type OutputTarget struct {
 	// an ore-shipped template without the ore needing to declare the
 	// destination itself.
 	From string `yaml:"from,omitempty"`
+	// Ext, if non-empty, replaces the extension of every file written under
+	// a directory mapping (e.g. ".toml" for Codex agents).
+	Ext string `yaml:"ext,omitempty"`
+	// Skip suppresses the source entirely. A `targets:` entry no enabled
+	// harness supports expands to skip so the source is not auto-discovered.
+	Skip bool `yaml:"skip,omitempty"`
 }
 
 // ShouldProcess returns whether files under this target should be template-processed.
