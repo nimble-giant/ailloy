@@ -39,13 +39,14 @@ var ingotAddGlobal bool
 var ingotAddCmd = &cobra.Command{
 	Use:   "add <reference>",
 	Short: "Download and register an ingot",
-	Long: `Download an ingot and register it in the project's .ailloy/ingots/ directory.
+	Long: `Download an ingot and register it in the project's state dir
+(<state dir>/ingots/, see 'ailloy state path').
 
 If the reference points to a multi-ingot repo (containing ingots/<name>/ingot.yaml
 entries) and no //subpath is given, every ingot in the repo is installed. To install
 just one, use the //ingots/<name> subpath suffix.
 
-The ingot files are copied into .ailloy/ingots/<name>/ for use by the template engine.`,
+The ingot files are copied into <state dir>/ingots/<name>/ for use by the template engine.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runIngotAdd,
 }
@@ -55,7 +56,7 @@ func init() {
 	ingotCmd.AddCommand(ingotGetCmd)
 	ingotCmd.AddCommand(ingotAddCmd)
 
-	ingotAddCmd.Flags().BoolVar(&ingotAddGlobal, "global", false, "install under ~/.ailloy/ingots/ instead of ./.ailloy/ingots/")
+	ingotAddCmd.Flags().BoolVar(&ingotAddGlobal, "global", false, "install under ~/.ailloy/ingots/ instead of the project state dir")
 }
 
 func runIngotGet(_ *cobra.Command, args []string) error {
@@ -90,7 +91,7 @@ func runIngotGet(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("determining cache directory: %w", err)
 	}
 
-	lock, _ := foundry.ReadLockFile(foundry.LockFileName)
+	lock, _ := foundry.ReadLockFile(foundry.ProjectLockPath())
 	version := "latest"
 	if entry := lock.FindEntry(parsed.CacheKey(), parsed.Subpath); entry != nil {
 		version = entry.Version
@@ -178,7 +179,7 @@ func installIngotsFromFS(fsys fs.FS, result *foundry.ResolveResult, global bool)
 	// Read lock once; project-scope only. ailloy.lock is project-only today.
 	var lock *foundry.LockFile
 	if !global {
-		lock, _ = foundry.ReadLockFile(foundry.LockFileName)
+		lock, _ = foundry.ReadLockFile(foundry.ProjectLockPath())
 	}
 
 	for _, p := range pkgs {
@@ -208,7 +209,7 @@ func installIngotsFromFS(fsys fs.FS, result *foundry.ResolveResult, global bool)
 	}
 	// Update ailloy.lock if present (project scope only).
 	if lock != nil {
-		if err := foundry.WriteLockFile(foundry.LockFileName, lock); err != nil {
+		if err := foundry.WriteLockFile(foundry.ProjectLockPath(), lock); err != nil {
 			log.Printf("warning: failed to update lock file: %v", err)
 		}
 	}
@@ -236,7 +237,7 @@ func installSingleIngot(fsys fs.FS, pkg mold.IngotPackage, result *foundry.Resol
 		effectiveSubpath = pkg.Subpath
 	}
 
-	baseRoot := filepath.Join(".ailloy", "ingots")
+	baseRoot := filepath.Join(projectStateDir(), "ingots")
 	if global {
 		home, herr := os.UserHomeDir()
 		if herr != nil {

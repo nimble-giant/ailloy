@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"io"
 	"os"
 
@@ -75,6 +76,11 @@ func init() {
 		}
 	}
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		// Move legacy in-project bookkeeping (.ailloy/, ailloy.lock) into the
+		// project's state dir before any command reads it.
+		if !rootDocs && !skipsStateHooks(cmd.Name()) && cmd != stateMigrateCmd {
+			migrateProjectState(cmd.ErrOrStderr())
+		}
 		if !rootDocs {
 			return nil
 		}
@@ -93,6 +99,14 @@ func init() {
 		cmd.Run = nil
 		cmd.PostRun = nil
 		cmd.PostRunE = nil
+		return nil
+	}
+	// Record which project a state dir belongs to so `ailloy state list` can
+	// map the hidden dirs back to projects.
+	rootCmd.PersistentPostRunE = func(cmd *cobra.Command, args []string) error {
+		if !skipsStateHooks(cmd.Name()) {
+			_ = projectstate.Record(".")
+		}
 		return nil
 	}
 }

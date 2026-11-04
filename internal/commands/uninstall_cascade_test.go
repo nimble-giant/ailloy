@@ -17,7 +17,7 @@ func TestUninstall_SoleMoldUsingOre_RemovesOre(t *testing.T) {
 	}
 
 	moldKey := "github.com/example/test-mold"
-	if err := os.MkdirAll(filepath.Join(".ailloy", "ores", "status"), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Join(projectStateDir(), "ores", "status"), 0750); err != nil {
 		t.Fatal(err)
 	}
 	manifest := &foundry.InstalledManifest{
@@ -27,7 +27,7 @@ func TestUninstall_SoleMoldUsingOre_RemovesOre(t *testing.T) {
 			{Name: "status", Source: "github.com/example/status-ore", Version: "1.0.0", Dependents: []string{moldKey}},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestUninstall_SoleMoldUsingOre_RemovesOre(t *testing.T) {
 	if got != nil && len(got.Ores) != 0 {
 		t.Errorf("ore should be cascade-removed: %+v", got.Ores)
 	}
-	if _, err := os.Stat(filepath.Join(".ailloy", "ores", "status")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectStateDir(), "ores", "status")); !os.IsNotExist(err) {
 		t.Errorf("ore install dir should be gone: %v", err)
 	}
 }
@@ -55,7 +55,7 @@ func TestUninstall_TwoMoldsShareOre_FirstUninstallLeavesOre(t *testing.T) {
 
 	moldA := "github.com/example/mold-a"
 	moldB := "github.com/example/mold-b"
-	if err := os.MkdirAll(filepath.Join(".ailloy", "ores", "status"), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Join(projectStateDir(), "ores", "status"), 0750); err != nil {
 		t.Fatal(err)
 	}
 	manifest := &foundry.InstalledManifest{
@@ -64,7 +64,7 @@ func TestUninstall_TwoMoldsShareOre_FirstUninstallLeavesOre(t *testing.T) {
 			{Name: "status", Source: "github.com/example/status-ore", Dependents: []string{moldA, moldB}},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestUninstall_TwoMoldsShareOre_FirstUninstallLeavesOre(t *testing.T) {
 	if len(got.Ores[0].Dependents) != 1 || got.Ores[0].Dependents[0] != moldB {
 		t.Errorf("only moldB should remain in dependents: %+v", got.Ores[0].Dependents)
 	}
-	if _, err := os.Stat(filepath.Join(".ailloy", "ores", "status")); err != nil {
+	if _, err := os.Stat(filepath.Join(projectStateDir(), "ores", "status")); err != nil {
 		t.Errorf("ore install dir should still exist: %v", err)
 	}
 }
@@ -95,7 +95,7 @@ func TestCascadeUninstallTransitiveMolds_OrphanRemoved(t *testing.T) {
 
 	parentKey := "github.com/example/parent"
 	leafSrc := "github.com/example/leaf"
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 
 	// Pre-stage a transitive entry whose only parent is the one being removed,
 	// AND lay down its installed file so UninstallMold has something to remove.
@@ -141,7 +141,7 @@ func TestCascadeUninstallTransitiveMolds_DirectKeptStripsParent(t *testing.T) {
 	}
 
 	parentKey := "github.com/example/parent"
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 
 	// Direct cast that happens to also list parent in InstalledBy. Must NOT
 	// be removed; parent should just be stripped from InstalledBy.
@@ -182,7 +182,7 @@ func TestCascadeUninstallTransitiveMolds_SharedTransitiveKept(t *testing.T) {
 
 	parentA := "github.com/example/a"
 	parentB := "github.com/example/b"
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 
 	manifest := &foundry.InstalledManifest{
 		APIVersion: "v1",
@@ -233,7 +233,7 @@ func TestUninstall_OreWithUserSentinel_NotAutoRemoved(t *testing.T) {
 	}
 
 	moldKey := "github.com/example/mold"
-	if err := os.MkdirAll(filepath.Join(".ailloy", "ores", "status"), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Join(projectStateDir(), "ores", "status"), 0750); err != nil {
 		t.Fatal(err)
 	}
 	manifest := &foundry.InstalledManifest{
@@ -242,7 +242,7 @@ func TestUninstall_OreWithUserSentinel_NotAutoRemoved(t *testing.T) {
 			{Name: "status", Source: "github.com/example/status-ore", Dependents: []string{moldKey, "user"}},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,7 +71,7 @@ func TestE2E_PublishOreThenCastConsumerMold(t *testing.T) {
 	}
 
 	// 4. Ore was installed alongside the mold.
-	oreDir := filepath.Join(projectDir, ".ailloy", "ores", "status")
+	oreDir := filepath.Join(projectstate.DirFor(projectDir), "ores", "status")
 	if _, err := os.Stat(filepath.Join(oreDir, "ore.yaml")); err != nil {
 		t.Errorf("ore should be installed at %s: %v", oreDir, err)
 	}
@@ -82,7 +83,7 @@ func TestE2E_PublishOreThenCastConsumerMold(t *testing.T) {
 	// dependent. (moldKey is "" for local-path molds, so the dependents list
 	// is empty — but the entry itself must exist so the cascade walker has
 	// state to act on later.)
-	im, _ := foundry.ReadInstalledManifest(filepath.Join(projectDir, ".ailloy", "installed.yaml"))
+	im, _ := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(projectDir), "installed.yaml"))
 	if im == nil {
 		t.Fatal("installed manifest missing after cast")
 	}
@@ -124,12 +125,12 @@ func TestE2E_PublishOreThenCastConsumerMold(t *testing.T) {
 	if oreEntry := im.FindArtifact("ore", "status"); oreEntry != nil {
 		oreEntry.Dependents = append(oreEntry.Dependents, moldKey)
 	}
-	if err := foundry.WriteInstalledManifest(filepath.Join(projectDir, ".ailloy", "installed.yaml"), im); err != nil {
+	if err := foundry.WriteInstalledManifest(filepath.Join(projectstate.DirFor(projectDir), "installed.yaml"), im); err != nil {
 		t.Fatalf("rewrite manifest with mold entry: %v", err)
 	}
 
 	// Cascade: drop the consumer mold and verify the ore is GC'd.
-	if err := cascadeUninstallArtifacts(filepath.Join(projectDir, ".ailloy", "installed.yaml"), moldKey, false); err != nil {
+	if err := cascadeUninstallArtifacts(filepath.Join(projectstate.DirFor(projectDir), "installed.yaml"), moldKey, false); err != nil {
 		t.Fatalf("cascadeUninstallArtifacts: %v", err)
 	}
 
@@ -137,7 +138,7 @@ func TestE2E_PublishOreThenCastConsumerMold(t *testing.T) {
 	if _, err := os.Stat(oreDir); !os.IsNotExist(err) {
 		t.Errorf("ore install dir should be cascade-removed: %v", err)
 	}
-	postIM, _ := foundry.ReadInstalledManifest(filepath.Join(projectDir, ".ailloy", "installed.yaml"))
+	postIM, _ := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(projectDir), "installed.yaml"))
 	if postIM != nil && postIM.FindArtifact("ore", "status") != nil {
 		t.Errorf("ore manifest entry should be cascade-removed: %+v", postIM.Ores)
 	}
@@ -191,7 +192,7 @@ func TestE2E_TwoMoldsShareOre_FirstUninstallKeepsOre(t *testing.T) {
 		t.Fatalf("CastMold B: %v", err)
 	}
 
-	manifestPath := filepath.Join(projectDir, ".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectstate.DirFor(projectDir), "installed.yaml")
 	im, _ := foundry.ReadInstalledManifest(manifestPath)
 	if im == nil {
 		t.Fatal("installed manifest missing")
@@ -222,7 +223,7 @@ func TestE2E_TwoMoldsShareOre_FirstUninstallKeepsOre(t *testing.T) {
 	if postIM == nil || postIM.FindArtifact("ore", "status") == nil {
 		t.Fatalf("ore should remain after first uninstall: %+v", postIM)
 	}
-	if _, err := os.Stat(filepath.Join(projectDir, ".ailloy", "ores", "status")); err != nil {
+	if _, err := os.Stat(filepath.Join(projectstate.DirFor(projectDir), "ores", "status")); err != nil {
 		t.Errorf("ore install dir should still exist: %v", err)
 	}
 
@@ -234,7 +235,7 @@ func TestE2E_TwoMoldsShareOre_FirstUninstallKeepsOre(t *testing.T) {
 	if postIM2 != nil && postIM2.FindArtifact("ore", "status") != nil {
 		t.Errorf("ore should be cascade-removed after second uninstall: %+v", postIM2.Ores)
 	}
-	if _, err := os.Stat(filepath.Join(projectDir, ".ailloy", "ores", "status")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectstate.DirFor(projectDir), "ores", "status")); !os.IsNotExist(err) {
 		t.Errorf("ore install dir should be gone after second uninstall: %v", err)
 	}
 }

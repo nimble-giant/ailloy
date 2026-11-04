@@ -154,7 +154,7 @@ Create a new issue for {{ project.organization }}.
 When `{{ingot "name"}}` is called during rendering, the resolver searches these paths in order:
 
 1. **Mold-local** — `./ingots/` (the mold's own ingots directory)
-2. **Project** — `.ailloy/ingots/` (ingots installed in the current project)
+2. **Project** — `<state dir>/ingots/` (ingots installed for the current project; `ailloy state path`)
 3. **Global** — `~/.ailloy/ingots/` (user-level shared ingots)
 
 The first match wins. This allows molds to bundle their own ingots while also pulling in shared ingots from the project or user level.
@@ -177,11 +177,11 @@ Ingots can be published as standalone git repositories and installed into your p
 # Download to local cache (inspect before installing)
 ailloy ingot get github.com/my-org/my-ingot@v1.0.0
 
-# Download and install into .ailloy/ingots/
+# Download and install into <state dir>/ingots/
 ailloy ingot add github.com/my-org/my-ingot@v1.0.0
 ```
 
-After `ingot add`, the ingot files are copied to `.ailloy/ingots/<name>/` where the template engine can resolve them during `cast` and `forge`.
+After `ingot add`, the ingot files are copied to `<state dir>/ingots/<name>/` where the template engine can resolve them during `cast` and `forge`.
 
 Bidirectional command forms also work:
 

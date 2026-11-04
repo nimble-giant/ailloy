@@ -330,7 +330,7 @@ func InstallFoundryCore(ctx context.Context, cfg *index.Config, nameOrURL string
 	}
 
 	// Read target lockfile to spot already-installed sources.
-	lockPath := foundry.LockFileName
+	lockPath := foundry.ProjectLockPath()
 	if opts.Global {
 		if home, herr := os.UserHomeDir(); herr == nil {
 			lockPath = filepath.Join(home, foundry.LockFileName)

@@ -3,14 +3,28 @@ package foundry
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 )
 
 // LockFileName is the default lock file name.
 const LockFileName = "ailloy.lock"
+
+// ProjectLockPath returns the lock path for the project rooted at the
+// current working directory. Like the installed manifest it lives in the
+// project's state dir under ~/.ailloy/projects/, not in the project tree.
+func ProjectLockPath() string {
+	return ProjectLockPathFor(".")
+}
+
+// ProjectLockPathFor returns the lock path for the project rooted at root.
+func ProjectLockPathFor(root string) string {
+	return filepath.Join(projectstate.DirFor(root), LockFileName)
+}
 
 // LockEntry records the resolved version of a single mold dependency.
 // File-level provenance (which files were rendered and their hashes) lives
@@ -59,6 +73,9 @@ func ReadLockFile(path string) (*LockFile, error) {
 
 // WriteLockFile marshals and writes the lock file to the given path.
 func WriteLockFile(path string, lock *LockFile) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil { //#nosec G301
+		return fmt.Errorf("creating lock dir: %w", err)
+	}
 	data, err := yaml.Marshal(lock)
 	if err != nil {
 		return fmt.Errorf("marshaling lock file: %w", err)

@@ -105,7 +105,7 @@ func init() {
 	castCmd.Flags().BoolVar(&castFrozen,
 		"frozen",
 		false,
-		"fail (do not auto-install) when a declared ingot/ore dep is missing from .ailloy/; intended for CI")
+		"fail (do not auto-install) when a declared ingot/ore dep is missing from the project state dir; intended for CI")
 	castCmd.Flags().BoolVar(&castLatestOnNoTags,
 		"latest-on-no-tags",
 		false,
@@ -296,7 +296,7 @@ func resolveMoldReaderWithDefaultBranch(rawRef string) (*blanks.MoldReader, stri
 
 // loadCastFlux loads layered flux values using Helm-style precedence:
 // mold flux.yaml < mold.yaml schema defaults < persisted ~/.ailloy/flux/<slug>.yaml
-// < persisted ./.ailloy/flux/<slug>.yaml < -f files (left to right) < --set flags.
+// < persisted <project state dir>/flux/<slug>.yaml < -f files (left to right) < --set flags.
 //
 // Schema and defaults are loaded via LoadMoldFluxWithOres so installed ore
 // overlays (mold-local → project → global) participate in the merge before
@@ -682,13 +682,14 @@ func hashFile(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// installState represents the .ailloy/state.yaml file that records where blanks were installed.
+// installState represents the state.yaml file (in the project's state dir) that records where blanks were installed.
 type installState struct {
 	BlankDirs    []string `yaml:"blankDirs,omitempty"`
 	WorkflowDirs []string `yaml:"workflowDirs,omitempty"`
 }
 
-const installStatePath = ".ailloy/state.yaml"
+// installStatePath returns the project's state.yaml path.
+func installStatePath() string { return filepath.Join(projectStateDir(), "state.yaml") }
 
 // writeInstallState records where blanks were installed so `mold list` can find them.
 //
@@ -697,7 +698,7 @@ const installStatePath = ".ailloy/state.yaml"
 // rather than overwriting each other.
 func writeInstallState(dirs []string) error {
 	state := installState{}
-	if existing, err := readInstallState(installStatePath); err == nil && existing != nil {
+	if existing, err := readInstallState(installStatePath()); err == nil && existing != nil {
 		state = *existing
 	}
 
@@ -724,10 +725,10 @@ func writeInstallState(dirs []string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(".ailloy", 0750); err != nil { // #nosec G301
+	if err := os.MkdirAll(projectStateDir(), 0750); err != nil { // #nosec G301
 		return err
 	}
-	return os.WriteFile(installStatePath, data, 0644) // #nosec G306
+	return os.WriteFile(installStatePath(), data, 0644) // #nosec G306
 }
 
 func readInstallState(path string) (*installState, error) {

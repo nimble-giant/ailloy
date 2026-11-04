@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,7 +42,10 @@ func TestRunIngotAdd_SingleIngot_RecordsArtifactAndLock(t *testing.T) {
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	lockPath := filepath.Join(projectDir, foundry.LockFileName)
+	lockPath := foundry.ProjectLockPathFor(projectDir)
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o750); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(lockPath, []byte("apiVersion: v1\nmolds: []\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -51,11 +55,11 @@ func TestRunIngotAdd_SingleIngot_RecordsArtifactAndLock(t *testing.T) {
 		t.Fatalf("runIngotAddFromLocal: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(projectDir, ".ailloy", "ingots", "solo", "ingot.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(projectstate.DirFor(projectDir), "ingots", "solo", "ingot.yaml")); err != nil {
 		t.Fatalf("expected ingot.yaml under .ailloy/ingots/solo/, got: %v", err)
 	}
 
-	im, err := foundry.ReadInstalledManifest(filepath.Join(projectDir, ".ailloy", "installed.yaml"))
+	im, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(projectDir), "installed.yaml"))
 	if err != nil || im == nil {
 		t.Fatalf("read installed manifest: im=%v err=%v", im, err)
 	}
@@ -93,7 +97,10 @@ func TestRunIngotAdd_MultiIngot_InstallsAll(t *testing.T) {
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	lockPath := filepath.Join(projectDir, foundry.LockFileName)
+	lockPath := foundry.ProjectLockPathFor(projectDir)
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o750); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(lockPath, []byte("apiVersion: v1\nmolds: []\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -104,12 +111,12 @@ func TestRunIngotAdd_MultiIngot_InstallsAll(t *testing.T) {
 	}
 
 	for _, name := range []string{"header", "footer"} {
-		if _, err := os.Stat(filepath.Join(projectDir, ".ailloy", "ingots", name, "ingot.yaml")); err != nil {
+		if _, err := os.Stat(filepath.Join(projectstate.DirFor(projectDir), "ingots", name, "ingot.yaml")); err != nil {
 			t.Errorf("missing %s: %v", name, err)
 		}
 	}
 
-	im, err := foundry.ReadInstalledManifest(filepath.Join(projectDir, ".ailloy", "installed.yaml"))
+	im, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(projectDir), "installed.yaml"))
 	if err != nil || im == nil {
 		t.Fatalf("read installed manifest: im=%v err=%v", im, err)
 	}

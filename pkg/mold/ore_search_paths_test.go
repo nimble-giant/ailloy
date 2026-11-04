@@ -39,7 +39,11 @@ func TestBuildDefaultOreSearchPaths_OrderAndContent(t *testing.T) {
 	for _, p := range paths {
 		gotNames = append(gotNames, p.Name)
 		switch p.Name {
-		case "project", "global":
+		case "project":
+			if p.Root != "ores" {
+				t.Errorf("project path Root = %q, want ores (under the project state dir)", p.Root)
+			}
+		case "global":
 			if p.Root != ".ailloy/ores" {
 				t.Errorf("%s path Root = %q, want .ailloy/ores", p.Name, p.Root)
 			}

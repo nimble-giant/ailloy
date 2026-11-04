@@ -22,7 +22,7 @@ var uninstallCmd = &cobra.Command{
 	Long: `Uninstall a previously casted mold by source identifier (e.g. github.com/owner/repo).
 
 Removes the files listed in the mold's installed manifest entry, prunes any
-empty directories, and drops the entry from .ailloy/installed.yaml. If
+empty directories, and drops the entry from the installed manifest. If
 ailloy.lock exists alongside the manifest, the matching lock entry is also
 removed.
 

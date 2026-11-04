@@ -231,7 +231,8 @@ func runForge(_ *cobra.Command, args []string) error {
 
 // buildIngotResolver creates an IngotResolver with the standard search path order:
 // mold source root (so bundled ingots are found when casting from a remote or
-// path mold), current directory (mold-local), project .ailloy/, global ~/.ailloy/.
+// path mold), current directory (mold-local), the project state dir
+// (~/.ailloy/projects/<project>/), global ~/.ailloy/.
 // moldRoot may be empty when the mold has no on-disk root (e.g., embedded molds).
 func buildIngotResolver(flux map[string]any, moldRoot string) *mold.IngotResolver {
 	var searchPaths []string
@@ -241,8 +242,10 @@ func buildIngotResolver(flux map[string]any, moldRoot string) *mold.IngotResolve
 	}
 	searchPaths = append(searchPaths, ".")
 
-	if _, err := os.Stat(".ailloy"); err == nil {
-		searchPaths = append(searchPaths, ".ailloy")
+	if stateDir := projectStateDir(); stateDir != "" {
+		if _, err := os.Stat(stateDir); err == nil {
+			searchPaths = append(searchPaths, stateDir)
+		}
 	}
 
 	if homeDir, err := os.UserHomeDir(); err == nil {

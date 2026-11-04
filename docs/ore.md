@@ -344,7 +344,7 @@ Layers 1–2 also control the on-disk install dir name; layers 3–4 are layered
 When merging ore deps into a mold's flux schema and defaults, ailloy walks search paths in priority order:
 
 1. **Mold-local** — `./ores/<name>/` (if the mold ships its own ore overlay)
-2. **Project** — `.ailloy/ores/<name>/` (cast-time install destination)
+2. **Project** — `<state dir>/ores/<name>/` (cast-time install destination; `ailloy state path`)
 3. **Global** — `~/.ailloy/ores/<name>/` (user-scope, `ore add --global`)
 
 First match wins. The mold's own `flux.schema.yaml` always wins over an installed ore on collision.

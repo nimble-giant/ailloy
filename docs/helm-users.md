@@ -18,7 +18,7 @@ This guide maps what you already know to Ailloy terminology, shows every command
 | Subchart / Dependency | Ingot | Reusable template partials included via `{{ingot "name"}}` |
 | — | Ore | Reusable flux partials — structured data objects (e.g. `ore.status`) for opt-in business logic. See [Ore](ore.md). |
 | `Chart.lock` | `ailloy.lock` (opt-in, via `ailloy quench`) | Pins dependencies to exact versions and commits |
-| — | `.ailloy/installed.yaml` | Always-on manifest of cast molds — provenance for `recast` / `quench` |
+| — | `installed.yaml` (project state dir) | Always-on manifest of cast molds — provenance for `recast` / `quench` |
 | — | Output mapping | Maps source directories to destination paths (no Helm equivalent) |
 | — | Anneal | Interactive configuration wizard (no Helm equivalent) |
 
@@ -240,10 +240,10 @@ helm package ./my-chart             ailloy smelt ./my-mold     ailloy package ./
 
 ### Dependencies and lock files
 
-Both tools pin dependency versions in a lock file, but Ailloy's `ailloy.lock` is **opt-in** rather than auto-generated. Cast always writes a provenance manifest at `.ailloy/installed.yaml` (commit it to git like `package.json`), but the lock file is created only when you run `ailloy quench`. Once it exists, `cast`, `ingot add`, and `recast` keep it in sync automatically. `ailloy quench --verify` is the CI-friendly drift check.
+Both tools pin dependency versions in a lock file, but Ailloy's `ailloy.lock` is **opt-in** rather than auto-generated. Cast always writes a provenance manifest, `installed.yaml`, to the project's state directory under `~/.ailloy/projects/` (outside the project tree; `ailloy state path` prints it), but the lock file is created only when you run `ailloy quench`. Once it exists, `cast`, `ingot add`, and `recast` keep it in sync automatically. `ailloy quench --verify` is the CI-friendly drift check.
 
 ```yaml
-# .ailloy/installed.yaml — always written by cast/ingot add
+# installed.yaml — always written by cast/ingot add
 apiVersion: v1
 molds:
   - name: nimble-mold

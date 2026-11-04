@@ -40,7 +40,8 @@ ailloy cast github.com/nimble-giant/nimble-mold
 ailloy cast ./my-mold
 ```
 
-A successful cast writes a manifest to `.ailloy/installed.yaml` so the
+A successful cast writes a manifest to `installed.yaml` in the project's state
+directory (`~/.ailloy/projects/…`, see `ailloy state path`) so the
 files can be tracked, refreshed (`ailloy recast`), or removed
 (`ailloy uninstall`).
 

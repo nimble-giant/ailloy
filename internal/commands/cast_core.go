@@ -187,7 +187,7 @@ func CastMold(_ context.Context, ref string, opts CastOptions) (CastResult, erro
 	dirs = cleanupEmptyDirs(dirs, destPrefix)
 	res.Dirs = dirs
 
-	// Mirror what cast.go does: record install dirs in .ailloy/state.yaml so
+	// Mirror what cast.go does: record install dirs in the project's state.yaml so
 	// `mold list` can find blanks installed via the foundries TUI.
 	if destPrefix == "" {
 		if err := writeInstallState(dirs); err != nil {
@@ -251,7 +251,7 @@ func openMoldReaderForCore(ref string, global bool, logger *log.Logger) (*blanks
 // layerFluxForCore mirrors loadCastFlux but is parameterized so CastMold
 // doesn't depend on package-level cast flag vars. `source` is the resolved
 // mold ref used to pick up persisted flux files (~/.ailloy/flux/<slug>.yaml
-// then ./.ailloy/flux/<slug>.yaml). Empty source skips persisted-file lookup.
+// then <project state dir>/flux/<slug>.yaml). Empty source skips persisted-file lookup.
 //
 // Returns the layered flux map plus the merged schema (mold + ore overlays);
 // callers thread the schema into copyResolvedFilesWithSchema so ValidateFlux

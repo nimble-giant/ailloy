@@ -48,7 +48,11 @@ type artifactResolverFunc func(rawRef string, opts ...foundry.ResolveOption) (fs
 // dependencies both slices are empty (leaf-mold case: no /deps/ subtree).
 func collectDeps(moldDir string, m *mold.Mold) ([]archiveFile, *DepManifest, error) {
 	var resolveOpts []foundry.ResolveOption
-	lockPath := filepath.Join(moldDir, foundry.LockFileName)
+	lockPath := foundry.ProjectLockPathFor(moldDir)
+	if _, err := os.Stat(lockPath); err != nil {
+		// Fall back to a not-yet-migrated in-tree lock.
+		lockPath = filepath.Join(moldDir, foundry.LockFileName)
+	}
 	if _, err := os.Stat(lockPath); err == nil {
 		resolveOpts = append(resolveOpts, foundry.WithLockPath(lockPath))
 	}

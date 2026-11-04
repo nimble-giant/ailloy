@@ -38,7 +38,7 @@ version: 1.0.0
 	}
 
 	// Project-installed ore.
-	oreDir := filepath.Join(".ailloy", "ores", "status")
+	oreDir := filepath.Join(projectStateDir(), "ores", "status")
 	if err := os.MkdirAll(oreDir, 0750); err != nil {
 		t.Fatal(err)
 	}

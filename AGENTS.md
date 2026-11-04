@@ -51,9 +51,10 @@ Key CLI commands for working with molds:
 - **temper** (`validate`): Validate a mold or ingot package; use `--assay` (alias: `--lint`) to also render and assay output
 - **anneal** (`configure`): Configure flux variables interactively
 - **smelt** (`package`): Package a mold for distribution
-- **recast**: Re-resolve installed molds to newer versions AND re-render their content (alias: `upgrade`); refreshes `.ailloy/installed.yaml` and (if present) `ailloy.lock`. Accepts `--set`, `--values`/`-f`, `--with-workflows`, and `--force-replace-on-parse-error` — flags layer on top of the options the original cast recorded in the manifest.
-- **quench**: Opt in to `ailloy.lock` by pinning everything in `.ailloy/installed.yaml`; supports `--verify` (CI drift check) and `--global`
+- **recast**: Re-resolve installed molds to newer versions AND re-render their content (alias: `upgrade`); refreshes the project's `installed.yaml` and (if present) `ailloy.lock`. Accepts `--set`, `--values`/`-f`, `--with-workflows`, and `--force-replace-on-parse-error` — flags layer on top of the options the original cast recorded in the manifest.
+- **quench**: Opt in to `ailloy.lock` by pinning everything in the installed manifest; supports `--verify` (CI drift check) and `--global`
 - **evolve** (`reinstall`): Self-upgrade the ailloy CLI binary in place from the latest GitHub release; supports `--check`, `--version`, `--force`, and `--no-animate`. Refuses on Homebrew installs (use `brew upgrade nimble-giant/tap/ailloy`)
+- **state** (`path`, `list`, `migrate`): Locate ailloy's per-project bookkeeping, which lives in `~/.ailloy/projects/<project>-<hash>/` instead of the project tree; legacy `.ailloy/` + `ailloy.lock` are migrated automatically. `AILLOY_PROJECT_STATE_DIR` overrides the location
 - **cache clear**: Clear ailloy's on-disk cache (mold artifacts and foundry indexes under `~/.ailloy/cache/`). Supports `--molds`, `--indexes`, `--dry-run`, `--yes`. Bidirectional: `clear cache` also works.
 
 ## Usage

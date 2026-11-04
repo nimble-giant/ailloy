@@ -62,7 +62,7 @@ and B pinned `D@^2.0.0`, the cast fails with a conflict error.
 After the parent mold is cast, transitive dependencies are cast in
 leaves-first topological order. Each transitive uses the same destination as
 the parent (project root, or `~/` when `--global` is set) and its files are
-recorded in `.ailloy/installed.yaml`:
+recorded in the project's `installed.yaml` (in its state directory):
 
 ```yaml
 molds:

@@ -336,7 +336,7 @@ flux:
 	}
 
 	// Write project-scoped persisted file with target: opencode.
-	projectFlux := filepath.Join(".ailloy", "flux", slug+".yaml")
+	projectFlux := filepath.Join(projectStateDir(), "flux", slug+".yaml")
 	if err := os.MkdirAll(filepath.Dir(projectFlux), 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +405,7 @@ flux:
 	// source string (no Reference parsing) and writes to .ailloy/flux/.
 	rawSource := "github.com/replicated-collab/foundry//molds/launch"
 	saveSlug := mold.FluxFileSlug(rawSource)
-	projectFlux := filepath.Join(".ailloy", "flux", saveSlug+".yaml")
+	projectFlux := filepath.Join(projectStateDir(), "flux", saveSlug+".yaml")
 	if err := os.MkdirAll(filepath.Dir(projectFlux), 0o750); err != nil {
 		t.Fatal(err)
 	}

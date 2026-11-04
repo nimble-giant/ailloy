@@ -86,7 +86,7 @@ func (m Model) View() string {
 
 	if m.saving.active {
 		fmt.Fprintf(&b,
-			"\nSave %d override(s)?  [p] project (.ailloy/flux/)  [g] global (~/.ailloy/flux/)  [o] this cast only  [esc] discard & close\n",
+			"\nSave %d override(s)?  [p] project (state dir)  [g] global (~/.ailloy/flux/)  [o] this cast only  [esc] discard & close\n",
 			len(m.overrides))
 	}
 

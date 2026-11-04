@@ -34,7 +34,7 @@ func TestRecast_DropsOreFromMold_DecrementsDependentsAndGCs(t *testing.T) {
 	moldKey := "github.com/example/test-mold"
 
 	// Pretend an ore was previously installed for this mold.
-	oreInstallDir := filepath.Join(".ailloy", "ores", "status")
+	oreInstallDir := filepath.Join(projectStateDir(), "ores", "status")
 	if err := os.MkdirAll(oreInstallDir, 0750); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestRecast_DropsOreFromMold_DecrementsDependentsAndGCs(t *testing.T) {
 			},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestPruneRemovedDeps_KeepsStillDeclared(t *testing.T) {
 	}
 
 	moldKey := "github.com/example/test-mold"
-	oreInstallDir := filepath.Join(".ailloy", "ores", "status")
+	oreInstallDir := filepath.Join(projectStateDir(), "ores", "status")
 	if err := os.MkdirAll(oreInstallDir, 0750); err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestPruneRemovedDeps_KeepsStillDeclared(t *testing.T) {
 			},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestPruneRemovedDeps_KeepsEntryWithOtherDependents(t *testing.T) {
 	moldKey := "github.com/example/dropping-mold"
 	otherMold := "github.com/example/other-mold"
 
-	oreInstallDir := filepath.Join(".ailloy", "ores", "status")
+	oreInstallDir := filepath.Join(projectStateDir(), "ores", "status")
 	if err := os.MkdirAll(oreInstallDir, 0750); err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestPruneRemovedDeps_KeepsEntryWithOtherDependents(t *testing.T) {
 			},
 		},
 	}
-	manifestPath := filepath.Join(".ailloy", "installed.yaml")
+	manifestPath := filepath.Join(projectStateDir(), "installed.yaml")
 	if err := foundry.WriteInstalledManifest(manifestPath, manifest); err != nil {
 		t.Fatal(err)
 	}

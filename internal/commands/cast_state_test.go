@@ -22,7 +22,7 @@ func TestWriteInstallState_MergesWithExisting(t *testing.T) {
 		t.Fatalf("second writeInstallState: %v", err)
 	}
 
-	state, err := loadInstallStateForTest(installStatePath)
+	state, err := loadInstallStateForTest(installStatePath())
 	if err != nil {
 		t.Fatalf("read state.yaml: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestWriteInstallState_DedupesRepeatedDirs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state, err := loadInstallStateForTest(installStatePath)
+	state, err := loadInstallStateForTest(installStatePath())
 	if err != nil {
 		t.Fatalf("read state.yaml: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestWriteInstallState_FreshDirCreatesFile(t *testing.T) {
 	if err := writeInstallState([]string{".claude/skills/x"}); err != nil {
 		t.Fatalf("writeInstallState: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(".ailloy", "state.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(projectStateDir(), "state.yaml")); err != nil {
 		t.Errorf("state.yaml not created: %v", err)
 	}
 }

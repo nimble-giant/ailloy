@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,7 +48,7 @@ func TestResolveDepsEphemeral_DoesNotWriteToDisk(t *testing.T) {
 	}
 
 	// .ailloy/ores/ MUST NOT be created by an ephemeral resolve.
-	if _, err := os.Stat(filepath.Join(moldDir, ".ailloy", "ores")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectstate.DirFor(moldDir), "ores")); !os.IsNotExist(err) {
 		t.Errorf(".ailloy/ores should not exist after ephemeral resolve: %v", err)
 	}
 
@@ -305,7 +306,7 @@ dependencies:
 		t.Fatalf("runForge: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(moldDir, ".ailloy", "ores")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectstate.DirFor(moldDir), "ores")); !os.IsNotExist(err) {
 		t.Errorf(".ailloy/ores should not exist after forge: %v", err)
 	}
 }

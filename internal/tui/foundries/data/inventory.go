@@ -19,13 +19,13 @@ const (
 // InventoryItem represents one casted mold seen in an installed manifest.
 type InventoryItem struct {
 	Scope        Scope
-	ManifestPath string // path to .ailloy/installed.yaml that backs this entry
+	ManifestPath string // path to the installed.yaml that backs this entry
 	Entry        foundry.InstalledEntry
 	Verified     bool
 	Foundry      string // foundry name, "" if unknown
 }
 
-// LoadInventory reads the project installed manifest (./.ailloy/installed.yaml)
+// LoadInventory reads the project installed manifest (in the project's state dir)
 // and the global manifest (~/.ailloy/installed.yaml) and merges their entries
 // into a single slice. Verified status is determined by looking up each entry's
 // source against cfg's effective foundries.
@@ -47,7 +47,7 @@ func LoadInventory(cfg *index.Config) ([]InventoryItem, error) {
 		}
 	}
 
-	add(ScopeProject, foundry.InstalledManifestPath)
+	add(ScopeProject, foundry.ProjectManifestPath())
 	if home, err := os.UserHomeDir(); err == nil {
 		add(ScopeGlobal, filepath.Join(home, foundry.InstalledManifestPath))
 	}

@@ -70,9 +70,9 @@ func init() {
 	oreCmd.AddCommand(oreGetCmd, oreAddCmd, oreNewCmd, oreRemoveCmd)
 
 	oreAddCmd.Flags().StringVar(&oreAddAlias, "as", "", "namespace alias (install at ore.<alias>.* instead of ore.<name>.*)")
-	oreAddCmd.Flags().BoolVar(&oreAddGlobal, "global", false, "install under ~/.ailloy/ores/ instead of ./.ailloy/ores/")
+	oreAddCmd.Flags().BoolVar(&oreAddGlobal, "global", false, "install under ~/.ailloy/ores/ instead of the project state dir")
 	oreRemoveCmd.Flags().BoolVar(&oreRemoveForce, "force", false, "remove even if other molds depend on this ore")
-	oreRemoveCmd.Flags().BoolVar(&oreRemoveGlobal, "global", false, "remove from ~/.ailloy/ores/ instead of ./.ailloy/ores/")
+	oreRemoveCmd.Flags().BoolVar(&oreRemoveGlobal, "global", false, "remove from ~/.ailloy/ores/ instead of the project state dir")
 }
 
 func runOreGet(_ *cobra.Command, args []string) error {
@@ -103,7 +103,7 @@ func runOreGet(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("determining cache directory: %w", err)
 	}
-	lock, _ := foundry.ReadLockFile(foundry.LockFileName)
+	lock, _ := foundry.ReadLockFile(foundry.ProjectLockPath())
 	version := "latest"
 	if entry := lock.FindEntry(parsed.CacheKey(), parsed.Subpath); entry != nil {
 		version = entry.Version
@@ -163,7 +163,7 @@ func runOreAdd(_ *cobra.Command, args []string) error {
 		}
 		destRoot = filepath.Join(home, ".ailloy", "ores")
 	} else {
-		destRoot = filepath.Join(".ailloy", "ores")
+		destRoot = filepath.Join(projectStateDir(), "ores")
 	}
 	destDir := filepath.Join(destRoot, installName)
 	if err := os.MkdirAll(destDir, 0750); err != nil {
@@ -207,7 +207,7 @@ func runOreAdd(_ *cobra.Command, args []string) error {
 
 	// Update ailloy.lock if present (project scope only).
 	if !oreAddGlobal {
-		if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
+		if lock, _ := foundry.ReadLockFile(foundry.ProjectLockPath()); lock != nil {
 			lock.UpsertArtifactLock("ore", foundry.LockEntry{
 				Name:      result.Ref.Repo,
 				Source:    result.Ref.CacheKey(),
@@ -217,7 +217,7 @@ func runOreAdd(_ *cobra.Command, args []string) error {
 				Alias:     oreAddAlias,
 				Timestamp: time.Now().UTC(),
 			})
-			if err := foundry.WriteLockFile(foundry.LockFileName, lock); err != nil {
+			if err := foundry.WriteLockFile(foundry.ProjectLockPath(), lock); err != nil {
 				log.Printf("warning: failed to update lock file: %v", err)
 			}
 		}
@@ -307,7 +307,7 @@ func runOreRemove(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot remove ore %q: still required by mold(s) %v; use --force to override or 'ailloy uninstall' on the mold", name, molds)
 	}
 
-	dir := filepath.Join(".ailloy", "ores", name)
+	dir := filepath.Join(projectStateDir(), "ores", name)
 	if oreRemoveGlobal {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -337,9 +337,9 @@ func runOreRemove(_ *cobra.Command, args []string) error {
 
 	// Drop from lock if present (project scope only; ailloy.lock is project-only).
 	if !oreRemoveGlobal {
-		if lock, _ := foundry.ReadLockFile(foundry.LockFileName); lock != nil {
+		if lock, _ := foundry.ReadLockFile(foundry.ProjectLockPath()); lock != nil {
 			dropOreLockEntry(lock, name)
-			_ = foundry.WriteLockFile(foundry.LockFileName, lock)
+			_ = foundry.WriteLockFile(foundry.ProjectLockPath(), lock)
 		}
 	}
 	return nil

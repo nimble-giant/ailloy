@@ -171,7 +171,7 @@ ailloy cast github.com/nimble-giant/nimble-mold -f flux-overrides.yaml
 **`ailloy ingot`** — Reusable template components.
 
 - `get <reference>` — Download to local cache
-- `add <reference>` — Install into the project's `.ailloy/ingots/`
+- `add <reference>` — Install into the project's state dir (`<state dir>/ingots/`)
 
 </details>
 
@@ -257,6 +257,22 @@ non-interactive shell it refuses to run without `--yes`. See
 </details>
 
 <details>
+<summary><strong><code>state</code></strong> — locate ailloy's per-project bookkeeping</summary>
+
+Ailloy keeps its bookkeeping (installed manifest, `ailloy.lock`, install
+state, project flux, installed ores and ingots) out of your project, in
+`~/.ailloy/projects/<project>-<hash>/`. Only rendered mold output lands in
+the project. Legacy `.ailloy/` and `ailloy.lock` files are moved there
+automatically. See [`docs/project-state.md`](docs/project-state.md).
+
+- `state path` — print this project's state directory
+- `state list` — list every project with ailloy state
+- `state migrate` — move legacy in-project bookkeeping now
+- `AILLOY_PROJECT_STATE_DIR=.ailloy` — keep state (lock included) in the project
+
+</details>
+
+<details>
 <summary><strong><code>uninstall</code></strong> — remove a casted mold</summary>
 
 `ailloy uninstall <source>` removes the files a previous `cast` wrote.
@@ -264,7 +280,7 @@ Uses the install manifest (`files:` + `fileHashes:` in `ailloy.lock`) so
 user-modified files are retained unless `--force` is passed; files claimed
 by another casted mold are retained automatically.
 
-- `-g/--global` — operate on `~/ailloy.lock` instead of `./ailloy.lock`
+- `-g/--global` — operate on `~/ailloy.lock` instead of the project's state-dir lock
 - `--dry-run` — print what would be removed without touching disk
 - `--force` — delete files even if modified since cast
 

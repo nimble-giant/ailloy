@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -222,7 +223,7 @@ func TestCastTransitiveDeps_InstallsLeafAsTransitive(t *testing.T) {
 			Commit: "sha-root", InstalledAs: "direct",
 		}},
 	}
-	if err := foundry.WriteInstalledManifest(filepath.Join(tmp, ".ailloy", "installed.yaml"), manifest); err != nil {
+	if err := foundry.WriteInstalledManifest(filepath.Join(projectstate.DirFor(tmp), "installed.yaml"), manifest); err != nil {
 		t.Fatal(err)
 	}
 
@@ -236,7 +237,7 @@ func TestCastTransitiveDeps_InstallsLeafAsTransitive(t *testing.T) {
 	}
 
 	// installed.yaml should now have the leaf as transitive.
-	got, err := foundry.ReadInstalledManifest(filepath.Join(tmp, ".ailloy", "installed.yaml"))
+	got, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(tmp), "installed.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +350,7 @@ func TestCastTransitiveDeps_EmbeddedDepWithIngots(t *testing.T) {
 	rootResult := &foundry.ResolveResult{Ref: rootRef}
 
 	manifest := &foundry.InstalledManifest{APIVersion: "v1", Molds: []foundry.InstalledEntry{}}
-	if err := foundry.WriteInstalledManifest(filepath.Join(tmp, ".ailloy", "installed.yaml"), manifest); err != nil {
+	if err := foundry.WriteInstalledManifest(filepath.Join(projectstate.DirFor(tmp), "installed.yaml"), manifest); err != nil {
 		t.Fatal(err)
 	}
 
@@ -366,7 +367,7 @@ func TestCastTransitiveDeps_EmbeddedDepWithIngots(t *testing.T) {
 	// but the cast itself must not fail — if stageIngotsFromFS had not worked,
 	// the IngotResolver would have found no search path for "ingots" and any
 	// template that references an ingot would blow up during copyResolvedFiles).
-	got, err := foundry.ReadInstalledManifest(filepath.Join(tmp, ".ailloy", "installed.yaml"))
+	got, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(tmp), "installed.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +424,7 @@ func TestCastTransitiveDeps_LocalDirSentinel(t *testing.T) {
 		APIVersion: "v1",
 		Molds:      []foundry.InstalledEntry{},
 	}
-	if err := foundry.WriteInstalledManifest(filepath.Join(tmp, ".ailloy", "installed.yaml"), manifest); err != nil {
+	if err := foundry.WriteInstalledManifest(filepath.Join(projectstate.DirFor(tmp), "installed.yaml"), manifest); err != nil {
 		t.Fatal(err)
 	}
 
@@ -437,7 +438,7 @@ func TestCastTransitiveDeps_LocalDirSentinel(t *testing.T) {
 	}
 
 	// installed.yaml should record the leaf as transitive.
-	got, err := foundry.ReadInstalledManifest(filepath.Join(tmp, ".ailloy", "installed.yaml"))
+	got, err := foundry.ReadInstalledManifest(filepath.Join(projectstate.DirFor(tmp), "installed.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

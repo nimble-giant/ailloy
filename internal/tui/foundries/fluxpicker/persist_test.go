@@ -1,6 +1,7 @@
 package fluxpicker
 
 import (
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,8 +75,8 @@ func TestPersistOverrides_ProjectWritesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if path != ".ailloy/flux/agents.yaml" {
-		t.Fatalf("path = %q want .ailloy/flux/agents.yaml", path)
+	if want := filepath.Join(projectstate.Dir(), "flux", "agents.yaml"); path != want {
+		t.Fatalf("path = %q want %q", path, want)
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("expected file at %s, got %v", path, err)
@@ -158,7 +159,7 @@ func TestPersistFoundryOverridesFansOutToProject(t *testing.T) {
 	// beta also gets its per-mold theme. gamma gets only per-mold theme.
 	for _, name := range []string{"alpha", "beta", "gamma"} {
 		slug := mold.FluxFileSlug(refs[name])
-		path := filepath.Join(".ailloy", "flux", slug+".yaml")
+		path := filepath.Join(projectstate.Dir(), "flux", slug+".yaml")
 		if _, err := os.Stat(path); err != nil {
 			t.Errorf("expected %s to exist (%s flux file): %v", path, name, err)
 		}
@@ -169,7 +170,7 @@ func TestPersistFoundryOverridesFansOutToProject(t *testing.T) {
 
 	// Spot-check beta's content.
 	betaSlug := mold.FluxFileSlug(refs["beta"])
-	b, _ := os.ReadFile(filepath.Join(".ailloy", "flux", betaSlug+".yaml"))
+	b, _ := os.ReadFile(filepath.Join(projectstate.Dir(), "flux", betaSlug+".yaml"))
 	if !strings.Contains(string(b), "claude") || !strings.Contains(string(b), "noon") {
 		t.Errorf("beta flux file missing expected content:\n%s", b)
 	}

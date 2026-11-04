@@ -230,9 +230,9 @@ space toggle · enter cast all · / search · c clear · r refresh · j/k move
 | Tab | What it does |
 | --- | --- |
 | **Discover** | Browse the merged catalog across every effective foundry. Nested foundries declared via `foundries:` are resolved transitively, and nested-foundry molds render with a faint `via parent → child` annotation showing their resolution chain. Multi-select with `space`, install all selected with `enter`. Live filter with `/`. The "Recent" section highlights molds whose foundry was indexed in the last 7 days (top 10). Already-installed molds show a blue `● installed <version>` badge. Press `f` on any mold to open the [flux value picker](#flux-value-picker). |
-| **Installed** | List every casted mold across project (`./ailloy.lock`) and global (`~/ailloy.lock`) scope. `u` re-casts to the latest version; `x` uninstalls (uses the install manifest, skips files modified since cast). Pre-manifest legacy entries display a yellow warning. Press `f` to edit flux values for the highlighted mold. |
+| **Installed** | List every casted mold across project (state-dir `ailloy.lock`) and global (`~/ailloy.lock`) scope. `u` re-casts to the latest version; `x` uninstalls (uses the install manifest, skips files modified since cast). Pre-manifest legacy entries display a yellow warning. Press `f` to edit flux values for the highlighted mold. |
 | **Foundries** | Add (`a`), remove (`d`), or refresh (`r`) registered foundry indexes. The verified default is rendered as a built-in entry and can't be removed. |
-| **Health** | Drift checks (orphaned molds whose foundry no longer indexes them, legacy install manifests) plus `assay` findings against the rendered blank directories from `.ailloy/state.yaml`. `r` re-runs the checks. |
+| **Health** | Drift checks (orphaned molds whose foundry no longer indexes them, legacy install manifests) plus `assay` findings against the rendered blank directories from the project's `state.yaml`. `r` re-runs the checks. |
 
 #### Key bindings
 
@@ -290,7 +290,7 @@ select gets a dropdown (with discovery support), int validates as you type.
 
 The save prompt routes the overrides three ways:
 
-- `[p]` project — writes `./.ailloy/flux/<slug>.yaml` (atomic; merges with
+- `[p]` project — writes `<state dir>/flux/<slug>.yaml` (atomic; merges with
   existing content).
 - `[g]` global — writes `~/.ailloy/flux/<slug>.yaml`.
 - `[o]` this cast only — keeps the values in TUI memory and threads them as
@@ -311,7 +311,7 @@ error banner.
 ### Uninstalling a casted mold
 
 ```bash
-# Project scope (./ailloy.lock):
+# Project scope (<state dir>/ailloy.lock):
 ailloy uninstall github.com/nimble-giant/nimble-mold
 
 # Preview without touching disk:
@@ -521,12 +521,12 @@ After download, the manifest (`mold.yaml` or `ingot.yaml`) is validated and the 
 Ingots are reusable template components that can be included in molds via the `{{ingot "name"}}` template function. Use `ingot add` to download an ingot and register it in your project:
 
 ```bash
-# Download and install an ingot into .ailloy/ingots/
+# Download and install an ingot into <state dir>/ingots/
 ailloy ingot add github.com/my-org/my-ingot@v1.0.0
 ailloy add ingot github.com/my-org/my-ingot@v1.0.0
 ```
 
-This copies the ingot files into `.ailloy/ingots/<name>/` where the template engine can resolve them during `cast` and `forge`.
+This copies the ingot files into `<state dir>/ingots/<name>/` where the template engine can resolve them during `cast` and `forge`.
 
 ## Bidirectional Commands
 
@@ -641,7 +641,7 @@ On subsequent runs, if a version directory already exists and contains a `mold.y
 
 ## Installed Manifest
 
-Every `ailloy cast` and `ailloy ingot add` writes provenance for the installed mold into `.ailloy/installed.yaml`. This file is the source of truth for `recast` and `quench`, and should be committed to git.
+Every `ailloy cast` and `ailloy ingot add` writes provenance for the installed mold into `installed.yaml` in the project's state directory (`~/.ailloy/projects/<project>-<hash>/`, see `ailloy state path` and [Project State](project-state.md)). This file is the source of truth for `recast` and `quench`; it lives outside the project tree, so there is nothing to commit.
 
 ```yaml
 apiVersion: v1
@@ -655,7 +655,7 @@ molds:
 
 ## Lock File (opt-in)
 
-`ailloy.lock` is **opt-in**: it is created only by `ailloy quench`. Once the file exists, `cast`, `ingot add`, and `recast` keep it updated automatically. New projects get no lock until they quench; existing projects with an `ailloy.lock` continue to work — the lock is honored and updated as before.
+`ailloy.lock` is **opt-in**: it is created only by `ailloy quench`, next to `installed.yaml` in the project's state directory. To commit the lock for CI drift checks, set `AILLOY_PROJECT_STATE_DIR=.ailloy` (see [Project State](project-state.md)). Once the file exists, `cast`, `ingot add`, and `recast` keep it updated automatically. New projects get no lock until they quench; existing projects with an `ailloy.lock` continue to work — the lock is honored and updated as before.
 
 The lock pins each mold to an exact commit SHA. Because git is content-addressable, any tampering on the upstream side is rejected by git itself when the SHA is fetched. Local edits to rendered blanks are expected and not flagged as drift.
 
@@ -672,7 +672,7 @@ molds:
 ### Typical opt-in flow
 
 ```bash
-ailloy cast github.com/nimble-giant/nimble-mold     # writes .ailloy/installed.yaml
+ailloy cast github.com/nimble-giant/nimble-mold     # writes <state dir>/installed.yaml
 ailloy quench                                         # creates ailloy.lock pinning everything
 ailloy quench --verify                                # CI: exit non-zero if pins drift
 ailloy recast                                         # update everything; refreshes both files
@@ -682,7 +682,7 @@ ailloy recast                                         # update everything; refre
 
 #### Recast (alias: upgrade)
 
-Re-resolve installed dependencies to their latest available versions. Recast drives off `.ailloy/installed.yaml`; if `ailloy.lock` exists, it is refreshed too.
+Re-resolve installed dependencies to their latest available versions. Recast drives off the project's `installed.yaml`; if `ailloy.lock` exists, it is refreshed too.
 
 ```bash
 # Update all dependencies
@@ -705,7 +705,7 @@ Recast fetches the latest semver tags from each dependency's remote, compares wi
 Create or refresh `ailloy.lock` from the installed manifest, pinning every entry to an exact commit SHA.
 
 ```bash
-# Create or refresh ailloy.lock from .ailloy/installed.yaml
+# Create or refresh ailloy.lock from installed.yaml
 ailloy quench
 
 # Update a single mold's pin (requires existing lock)

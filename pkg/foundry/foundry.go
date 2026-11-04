@@ -85,7 +85,7 @@ type resolveConfig struct {
 // applyResolveDefaults sets the default lockPath. Exposed for tests.
 func applyResolveDefaults(c *resolveConfig) {
 	if c.lockPath == "" {
-		c.lockPath = LockFileName
+		c.lockPath = ProjectLockPath()
 	}
 	if c.logger == nil {
 		c.logger = log.Default()

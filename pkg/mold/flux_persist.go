@@ -1,6 +1,7 @@
 package mold
 
 import (
+	"github.com/nimble-giant/ailloy/pkg/projectstate"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,7 +65,7 @@ func PersistedFluxPaths(ref string) []string {
 			paths = append(paths, p)
 		}
 	}
-	p := filepath.Join(".ailloy", "flux", slug+".yaml")
+	p := filepath.Join(projectstate.Dir(), "flux", slug+".yaml")
 	if persistedFluxFileExists(p) {
 		paths = append(paths, p)
 	}
