@@ -17,6 +17,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/spf13/cobra v1.9.1
+	github.com/ulikunitz/xz v0.5.15
 	golang.org/x/sync v0.22.0
 	golang.org/x/term v0.43.0
 )

@@ -19,6 +19,7 @@ import (
 	"github.com/nimble-giant/ailloy/internal/tui/evolution"
 	"github.com/nimble-giant/ailloy/pkg/styles"
 	"github.com/spf13/cobra"
+	"github.com/ulikunitz/xz"
 )
 
 const (
@@ -236,12 +237,13 @@ func compareSemver(a, b string) (int, error) {
 }
 
 // assetName returns the release asset filename for a given platform, matching
-// the naming used by .github/workflows/release.yml.
+// the naming used by .github/workflows/release.yml. macOS and Linux artifacts
+// are xz-compressed (.xz); Windows ships the raw .exe.
 func assetName(goos, goarch string) string {
 	if goos == "windows" {
 		return fmt.Sprintf("ailloy-%s-%s.exe", goos, goarch)
 	}
-	return fmt.Sprintf("ailloy-%s-%s", goos, goarch)
+	return fmt.Sprintf("ailloy-%s-%s.xz", goos, goarch)
 }
 
 func installRelease(tag, destPath string) error {
@@ -282,8 +284,24 @@ func installRelease(tag, destPath string) error {
 		return fmt.Errorf("download %s: %s", asset, resp.Status)
 	}
 
+	// Hash the on-the-wire bytes (matches the entry in checksums.txt,
+	// which is computed over the compressed .xz on non-Windows). The xz
+	// reader pulls from the same teed stream, so every byte the network
+	// delivers flows through the hasher exactly once.
 	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(tmp, hasher), resp.Body); err != nil {
+	wire := io.TeeReader(resp.Body, hasher)
+
+	src := wire
+	if strings.HasSuffix(asset, ".xz") {
+		xr, err := xz.NewReader(wire)
+		if err != nil {
+			_ = tmp.Close()
+			return fmt.Errorf("init xz reader for %s: %w", asset, err)
+		}
+		src = xr
+	}
+
+	if _, err := io.Copy(tmp, src); err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("write %s: %w", asset, err)
 	}
